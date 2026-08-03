@@ -56,15 +56,21 @@ class ScoringViewModel : ViewModel() {
         recordBall(ball)
     }
 
-    fun handleExtra(type: ExtrasType) {
+    fun handleExtra(type: ExtrasType, additionalRuns: Int = 0) {
         val currentMatch = _matchState.value ?: return
         if (currentMatch.pendingAction != PendingAction.NONE) return
         
         val isLegal = type == ExtrasType.BYE || type == ExtrasType.LEG_BYE
+        
+        // For No Ball, additional runs go to the batter (off the bat)
+        // For Wide, additional runs are usually byes/wides (extras)
+        val batRuns = if (type == ExtrasType.NO_BALL) additionalRuns else 0
+        val penaltyAndExtraRuns = if (type == ExtrasType.NO_BALL) 1 else (1 + additionalRuns)
+
         val ball = Ball(
-            runs = 0,
+            runs = batRuns,
             extrasType = type,
-            extraRuns = 1,
+            extraRuns = penaltyAndExtraRuns,
             strikerId = currentMatch.strikerId ?: return,
             nonStrikerId = currentMatch.nonStrikerId ?: return,
             bowlerId = currentMatch.currentBowlerId ?: return,
