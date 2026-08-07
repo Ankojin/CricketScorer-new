@@ -370,11 +370,7 @@ fun StatItem(label: String, value: String) {
 fun MatchRow(match: Match, onStartMatch: (Match) -> Unit, onDelete: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        onClick = { 
-            if (match.status != MatchStatus.COMPLETED) {
-                onStartMatch(match) 
-            }
-        },
+        onClick = { onStartMatch(match) },
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -406,7 +402,12 @@ fun MatchRow(match: Match, onStartMatch: (Match) -> Unit, onDelete: () -> Unit) 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(match.teamA.name, fontWeight = FontWeight.Bold)
                 if (match.status != MatchStatus.UPCOMING) {
-                    val score = if (match.innings1Data?.teamId == match.teamA.id) "${match.innings1Data.runs}/${match.innings1Data.wickets}" else "${match.totalRuns}/${match.totalWickets}"
+                    val score = when {
+                        match.innings1Data?.teamId == match.teamA.id -> "${match.innings1Data.runs}/${match.innings1Data.wickets}"
+                        match.battingTeamId == match.teamA.id -> "${match.totalRuns}/${match.totalWickets}"
+                        match.currentInnings == 2 && match.innings1Data?.teamId == match.teamB.id -> "${match.totalRuns}/${match.totalWickets}"
+                        else -> "0/0"
+                    }
                     Text(score, fontWeight = FontWeight.Bold)
                 }
             }
@@ -414,7 +415,12 @@ fun MatchRow(match: Match, onStartMatch: (Match) -> Unit, onDelete: () -> Unit) 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(match.teamB.name, fontWeight = FontWeight.Bold)
                 if (match.status != MatchStatus.UPCOMING) {
-                    val score = if (match.innings1Data?.teamId == match.teamB.id) "${match.innings1Data.runs}/${match.innings1Data.wickets}" else "${match.totalRuns}/${match.totalWickets}"
+                    val score = when {
+                        match.innings1Data?.teamId == match.teamB.id -> "${match.innings1Data.runs}/${match.innings1Data.wickets}"
+                        match.battingTeamId == match.teamB.id -> "${match.totalRuns}/${match.totalWickets}"
+                        match.currentInnings == 2 && match.innings1Data?.teamId == match.teamA.id -> "${match.totalRuns}/${match.totalWickets}"
+                        else -> "0/0"
+                    }
                     Text(score, fontWeight = FontWeight.Bold)
                 }
             }

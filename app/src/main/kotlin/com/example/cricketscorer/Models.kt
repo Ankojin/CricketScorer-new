@@ -15,7 +15,8 @@ data class BattingStats(
     val sixes: Int = 0,
     val isOut: Boolean = false,
     val wicketType: WicketType = WicketType.NONE,
-    val dismissalBowlerId: String? = null
+    val dismissalBowlerId: String? = null,
+    val dismissalFielderId: String? = null
 ) {
     val strikeRate: Double
         get() = if (balls > 0) (runs.toDouble() / balls) * 100 else 0.0
@@ -74,14 +75,19 @@ data class Ball(
     val strikerId: String,
     val nonStrikerId: String,
     val bowlerId: String,
-    val isLegalBall: Boolean = true
+    val fielderId: String? = null,
+    val isLegalBall: Boolean = true,
+    val outPlayerId: String? = null
 )
 
 data class WicketRecord(
     val wicketNumber: Int,
     val batterName: String,
     val totalRuns: Int,
-    val over: String
+    val over: String,
+    val wicketType: WicketType = WicketType.NONE,
+    val bowlerName: String? = null,
+    val fielderName: String? = null
 )
 
 data class InningsSummary(
@@ -106,6 +112,12 @@ data class Match(
     val tossDecision: String? = null, // "BAT" or "BOWL"
     val initialBattingTeamId: String? = null,
     val initialBowlingTeamId: String? = null,
+    
+    val teamACaptainId: String? = null,
+    val teamBCaptainId: String? = null,
+    val teamAWicketKeeperId: String? = null,
+    val teamBWicketKeeperId: String? = null,
+    
     val target: Int? = null,
     var status: MatchStatus = MatchStatus.UPCOMING,
     val currentInnings: Int = 1,
@@ -132,7 +144,8 @@ data class Match(
 )
 
 enum class PendingAction {
-    NONE, SELECT_STRIKER, SELECT_NON_STRIKER, SELECT_BOWLER, TOSS_REQUIRED
+    NONE, SELECT_STRIKER, SELECT_NON_STRIKER, SELECT_BOWLER, TOSS_REQUIRED, 
+    SELECT_CAPTAIN_A, SELECT_CAPTAIN_B, SELECT_WK_A, SELECT_WK_B, SELECT_FIELDER
 }
 
 enum class MatchStatus {
