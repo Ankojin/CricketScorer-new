@@ -108,7 +108,10 @@ fun HomeScreen(
             item {
                 Spacer(modifier = Modifier.height(32.dp))
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text("Cricket Scorer v1.0", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Cricket Scorer v1.0", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Text("Prepared by Ankoji", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }

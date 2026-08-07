@@ -201,7 +201,7 @@ object TournamentRepository {
                     
                     var updatedTeams = t.teams
                     if (updatedMatch.status == MatchStatus.COMPLETED && !wasCompleted) {
-                        updatedTeams = updateTournamentPoints(t.teams, updatedMatch)
+                        updatedTeams = updateTournamentPointsAndStats(t.teams, updatedMatch)
                     }
                     
                     t.copy(matches = updatedMatches, teams = updatedTeams)
@@ -212,19 +212,46 @@ object TournamentRepository {
         }
     }
 
-    private fun updateTournamentPoints(teams: List<Team>, match: Match): List<Team> {
+    private fun updateTournamentPointsAndStats(teams: List<Team>, match: Match): List<Team> {
         return teams.map { team ->
             if (team.id == match.teamA.id || team.id == match.teamB.id) {
+                val matchTeam = if (team.id == match.teamA.id) match.teamA else match.teamB
+                
                 val won = match.winnerId == team.id
                 val lost = match.winnerId != null && match.winnerId != team.id
                 val draw = match.status == MatchStatus.COMPLETED && match.winnerId == null
                 
+                val updatedPlayers = team.players.map { tp ->
+                    val mp = matchTeam.players.find { it.id == tp.id }
+                    if (mp != null) {
+                        tp.copy(
+                            battingStats = tp.battingStats.copy(
+                                runs = tp.battingStats.runs + mp.battingStats.runs,
+                                balls = tp.battingStats.balls + mp.battingStats.balls,
+                                fours = tp.battingStats.fours + mp.battingStats.fours,
+                                sixes = tp.battingStats.sixes + mp.battingStats.sixes
+                            ),
+                            bowlingStats = tp.bowlingStats.copy(
+                                wickets = tp.bowlingStats.wickets + mp.bowlingStats.wickets,
+                                runsConceded = tp.bowlingStats.runsConceded + mp.bowlingStats.runsConceded,
+                                balls = tp.bowlingStats.balls + mp.bowlingStats.balls,
+                                overs = tp.bowlingStats.overs + mp.bowlingStats.overs
+                            ),
+                            fieldingStats = tp.fieldingStats.copy(
+                                catches = tp.fieldingStats.catches + mp.fieldingStats.catches,
+                                runOuts = tp.fieldingStats.runOuts + mp.fieldingStats.runOuts,
+                                stumpings = tp.fieldingStats.stumpings + mp.fieldingStats.stumpings
+                            )
+                        )
+                    } else tp
+                }
+
                 team.copy(
+                    players = updatedPlayers,
                     matchesPlayed = team.matchesPlayed + 1,
                     wins = team.wins + if (won) 1 else 0,
                     losses = team.losses + if (lost) 1 else 0,
                     points = team.points + (if (won) 2 else if (draw) 1 else 0),
-                    // Net Run Rate: Simple simulation
                     nrr = team.nrr + (if (won) 0.5 else if (lost) -0.5 else 0.0) 
                 )
             } else team
