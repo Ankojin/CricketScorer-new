@@ -77,7 +77,8 @@ data class Ball(
     val bowlerId: String,
     val fielderId: String? = null,
     val isLegalBall: Boolean = true,
-    val outPlayerId: String? = null
+    val outPlayerId: String? = null,
+    val rotateStrike: Boolean = true
 )
 
 data class WicketRecord(
@@ -145,7 +146,8 @@ data class Match(
 
 enum class PendingAction {
     NONE, SELECT_STRIKER, SELECT_NON_STRIKER, SELECT_BOWLER, TOSS_REQUIRED, 
-    SELECT_CAPTAIN_A, SELECT_CAPTAIN_B, SELECT_WK_A, SELECT_WK_B, SELECT_FIELDER
+    SELECT_CAPTAIN_A, SELECT_CAPTAIN_B, SELECT_WK_A, SELECT_WK_B, SELECT_FIELDER,
+    START_SECOND_INNINGS
 }
 
 enum class MatchStatus {

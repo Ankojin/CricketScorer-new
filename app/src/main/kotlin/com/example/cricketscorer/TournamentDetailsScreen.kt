@@ -498,6 +498,10 @@ fun TeamCard(
 ) {
     var showAddPlayerDialog by remember { mutableStateOf(false) }
     var playerNameToAdd by remember { mutableStateOf("") }
+    
+    var showEditPlayerDialog by remember { mutableStateOf(false) }
+    var playerToEdit by remember { mutableStateOf<Player?>(null) }
+    var editedPlayerName by remember { mutableStateOf("") }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -560,6 +564,11 @@ fun TeamCard(
                             playerPair.forEach { player ->
                                 PlayerChip(
                                     name = player.name,
+                                    onEdit = {
+                                        playerToEdit = player
+                                        editedPlayerName = player.name
+                                        showEditPlayerDialog = true
+                                    },
                                     onDelete = { viewModel.deletePlayer(tournamentId, team.id, player.id) },
                                     modifier = Modifier.weight(1f).padding(4.dp)
                                 )
@@ -607,11 +616,50 @@ fun TeamCard(
                 }
             )
         }
+
+        if (showEditPlayerDialog && playerToEdit != null) {
+            AlertDialog(
+                onDismissRequest = { showEditPlayerDialog = false },
+                title = { Text("Edit Player Name", fontWeight = FontWeight.Bold) },
+                text = {
+                    OutlinedTextField(
+                        value = editedPlayerName,
+                        onValueChange = { editedPlayerName = it },
+                        label = { Text("Full Name") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (editedPlayerName.isNotBlank()) {
+                                viewModel.updatePlayerName(
+                                    tournamentId,
+                                    team.id,
+                                    playerToEdit!!.id,
+                                    editedPlayerName
+                                )
+                                showEditPlayerDialog = false
+                            }
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Update")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEditPlayerDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
     }
 }
 
 @Composable
-fun PlayerChip(name: String, onDelete: () -> Unit, modifier: Modifier = Modifier) {
+fun PlayerChip(name: String, onEdit: () -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = Color(0xFFF0F2F5),
@@ -630,7 +678,9 @@ fun PlayerChip(name: String, onDelete: () -> Unit, modifier: Modifier = Modifier
             Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = name,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onEdit() },
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1

@@ -30,6 +30,10 @@ class TournamentViewModel : ViewModel() {
         TournamentRepository.deletePlayer(tournamentId, teamId, playerId)
     }
 
+    fun updatePlayerName(tournamentId: String, teamId: String, playerId: String, newName: String) {
+        TournamentRepository.updatePlayerName(tournamentId, teamId, playerId, newName)
+    }
+
     fun scheduleMatch(tournamentId: String, teamAId: String, teamBId: String) {
         TournamentRepository.scheduleMatch(tournamentId, teamAId, teamBId)
     }

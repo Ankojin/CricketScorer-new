@@ -21,23 +21,31 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 
+import androidx.compose.foundation.isSystemInDarkTheme
+import com.example.cricketscorer.ui.theme.CricketScorerTheme
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            CricketScorerTheme {
-                MainNavigation()
+            val scoringViewModel: ScoringViewModel = viewModel()
+            val isDarkMode by scoringViewModel.isDarkMode.collectAsState()
+            val useDarkTheme = isDarkMode ?: isSystemInDarkTheme()
+            
+            CricketScorerTheme(darkTheme = useDarkTheme) {
+                MainNavigation(scoringViewModel)
             }
         }
     }
 }
 
 @Composable
-fun MainNavigation() {
+fun MainNavigation(scoringViewModel: ScoringViewModel) {
     val navController = rememberNavController()
-    val scoringViewModel: ScoringViewModel = viewModel()
     val tournamentViewModel: TournamentViewModel = viewModel()
+    
+    // Rest of MainNavigation...
 
     Scaffold(
         bottomBar = {
@@ -92,9 +100,8 @@ fun MainNavigation() {
             composable("home") {
                 HomeScreen(
                     onNavigateToDashboard = { navController.navigate("dashboard") },
-                    onNavigateToLiveScoring = { 
-                        // If there's an active match in ViewModel, go to it
-                        // For now just navigate
+                    onNavigateToLiveScoring = { match ->
+                        scoringViewModel.loadMatch(match)
                         navController.navigate("live_scoring")
                     }
                 )
@@ -133,32 +140,3 @@ fun MainNavigation() {
 }
 
 data class NavigationItem(val label: String, val route: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
-
-@Composable
-fun CricketScorerTheme(content: @Composable () -> Unit) {
-    val primaryColor = Color(0xFF003366) 
-    val secondaryColor = Color(0xFF00AA55) 
-
-    val colorScheme = lightColorScheme(
-        primary = primaryColor,
-        onPrimary = Color.White,
-        primaryContainer = Color(0xFFE3F2FD),
-        onPrimaryContainer = primaryColor,
-        secondary = secondaryColor,
-        onSecondary = Color.White,
-        surface = Color.White,
-        background = Color(0xFFF5F5F5)
-    )
-
-    MaterialTheme(
-        colorScheme = colorScheme,
-        content = {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = MaterialTheme.colorScheme.background
-            ) {
-                content()
-            }
-        }
-    )
-}

@@ -122,13 +122,33 @@ object TournamentRepository {
         _tournaments.update { list ->
             val newList = list.map { t ->
                 if (t.id == tournamentId) {
+                    var createdPlayer: Player? = null
                     val updatedTeams = t.teams.map { team ->
                         if (team.id == teamId) {
                             val newPlayer = Player(id = UUID.randomUUID().toString(), name = playerName)
+                            createdPlayer = newPlayer
                             team.copy(players = team.players + newPlayer)
                         } else team
                     }
-                    t.copy(teams = updatedTeams)
+
+                    val playerToAdd = createdPlayer
+                    val updatedMatches = if (playerToAdd != null) {
+                        t.matches.map { match ->
+                            if (match.status == MatchStatus.LIVE || match.status == MatchStatus.UPCOMING) {
+                                val updatedTeamA = if (match.teamA.id == teamId) {
+                                    match.teamA.copy(players = match.teamA.players + playerToAdd)
+                                } else match.teamA
+
+                                val updatedTeamB = if (match.teamB.id == teamId) {
+                                    match.teamB.copy(players = match.teamB.players + playerToAdd)
+                                } else match.teamB
+
+                                match.copy(teamA = updatedTeamA, teamB = updatedTeamB)
+                            } else match
+                        }
+                    } else t.matches
+
+                    t.copy(teams = updatedTeams, matches = updatedMatches)
                 } else t
             }
             saveToDisk(newList)
@@ -145,7 +165,61 @@ object TournamentRepository {
                             team.copy(players = team.players.filter { it.id != playerId })
                         } else team
                     }
-                    t.copy(teams = updatedTeams)
+
+                    val updatedMatches = t.matches.map { match ->
+                        if (match.status == MatchStatus.LIVE || match.status == MatchStatus.UPCOMING) {
+                            val updatedTeamA = if (match.teamA.id == teamId) {
+                                match.teamA.copy(players = match.teamA.players.filter { it.id != playerId })
+                            } else match.teamA
+
+                            val updatedTeamB = if (match.teamB.id == teamId) {
+                                match.teamB.copy(players = match.teamB.players.filter { it.id != playerId })
+                            } else match.teamB
+
+                            match.copy(teamA = updatedTeamA, teamB = updatedTeamB)
+                        } else match
+                    }
+
+                    t.copy(teams = updatedTeams, matches = updatedMatches)
+                } else t
+            }
+            saveToDisk(newList)
+            newList
+        }
+    }
+
+    fun updatePlayerName(tournamentId: String, teamId: String, playerId: String, newName: String) {
+        _tournaments.update { list ->
+            val newList = list.map { t ->
+                if (t.id == tournamentId) {
+                    val updatedTeams = t.teams.map { team ->
+                        if (team.id == teamId) {
+                            val updatedPlayers = team.players.map { player ->
+                                if (player.id == playerId) player.copy(name = newName) else player
+                            }
+                            team.copy(players = updatedPlayers)
+                        } else team
+                    }
+                    
+                    val updatedMatches = t.matches.map { match ->
+                        if (match.status == MatchStatus.LIVE || match.status == MatchStatus.UPCOMING) {
+                            val updatedTeamA = if (match.teamA.id == teamId) {
+                                match.teamA.copy(players = match.teamA.players.map { p ->
+                                    if (p.id == playerId) p.copy(name = newName) else p
+                                })
+                            } else match.teamA
+                            
+                            val updatedTeamB = if (match.teamB.id == teamId) {
+                                match.teamB.copy(players = match.teamB.players.map { p ->
+                                    if (p.id == playerId) p.copy(name = newName) else p
+                                })
+                            } else match.teamB
+                            
+                            match.copy(teamA = updatedTeamA, teamB = updatedTeamB)
+                        } else match
+                    }
+                    
+                    t.copy(teams = updatedTeams, matches = updatedMatches)
                 } else t
             }
             saveToDisk(newList)

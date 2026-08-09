@@ -24,8 +24,11 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun HomeScreen(
     onNavigateToDashboard: () -> Unit,
-    onNavigateToLiveScoring: () -> Unit
+    onNavigateToLiveScoring: (Match) -> Unit
 ) {
+    val tournaments by TournamentRepository.tournaments.collectAsState()
+    val liveMatch = tournaments.flatMap { it.matches }.find { it.status == MatchStatus.LIVE }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -57,7 +60,72 @@ fun HomeScreen(
                 .padding(padding)
                 .background(Color(0xFFF5F5F5))
         ) {
-            // Live Match Section (Now Optional)
+            // Live Match Section
+            if (liveMatch != null) {
+                item {
+                    Text(
+                        "LIVE MATCH",
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    
+                    Card(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .fillMaxWidth()
+                            .clickable { onNavigateToLiveScoring(liveMatch) },
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        "${liveMatch.teamA.name} vs ${liveMatch.teamB.name}",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        "Innings ${liveMatch.currentInnings}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.Gray
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        "${liveMatch.totalRuns}/${liveMatch.totalWickets}",
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Black,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        "(${liveMatch.totalBalls / 6}.${liveMatch.totalBalls % 6} Ov)",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(12.dp))
+                            
+                            Button(
+                                onClick = { onNavigateToLiveScoring(liveMatch) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("CONTINUE SCORING")
+                            }
+                        }
+                    }
+                }
+            }
+
             item {
                 Text(
                     "QUICK START",
@@ -109,7 +177,7 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(32.dp))
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Cricket Scorer v1.0", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Text("Cricket Scorer v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                         Text("Prepared by Ankoji", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
                     }
                 }
