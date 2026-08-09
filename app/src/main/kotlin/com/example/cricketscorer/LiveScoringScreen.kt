@@ -1,5 +1,10 @@
 package com.example.cricketscorer
 
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.view.View
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,11 +25,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
+import java.io.File
+import java.io.FileOutputStream
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -35,8 +45,12 @@ fun LiveScoringScreen(
 ) {
     val match by viewModel.matchState.collectAsState()
     var selectedTabIndex by remember { mutableIntStateOf(0) }
+    var viewedInnings by remember(match?.currentInnings) { mutableIntStateOf(match?.currentInnings ?: 1) }
     var showOversDialog by remember { mutableStateOf(false) }
     var showManageSquads by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val view = LocalView.current
 
     Scaffold(
         topBar = {
@@ -46,16 +60,35 @@ fun LiveScoringScreen(
                         Column {
                             Text("Match Center", fontWeight = FontWeight.Black)
                             match?.let { m ->
-                                val battingTeamName = if (m.battingTeamId == m.teamA.id) m.teamA.name else m.teamB.name
-                                val crr = if (m.totalBalls > 0) (m.totalRuns.toDouble() / (m.totalBalls / 6.0 + (m.totalBalls % 6) / 6.0)) else 0.0
-                                val tickerText = buildString {
-                                    append("🏏 $battingTeamName ${m.totalRuns}/${m.totalWickets} (${m.totalBalls / 6}.${m.totalBalls % 6})")
-                                    append("  •  CRR: ${String.format(Locale.getDefault(), "%.2f", crr)}")
-                                    if (m.currentInnings == 2) {
-                                        val runsNeeded = (m.target ?: 0) - m.totalRuns
-                                        val ballsRemaining = (m.oversPerInnings * 6) - m.totalBalls
-                                        append("  •  Target: ${m.target}")
-                                        append("  •  Need $runsNeeded off $ballsRemaining")
+                                val indicator = when {
+                                    m.status == MatchStatus.COMPLETED -> "MATCH COMPLETED"
+                                    m.pendingAction == PendingAction.START_SECOND_INNINGS -> "1ST INNINGS COMPLETED"
+                                    selectedTabIndex == 1 && viewedInnings == 1 && m.currentInnings == 2 -> "1ST INNINGS COMPLETED"
+                                    else -> "LIVE"
+                                }
+                                val tickerText = if (selectedTabIndex == 1) {
+                                    val team = if (viewedInnings == 1) {
+                                        if (m.initialBattingTeamId == m.teamA.id) m.teamA else m.teamB
+                                    } else {
+                                        if (m.initialBattingTeamId == m.teamA.id) m.teamB else m.teamA
+                                    }
+                                    val runs = if (viewedInnings == 1) (m.innings1Data?.runs ?: if (m.currentInnings == 1) m.totalRuns else 0) else m.totalRuns
+                                    val wkts = if (viewedInnings == 1) (m.innings1Data?.wickets ?: if (m.currentInnings == 1) m.totalWickets else 0) else m.totalWickets
+                                    val balls = if (viewedInnings == 1) (m.innings1Data?.balls ?: if (m.currentInnings == 1) m.totalBalls else 0) else m.totalBalls
+                                    val crr = if (balls > 0) (runs.toDouble() / (balls / 6.0 + (balls % 6) / 6.0)) else 0.0
+                                    
+                                    "[$indicator] ${team.name} $runs/$wkts (${balls / 6}.${balls % 6}) • CRR: ${String.format(Locale.getDefault(), "%.2f", crr)}"
+                                } else {
+                                    val battingTeamName = if (m.battingTeamId == m.teamA.id) m.teamA.name else m.teamB.name
+                                    val crr = if (m.totalBalls > 0) (m.totalRuns.toDouble() / (m.totalBalls / 6.0 + (m.totalBalls % 6) / 6.0)) else 0.0
+                                    buildString {
+                                        append("[$indicator] $battingTeamName ${m.totalRuns}/${m.totalWickets} (${m.totalBalls / 6}.${m.totalBalls % 6})")
+                                        append(" • CRR: ${String.format(Locale.getDefault(), "%.2f", crr)}")
+                                        if (m.currentInnings == 2 && m.status != MatchStatus.COMPLETED) {
+                                            val runsNeeded = (m.target ?: 0) - m.totalRuns
+                                            val ballsRemaining = (m.oversPerInnings * 6) - m.totalBalls
+                                            append(" • Target: ${m.target} • Need $runsNeeded off $ballsRemaining")
+                                        }
                                     }
                                 }
                                 Text(
@@ -74,6 +107,9 @@ fun LiveScoringScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { shareMatchScreenshot(context, view) }) {
+                            Icon(Icons.Default.Share, contentDescription = "Share")
+                        }
                         IconButton(onClick = { showOversDialog = true }) {
                             Icon(Icons.Default.Settings, contentDescription = "Settings")
                         }
@@ -108,6 +144,9 @@ fun LiveScoringScreen(
                     Tab(selected = selectedTabIndex == 2, onClick = { selectedTabIndex = 2 }) {
                         Text("OVERS", modifier = Modifier.padding(12.dp), fontWeight = FontWeight.Bold)
                     }
+                    Tab(selected = selectedTabIndex == 3, onClick = { selectedTabIndex = 3 }) {
+                        Text("STATS", modifier = Modifier.padding(12.dp), fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -116,13 +155,14 @@ fun LiveScoringScreen(
             Box(modifier = Modifier.padding(padding)) {
                 when (selectedTabIndex) {
                     0 -> LiveTab(m, viewModel)
-                    1 -> ScorecardTab(m, viewModel)
+                    1 -> ScorecardTab(m, viewModel, viewedInnings) { viewedInnings = it }
                     2 -> OversTab(m, viewModel)
+                    3 -> StatsTab(m)
                 }
 
                 if (m.pendingAction == PendingAction.TOSS_REQUIRED) {
                     TossOverlay(m, viewModel)
-                } else if (m.pendingAction == PendingAction.START_SECOND_INNINGS) {
+                } else if (m.pendingAction == PendingAction.START_SECOND_INNINGS && m.status != MatchStatus.COMPLETED) {
                     InningsOverOverlay(m, viewModel)
                 } else if (m.pendingAction != PendingAction.NONE && m.status != MatchStatus.COMPLETED) {
                     PlayerSelectionOverlay(m, viewModel)
@@ -329,32 +369,36 @@ fun LiveTab(match: Match, viewModel: ScoringViewModel) {
 }
 
 @Composable
-fun ScorecardTab(match: Match, viewModel: ScoringViewModel) {
-    var selectedInnings by remember { mutableIntStateOf(match.currentInnings) }
+fun ScorecardTab(
+    match: Match,
+    viewModel: ScoringViewModel,
+    viewedInnings: Int,
+    onInningsChange: (Int) -> Unit
+) {
     val teamA = match.teamA
     val teamB = match.teamB
 
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF8F9FA))) {
         ScrollableTabRow(
-            selectedTabIndex = selectedInnings - 1,
+            selectedTabIndex = viewedInnings - 1,
             containerColor = Color.White,
             contentColor = MaterialTheme.colorScheme.primary,
             edgePadding = 16.dp,
             divider = {},
             indicator = { tabPositions ->
                 TabRowDefaults.SecondaryIndicator(
-                    Modifier.tabIndicatorOffset(tabPositions[selectedInnings - 1]),
+                    Modifier.tabIndicatorOffset(tabPositions[viewedInnings - 1]),
                     height = 3.dp
                 )
             }
         ) {
             val i1Team = if (match.initialBattingTeamId == teamA.id) teamA else teamB
-            Tab(selected = selectedInnings == 1, onClick = { selectedInnings = 1 }) {
+            Tab(selected = viewedInnings == 1, onClick = { onInningsChange(1) }) {
                 Text("${i1Team.name} Innings", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
             }
             if (match.currentInnings == 2 || match.status == MatchStatus.COMPLETED) {
                 val i2Team = if (match.initialBattingTeamId == teamA.id) teamB else teamA
-                Tab(selected = selectedInnings == 2, onClick = { selectedInnings = 2 }) {
+                Tab(selected = viewedInnings == 2, onClick = { onInningsChange(2) }) {
                     Text("${i2Team.name} Innings", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 }
             }
@@ -365,7 +409,7 @@ fun ScorecardTab(match: Match, viewModel: ScoringViewModel) {
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
             item {
-                if (selectedInnings == 1) {
+                if (viewedInnings == 1) {
                     val i1Team = if (match.initialBattingTeamId == teamA.id) teamA else teamB
                     InningsScorecard(
                         match = match,
@@ -381,7 +425,9 @@ fun ScorecardTab(match: Match, viewModel: ScoringViewModel) {
                         totalOvers = if (match.innings1Data != null) "${match.innings1Data.balls / 6}.${match.innings1Data.balls % 6}" else (if (match.currentInnings == 1) "${match.totalBalls / 6}.${match.totalBalls % 6}" else "0.0"),
                         bowlingTeamPlayers = if (i1Team.id == teamA.id) teamB.players else teamA.players,
                         maxBalls = match.oversPerInnings * 6,
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        numericRuns = match.innings1Data?.runs ?: (if (match.currentInnings == 1) match.totalRuns else 0),
+                        numericBalls = match.innings1Data?.balls ?: (if (match.currentInnings == 1) match.totalBalls else 0)
                     )
                 } else {
                     val i2Team = if (match.initialBattingTeamId == teamA.id) teamB else teamA
@@ -399,7 +445,9 @@ fun ScorecardTab(match: Match, viewModel: ScoringViewModel) {
                         totalOvers = if (match.currentInnings == 2) "${match.totalBalls / 6}.${match.totalBalls % 6}" else "0.0",
                         bowlingTeamPlayers = if (i2Team.id == teamA.id) teamB.players else teamA.players,
                         maxBalls = match.oversPerInnings * 6,
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        numericRuns = if (match.currentInnings == 2) match.totalRuns else 0,
+                        numericBalls = if (match.currentInnings == 2) match.totalBalls else 0
                     )
                 }
             }
@@ -422,7 +470,9 @@ fun InningsScorecard(
     totalOvers: String?,
     bowlingTeamPlayers: List<Player>,
     maxBalls: Int,
-    viewModel: ScoringViewModel
+    viewModel: ScoringViewModel,
+    numericRuns: Int,
+    numericBalls: Int
 ) {
     Column(modifier = Modifier.fillMaxWidth().background(Color.White)) {
         Box(
@@ -460,7 +510,12 @@ fun InningsScorecard(
         ) {
             Text("Total 🏆", fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
             Column(horizontalAlignment = Alignment.End) {
-                Text(totalScore ?: "0/0", fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
+                val crr = if (numericBalls > 0) (numericRuns.toDouble() / (numericBalls / 6.0 + (numericBalls % 6) / 6.0)) else 0.0
+                Text(
+                    text = "${totalScore ?: "0/0"} (CRR: ${String.format(Locale.getDefault(), "%.2f", crr)})",
+                    fontWeight = FontWeight.Black,
+                    style = MaterialTheme.typography.titleMedium
+                )
                 Text("$totalOvers Ov", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
             }
         }
@@ -1457,6 +1512,397 @@ fun SquadList(title: String, players: List<Player>, match: Match, viewModel: Sco
                 }
                 HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray)
             }
+        }
+    }
+}
+
+fun shareMatchScreenshot(context: Context, view: View) {
+    val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    view.draw(canvas)
+
+    try {
+        val cachePath = File(context.cacheDir, "shared_images")
+        cachePath.mkdirs()
+        val file = File(cachePath, "match_stats.png")
+        val stream = FileOutputStream(file)
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+        stream.close()
+
+        val contentUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+
+        val shareIntent = Intent().apply {
+            action = Intent.ACTION_SEND
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            setDataAndType(contentUri, context.contentResolver.getType(contentUri))
+            putExtra(Intent.EXTRA_STREAM, contentUri)
+        }
+        context.startActivity(Intent.createChooser(shareIntent, "Share Match Stats"))
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+}
+
+data class InningsStats(
+    val powerplay: PhaseStats,
+    val middle: PhaseStats,
+    val final: PhaseStats,
+    val sixes: Int,
+    val fours: Int,
+    val boundaryRuns: Int,
+    val dotBallPercentage: Double,
+    val extras: Int
+)
+
+data class PhaseStats(
+    val runs: Int,
+    val wickets: Int
+)
+
+fun calculateInningsStats(balls: List<Ball>): InningsStats {
+    var ppRuns = 0; var ppWickets = 0
+    var midRuns = 0; var midWickets = 0
+    var finRuns = 0; var finWickets = 0
+    var sixes = 0; var fours = 0; var dotBalls = 0; var totalLegalBalls = 0; var extras = 0
+
+    var legalBallCount = 0
+    balls.forEach { ball ->
+        if (ball.isLegalBall) {
+            legalBallCount++
+            totalLegalBalls++
+            if (ball.runs == 0 && ball.extrasType == ExtrasType.NONE) dotBalls++
+        }
+        val runs = ball.runs + ball.extraRuns
+        val isWicket = ball.wicketType != WicketType.NONE
+        
+        when {
+            legalBallCount <= 36 -> { ppRuns += runs; if (isWicket) ppWickets++ }
+            legalBallCount <= 90 -> { midRuns += runs; if (isWicket) midWickets++ }
+            else -> { finRuns += runs; if (isWicket) finWickets++ }
+        }
+
+        if (ball.runs == 6) sixes++
+        if (ball.runs == 4) fours++
+        if (ball.extrasType != ExtrasType.NONE) {
+            extras += ball.extraRuns + (if (ball.extrasType == ExtrasType.WIDE || ball.extrasType == ExtrasType.NO_BALL) 1 else 0)
+        }
+    }
+
+    return InningsStats(
+        powerplay = PhaseStats(ppRuns, ppWickets),
+        middle = PhaseStats(midRuns, midWickets),
+        final = PhaseStats(finRuns, finWickets),
+        sixes = sixes, fours = fours, boundaryRuns = (sixes * 6) + (fours * 4),
+        dotBallPercentage = if (totalLegalBalls > 0) (dotBalls.toDouble() / totalLegalBalls) * 100 else 0.0,
+        extras = extras
+    )
+}
+
+fun calculatePartnerships(balls: List<Ball>, teamPlayers: List<Player>): List<Partnership> {
+    val partnerships = mutableListOf<Partnership>()
+    if (balls.isEmpty()) return partnerships
+
+    var b1Id: String? = null
+    var b2Id: String? = null
+    var b1Runs = 0; var b1Balls = 0
+    var b2Runs = 0; var b2Balls = 0
+    var pRuns = 0; var pBalls = 0
+
+    balls.forEach { ball ->
+        if (b1Id == null || b2Id == null) {
+            b1Id = ball.strikerId
+            b2Id = ball.nonStrikerId
+        }
+
+        pRuns += (ball.runs + ball.extraRuns)
+        if (ball.isLegalBall) pBalls++
+
+        if (ball.strikerId == b1Id) {
+            b1Runs += ball.runs
+            if (ball.isLegalBall) b1Balls++
+        } else if (ball.strikerId == b2Id) {
+            b2Runs += ball.runs
+            if (ball.isLegalBall) b2Balls++
+        } else if (ball.nonStrikerId == b1Id) {
+            // b2Id was replaced by striker
+            b2Id = ball.strikerId
+            b2Runs = ball.runs
+            if (ball.isLegalBall) b2Balls = 1 else b2Balls = 0
+        } else if (ball.nonStrikerId == b2Id) {
+            // b1Id was replaced by striker
+            b1Id = ball.strikerId
+            b1Runs = ball.runs
+            if (ball.isLegalBall) b1Balls = 1 else b1Balls = 0
+        }
+
+        if (ball.wicketType != WicketType.NONE) {
+            partnerships.add(Partnership(
+                b1Id!!, teamPlayers.find { it.id == b1Id }?.name ?: "Unknown", b1Runs, b1Balls,
+                b2Id!!, teamPlayers.find { it.id == b2Id }?.name ?: "Unknown", b2Runs, b2Balls,
+                pRuns, pBalls
+            ))
+            pRuns = 0; pBalls = 0
+            b1Runs = 0; b1Balls = 0
+            b2Runs = 0; b2Balls = 0
+            b1Id = null; b2Id = null
+        }
+    }
+
+    if (pRuns > 0 || pBalls > 0) {
+        partnerships.add(Partnership(
+            b1Id ?: "", teamPlayers.find { it.id == b1Id }?.name ?: "Unknown", b1Runs, b1Balls,
+            b2Id ?: "", teamPlayers.find { it.id == b2Id }?.name ?: "Unknown", b2Runs, b2Balls,
+            pRuns, pBalls
+        ))
+    }
+    return partnerships
+}
+
+@Composable
+fun StatsTab(match: Match) {
+    val teamA = match.teamA; val teamB = match.teamB
+    val i1Team = if (match.initialBattingTeamId == teamA.id) teamA else teamB
+    val i2Team = if (match.initialBattingTeamId == teamA.id) teamB else teamA
+
+    val splitIdx = match.innings1Data?.recordedBallsCount ?: match.ballHistory.size
+    val i1Balls = match.ballHistory.take(splitIdx)
+    val i2Balls = match.ballHistory.drop(splitIdx)
+
+    val i1Stats = calculateInningsStats(i1Balls)
+    val i2Stats = calculateInningsStats(i2Balls)
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(Color(0xFFF8F9FA)).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item { ScoringBreakdownCard(i1Team.name, i2Team.name, i1Stats, i2Stats) }
+        item { BestPerformancesBatters(i1Team, i2Team) }
+        item { BestPerformancesBowlers(i1Team, i2Team) }
+        item { PartnershipsSection(match, i1Team, i2Team) }
+    }
+}
+
+@Composable
+fun PartnershipsSection(match: Match, i1Team: Team, i2Team: Team) {
+    val splitIdx = match.innings1Data?.recordedBallsCount ?: match.ballHistory.size
+    val i1Balls = match.ballHistory.take(splitIdx)
+    val i2Balls = match.ballHistory.drop(splitIdx)
+
+    val i1Partnerships = calculatePartnerships(i1Balls, i1Team.players)
+    val i2Partnerships = calculatePartnerships(i2Balls, i2Team.players)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("PARTNERSHIPS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.Gray)
+            
+            if (i1Partnerships.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(i1Team.name.uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                i1Partnerships.forEachIndexed { index, partnership ->
+                    PartnershipRow(index + 1, partnership)
+                }
+            }
+
+            if (i2Partnerships.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(i2Team.name.uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                i2Partnerships.forEachIndexed { index, partnership ->
+                    PartnershipRow(index + 1, partnership)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PartnershipRow(wicketNum: Int, partnership: Partnership) {
+    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
+                Text(partnership.batter1Name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text("${partnership.batter1Runs} (${partnership.batter1Balls})", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+            }
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 8.dp)) {
+                Text("${partnership.totalRuns} (${partnership.totalBalls})", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Black)
+                Text("${wicketNum}${getOrdinalSuffix(wicketNum)} Wicket", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            }
+
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                Text(partnership.batter2Name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1, textAlign = TextAlign.End)
+                Text("${partnership.batter2Runs} (${partnership.batter2Balls})", style = MaterialTheme.typography.labelSmall, color = Color.Gray, textAlign = TextAlign.End)
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(6.dp))
+        
+        val totalBatterRuns = (partnership.batter1Runs + partnership.batter2Runs).coerceAtLeast(1)
+        val b1Weight = partnership.batter1Runs.toFloat() / totalBatterRuns
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .background(Color(0xFFEEEEEE), CircleShape)
+        ) {
+            if (b1Weight > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(b1Weight)
+                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(topStart = 2.dp, bottomStart = 2.dp))
+                )
+            }
+            if (1f - b1Weight > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(1f - b1Weight)
+                        .background(MaterialTheme.colorScheme.secondary, RoundedCornerShape(topEnd = 2.dp, bottomEnd = 2.dp))
+                )
+            }
+        }
+    }
+}
+
+fun getOrdinalSuffix(n: Int): String {
+    return when {
+        n % 100 in 11..13 -> "th"
+        n % 10 == 1 -> "st"
+        n % 10 == 2 -> "nd"
+        n % 10 == 3 -> "rd"
+        else -> "th"
+    }
+}
+
+@Composable
+fun ScoringBreakdownCard(team1Name: String, team2Name: String, s1: InningsStats, s2: InningsStats) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("SCORING BREAKDOWN", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.Gray)
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(team1Name, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                Text("VS", fontWeight = FontWeight.Bold, color = Color.LightGray, textAlign = TextAlign.Center, modifier = Modifier.width(40.dp))
+                Text(team2Name, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            BreakdownRow("Powerplay (1-6)", "${s1.powerplay.runs}/${s1.powerplay.wickets}", "${s2.powerplay.runs}/${s2.powerplay.wickets}")
+            BreakdownRow("Middle (7-15)", "${s1.middle.runs}/${s1.middle.wickets}", "${s2.middle.runs}/${s2.middle.wickets}")
+            BreakdownRow("Death (16+)", "${s1.final.runs}/${s1.final.wickets}", "${s2.final.runs}/${s2.final.wickets}")
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp)
+            BreakdownRow("Sixes", "${s1.sixes}", "${s2.sixes}")
+            BreakdownRow("Fours", "${s1.fours}", "${s2.fours}")
+            BreakdownRow("Boundary Runs", "${s1.boundaryRuns}", "${s2.boundaryRuns}")
+            BreakdownRow("Dot Ball %", String.format(Locale.getDefault(), "%.1f%%", s1.dotBallPercentage), String.format(Locale.getDefault(), "%.1f%%", s2.dotBallPercentage))
+            BreakdownRow("Extras", "${s1.extras}", "${s2.extras}")
+        }
+    }
+}
+
+@Composable
+fun BreakdownRow(label: String, val1: String, val2: String) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(val1, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.width(100.dp))
+        Text(val2, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+fun BestPerformancesBatters(team1: Team, team2: Team) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("BEST BATTING PERFORMANCES", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.Gray)
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                PerformanceColumn(team1.name, team1.players.sortedByDescending { it.battingStats.runs }.take(3).filter { it.battingStats.balls > 0 }, true)
+                Spacer(modifier = Modifier.width(16.dp))
+                PerformanceColumn(team2.name, team2.players.sortedByDescending { it.battingStats.runs }.take(3).filter { it.battingStats.balls > 0 }, false)
+            }
+        }
+    }
+}
+
+@Composable
+fun RowScope.PerformanceColumn(teamName: String, players: List<Player>, isLeft: Boolean) {
+    Column(modifier = Modifier.weight(1f), horizontalAlignment = if (isLeft) Alignment.Start else Alignment.End) {
+        Text(teamName, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
+        players.forEach { p ->
+            Text(
+                text = "${p.name}: ${p.battingStats.runs}(${p.battingStats.balls})", 
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                color = Color.DarkGray
+            )
+            Text(
+                text = "4s: ${p.battingStats.fours} | 6s: ${p.battingStats.sixes}",
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 9.sp,
+                color = Color.Gray
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+    }
+}
+
+@Composable
+fun BestPerformancesBowlers(team1: Team, team2: Team) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("BEST BOWLING PERFORMANCES", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.Gray)
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                BowlingPerformanceColumn(team1.name, team1.players.sortedWith(compareByDescending<Player> { it.bowlingStats.wickets }.thenBy { it.bowlingStats.economy }).take(3).filter { it.bowlingStats.balls > 0 || it.bowlingStats.overs > 0 }, true)
+                Spacer(modifier = Modifier.width(16.dp))
+                BowlingPerformanceColumn(team2.name, team2.players.sortedWith(compareByDescending<Player> { it.bowlingStats.wickets }.thenBy { it.bowlingStats.economy }).take(3).filter { it.bowlingStats.balls > 0 || it.bowlingStats.overs > 0 }, false)
+            }
+        }
+    }
+}
+
+@Composable
+fun RowScope.BowlingPerformanceColumn(teamName: String, players: List<Player>, isLeft: Boolean) {
+    Column(modifier = Modifier.weight(1f), horizontalAlignment = if (isLeft) Alignment.Start else Alignment.End) {
+        Text(teamName, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
+        players.forEach { p ->
+            Text(
+                text = "${p.name}: ${p.bowlingStats.wickets}/${p.bowlingStats.runsConceded}", 
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color.DarkGray
+            )
+            Text(
+                text = "${p.bowlingStats.formattedOvers} ov | Econ: ${String.format(Locale.getDefault(), "%.1f", p.bowlingStats.economy)}",
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 9.sp,
+                color = Color.Gray
+            )
+            Spacer(modifier = Modifier.height(4.dp))
         }
     }
 }

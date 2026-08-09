@@ -314,6 +314,9 @@ class ScoringViewModel : ViewModel() {
                     pendingAction = PendingAction.START_SECOND_INNINGS
                 )
             } else if (current.currentInnings == 2) {
+                if (current.pendingAction == PendingAction.START_SECOND_INNINGS) {
+                    current = current.copy(pendingAction = PendingAction.NONE)
+                }
                 if (current.totalRuns >= (current.target ?: 0)) {
                     current = current.copy(status = MatchStatus.COMPLETED, winnerId = current.battingTeamId)
                 } else if (inningsEnded) {
@@ -323,7 +326,9 @@ class ScoringViewModel : ViewModel() {
         }
 
         var final = current
-        if (final.status != MatchStatus.COMPLETED) {
+        if (final.status == MatchStatus.COMPLETED) {
+            final = final.copy(pendingAction = PendingAction.NONE)
+        } else {
             // Restore manual selections if they are valid
             if (final.strikerId == null && isAvailableForNew(final, match.strikerId)) final = final.copy(strikerId = match.strikerId)
             if (final.nonStrikerId == null && isAvailableForNew(final, match.nonStrikerId)) final = final.copy(nonStrikerId = match.nonStrikerId)

@@ -144,6 +144,19 @@ data class Match(
     val innings1Data: InningsSummary? = null
 )
 
+data class Partnership(
+    val batter1Id: String,
+    val batter1Name: String,
+    val batter1Runs: Int,
+    val batter1Balls: Int,
+    val batter2Id: String,
+    val batter2Name: String,
+    val batter2Runs: Int,
+    val batter2Balls: Int,
+    val totalRuns: Int,
+    val totalBalls: Int
+)
+
 enum class PendingAction {
     NONE, SELECT_STRIKER, SELECT_NON_STRIKER, SELECT_BOWLER, TOSS_REQUIRED, 
     SELECT_CAPTAIN_A, SELECT_CAPTAIN_B, SELECT_WK_A, SELECT_WK_B, SELECT_FIELDER,
