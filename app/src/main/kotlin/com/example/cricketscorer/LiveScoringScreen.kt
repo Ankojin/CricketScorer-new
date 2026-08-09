@@ -41,7 +41,8 @@ import java.util.Locale
 @Composable
 fun LiveScoringScreen(
     viewModel: ScoringViewModel,
-    onNavigateToDashboard: () -> Unit
+    onNavigateToDashboard: () -> Unit,
+    onNavigateToMatches: () -> Unit
 ) {
     val match by viewModel.matchState.collectAsState()
     var selectedTabIndex by remember { mutableIntStateOf(0) }
@@ -164,6 +165,8 @@ fun LiveScoringScreen(
                     TossOverlay(m, viewModel)
                 } else if (m.pendingAction == PendingAction.START_SECOND_INNINGS && m.status != MatchStatus.COMPLETED) {
                     InningsOverOverlay(m, viewModel)
+                } else if (m.pendingAction == PendingAction.SELECT_RUNS_DROPPED_CATCH) {
+                    DroppedCatchRunsOverlay(viewModel)
                 } else if (m.pendingAction != PendingAction.NONE && m.status != MatchStatus.COMPLETED) {
                     PlayerSelectionOverlay(m, viewModel)
                 }
@@ -240,11 +243,41 @@ fun LiveScoringScreen(
                     )
                 }
             }
-        } ?: Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+        } ?: Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    "No Active Match Selected",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Go to the Matches tab to select a game or resume scoring from the Home screen.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(32.dp))
+                Button(
+                    onClick = onNavigateToMatches,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("VIEW MATCHES", fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 }
+
+
 
 @Composable
 fun TossOverlay(match: Match, viewModel: ScoringViewModel) {
@@ -427,10 +460,18 @@ fun ScorecardTab(
                         maxBalls = match.oversPerInnings * 6,
                         viewModel = viewModel,
                         numericRuns = match.innings1Data?.runs ?: (if (match.currentInnings == 1) match.totalRuns else 0),
-                        numericBalls = match.innings1Data?.balls ?: (if (match.currentInnings == 1) match.totalBalls else 0)
+                        numericBalls = match.innings1Data?.balls ?: (if (match.currentInnings == 1) match.totalBalls else 0),
+                        durationMinutes = match.innings1Data?.durationMinutes ?: 0
                     )
                 } else {
                     val i2Team = if (match.initialBattingTeamId == teamA.id) teamB else teamA
+                    val i2Duration = if (match.status == MatchStatus.COMPLETED) {
+                        match.startTimeMillis?.let { start ->
+                            match.endTimeMillis?.let { end -> ((end - start) / 60000).toInt() }
+                        } ?: 0
+                    } else {
+                        match.startTimeMillis?.let { ((System.currentTimeMillis() - it) / 60000).toInt() } ?: 0
+                    }
                     InningsScorecard(
                         match = match,
                         team = i2Team,
@@ -447,7 +488,8 @@ fun ScorecardTab(
                         maxBalls = match.oversPerInnings * 6,
                         viewModel = viewModel,
                         numericRuns = if (match.currentInnings == 2) match.totalRuns else 0,
-                        numericBalls = if (match.currentInnings == 2) match.totalBalls else 0
+                        numericBalls = if (match.currentInnings == 2) match.totalBalls else 0,
+                        durationMinutes = i2Duration
                     )
                 }
             }
@@ -472,7 +514,8 @@ fun InningsScorecard(
     maxBalls: Int,
     viewModel: ScoringViewModel,
     numericRuns: Int,
-    numericBalls: Int
+    numericBalls: Int,
+    durationMinutes: Int
 ) {
     Column(modifier = Modifier.fillMaxWidth().background(Color.White)) {
         Box(
@@ -508,16 +551,22 @@ fun InningsScorecard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Total 🏆", fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
-            Column(horizontalAlignment = Alignment.End) {
-                val crr = if (numericBalls > 0) (numericRuns.toDouble() / (numericBalls / 6.0 + (numericBalls % 6) / 6.0)) else 0.0
+            val crr = if (numericBalls > 0) (numericRuns.toDouble() / (numericBalls / 6.0 + (numericBalls % 6) / 6.0)) else 0.0
+            Column {
+                Text("Total", fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = "${totalScore ?: "0/0"} (CRR: ${String.format(Locale.getDefault(), "%.2f", crr)})",
-                    fontWeight = FontWeight.Black,
-                    style = MaterialTheme.typography.titleMedium
+                    text = "$totalOvers Ov (RR: ${String.format(Locale.getDefault(), "%.2f", crr)}, $durationMinutes Mins)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                    fontWeight = FontWeight.Bold
                 )
-                Text("$totalOvers Ov", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
             }
+            Text(
+                text = "${totalScore ?: "0/0"}",
+                fontWeight = FontWeight.Black,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
         HorizontalDivider(thickness = 1.dp, color = Color.LightGray)
 
@@ -567,8 +616,9 @@ fun BattingTable(match: Match, players: List<Player>, strikerId: String?, nonStr
                     Column(modifier = Modifier.weight(4f)) {
                         val isCaptain = player.id == match.teamACaptainId || player.id == match.teamBCaptainId
                         val isWK = player.id == match.teamAWicketKeeperId || player.id == match.teamBWicketKeeperId
+                        val isRH = player.battingStats.isRetiredHurt
                         Text(
-                            text = "🏏 " + player.name + (if (isCaptain) " (c)" else "") + (if (isWK) " 🧤" else "") + (if (isCurrentBatter && !player.battingStats.isOut) "*" else ""),
+                            text = "🏏 " + player.name + (if (isCaptain) " (c)" else "") + (if (isWK) " 🧤" else "") + (if (isCurrentBatter && !player.battingStats.isOut) "*" else "") + (if (isRH) " (Ret. Hurt)" else ""),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             color = if (player.battingStats.isOut) Color.Gray else Color.Black
@@ -584,7 +634,8 @@ fun BattingTable(match: Match, players: List<Player>, strikerId: String?, nonStr
                             WicketType.STUMPED -> "st $dismissalFielderName b $dismissalBowlerName"
                             WicketType.RUN_OUT -> "run out ($dismissalFielderName)"
                             WicketType.HIT_WICKET -> "hit wicket b $dismissalBowlerName"
-                            WicketType.NONE -> if (isCurrentBatter) "not out" else ""
+                            WicketType.RETIRED_HURT -> "retired hurt"
+                            WicketType.NONE -> if (isCurrentBatter) "not out" else if (isRH) "retired hurt" else ""
                             else -> "out"
                         }
                         
@@ -690,6 +741,11 @@ fun OversTab(match: Match, viewModel: ScoringViewModel) {
             match.ballHistory.drop(splitIdx).mapIndexed { index, ball -> (index + splitIdx) to ball }
         }
 
+        val battingTeam = if (selectedInnings == 1) (if (match.initialBattingTeamId == teamA.id) teamA else teamB) else (if (match.initialBattingTeamId == teamA.id) teamB else teamA)
+        val bowlingTeam = if (battingTeam.id == teamA.id) teamB else teamA
+        val battingTeamPlayers = battingTeam.players
+        val bowlingTeamPlayers = bowlingTeam.players
+
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -716,15 +772,49 @@ fun OversTab(match: Match, viewModel: ScoringViewModel) {
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         val overNum = overs.size - index
+                        val bowlerId = overBalls.firstOrNull()?.second?.bowlerId
+                        val bowlerName = bowlingTeamPlayers.find { it.id == bowlerId }?.name ?: "Unknown"
+
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Over $overNum", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                            Column {
+                                Text("Over $overNum", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                                Text("Bowler: $bowlerName", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
+                            }
                             val overRuns = overBalls.sumOf { it.second.runs + it.second.extraRuns }
-                            Text("$overRuns Runs", fontWeight = FontWeight.Bold, color = Color.DarkGray)
+                            val overWickets = overBalls.count { it.second.wicketType != WicketType.NONE && it.second.wicketType != WicketType.RETIRED_HURT }
+                            Text("$overRuns Runs" + (if (overWickets > 0) ", $overWickets Wkts" else ""), fontWeight = FontWeight.Bold, color = Color.DarkGray)
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             overBalls.forEach { (idx, ball) ->
-                                BallCircle(ball, onClick = { editingBallIndex = idx })
+                                BallBox(ball, onClick = { editingBallIndex = idx })
+                            }
+                        }
+
+                        // Dropped Catch Info
+                        val droppedBalls = overBalls.filter { it.second.isDroppedCatch }
+                        if (droppedBalls.isNotEmpty()) {
+                            droppedBalls.forEach { (idx, ball) ->
+                                val ballNumInOver = overBalls.indexOfFirst { it.first == idx } + 1
+                                val overNum = overs.size - index
+                                val fielder = bowlingTeamPlayers.find { it.id == ball.fielderId }?.name ?: "Unknown"
+                                val batter = battingTeamPlayers.find { it.id == ball.strikerId }
+                                val batterStats = "${batter?.name} ${batter?.battingStats?.runs}* (${batter?.battingStats?.balls}b)"
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Surface(
+                                    color = Color(0xFFFFFDE7),
+                                    shape = RoundedCornerShape(4.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "$overNum.$ballNumInOver: Dropped catch | Fielder: $fielder | Batter: $batterStats",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(8.dp),
+                                        color = Color(0xFFF57F17),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }
@@ -826,41 +916,39 @@ fun OversTab(match: Match, viewModel: ScoringViewModel) {
 }
 
 @Composable
-fun BallCircle(ball: Ball, onClick: () -> Unit = {}) {
+fun BallBox(ball: Ball, onClick: () -> Unit = {}) {
     val bgColor = when {
+        ball.wicketType == WicketType.RETIRED_HURT -> Color.Gray
         ball.wicketType != WicketType.NONE -> Color(0xFFD32F2F)
         ball.runs == 4 -> Color(0xFF388E3C)
-        ball.runs == 6 -> Color(0xFF1976D2)
-        ball.extrasType != ExtrasType.NONE -> Color(0xFFFF9800)
-        else -> Color(0xFFE0E0E0)
+        ball.runs == 6 -> Color(0xFF6A1B9A)
+        else -> Color(0xFFE1F5FE)
     }
-    val contentColor = if (ball.runs == 0 && ball.extrasType == ExtrasType.NONE && ball.wicketType == WicketType.NONE) Color.Black else Color.White
+    val contentColor = if (ball.wicketType != WicketType.NONE || ball.runs in listOf(4, 6)) Color.White else Color(0xFF0288D1)
 
     Surface(
-        modifier = Modifier.size(32.dp).clickable { onClick() },
-        shape = CircleShape,
-        color = bgColor
+        modifier = Modifier.size(36.dp).clickable { onClick() },
+        shape = RoundedCornerShape(8.dp),
+        color = bgColor,
+        shadowElevation = 1.dp
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = if (ball.isLegalBall) "🔴" else "⚪",
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 1.dp),
-                fontSize = 7.sp
-            )
-            if (ball.wicketType != WicketType.NONE) {
-                Text("W", color = contentColor, fontSize = 14.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(top = 4.dp))
-            } else if (ball.runs == 6) {
-                Icon(Icons.Default.Star, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp).padding(top = 4.dp))
-            } else {
-                val text = when {
-                    ball.extrasType == ExtrasType.WIDE -> "${ball.extraRuns}wd"
-                    ball.extrasType == ExtrasType.NO_BALL -> if (ball.runs > 0) "${ball.runs}nb" else "${ball.extraRuns}nb"
-                    ball.extrasType == ExtrasType.BYE -> "b${ball.extraRuns}"
-                    ball.extrasType == ExtrasType.LEG_BYE -> "lb${ball.extraRuns}"
-                    else -> "${ball.runs}"
-                }
-                Text(text, color = contentColor, fontSize = 12.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(top = 4.dp))
+            val text = when {
+                ball.wicketType == WicketType.RETIRED_HURT -> "RH"
+                ball.wicketType != WicketType.NONE -> "W"
+                ball.runs == 0 && ball.extrasType == ExtrasType.NONE -> "•"
+                ball.extrasType == ExtrasType.WIDE -> "${ball.extraRuns}w"
+                ball.extrasType == ExtrasType.NO_BALL -> "${ball.runs + ball.extraRuns}nb"
+                ball.extrasType == ExtrasType.BYE -> "${ball.extraRuns}b"
+                ball.extrasType == ExtrasType.LEG_BYE -> "${ball.extraRuns}lb"
+                else -> "${ball.runs}"
             }
+            Text(
+                text = text,
+                color = contentColor,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
         }
     }
 }
@@ -880,6 +968,7 @@ fun PlayerSelectionOverlay(match: Match, viewModel: ScoringViewModel) {
         PendingAction.SELECT_WK_A -> "Select Wicket Keeper (${match.teamA.name})"
         PendingAction.SELECT_WK_B -> "Select Wicket Keeper (${match.teamB.name})"
         PendingAction.SELECT_FIELDER -> "Select Fielder (Catch/Stump/RO)"
+        PendingAction.SELECT_FIELDER_DROPPED_CATCH -> "Select Fielder (Dropped Catch)"
         else -> ""
     }
 
@@ -891,7 +980,7 @@ fun PlayerSelectionOverlay(match: Match, viewModel: ScoringViewModel) {
         PendingAction.SELECT_CAPTAIN_B -> match.teamB.players
         PendingAction.SELECT_WK_A -> match.teamA.players
         PendingAction.SELECT_WK_B -> match.teamB.players
-        PendingAction.SELECT_FIELDER -> bowlingTeam.players
+        PendingAction.SELECT_FIELDER, PendingAction.SELECT_FIELDER_DROPPED_CATCH -> bowlingTeam.players
         else -> emptyList()
     }
 
@@ -913,10 +1002,11 @@ fun PlayerSelectionOverlay(match: Match, viewModel: ScoringViewModel) {
                     } else {
                         LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
                             items(candidates) { player ->
+                                val displayName = if (player.battingStats.isRetiredHurt) "${player.name} (Ret. Hurt)" else player.name
                                 ListItem(
-                                    headlineContent = { Text(player.name, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+                                    headlineContent = { Text(displayName, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
                                     modifier = Modifier.clickable { 
-                                        if (match.pendingAction == PendingAction.SELECT_FIELDER) viewModel.selectFielder(player.id)
+                                        if (match.pendingAction == PendingAction.SELECT_FIELDER || match.pendingAction == PendingAction.SELECT_FIELDER_DROPPED_CATCH) viewModel.selectFielder(player.id)
                                         else viewModel.selectNewPlayer(player.id)
                                     },
                                     leadingContent = { 
@@ -988,6 +1078,43 @@ fun PlayerSelectionOverlay(match: Match, viewModel: ScoringViewModel) {
                 }
             }
         )
+    }
+}
+
+@Composable
+fun DroppedCatchRunsOverlay(viewModel: ScoringViewModel) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color.Black.copy(alpha = 0.6f)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Card(
+                modifier = Modifier.fillMaxWidth(0.9f).padding(16.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Text("Runs off Dropped Catch", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    Text("How many runs were taken?", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color.Gray)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        RunButton("0", modifier = Modifier.weight(1f)) { viewModel.handleRunsForDroppedCatch(0, true) }
+                        RunButton("1", modifier = Modifier.weight(1f)) { viewModel.handleRunsForDroppedCatch(1, true) }
+                        RunButton("2", modifier = Modifier.weight(1f)) { viewModel.handleRunsForDroppedCatch(2, true) }
+                        RunButton("3", modifier = Modifier.weight(1f)) { viewModel.handleRunsForDroppedCatch(3, true) }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        RunButton("4 💥", color = Color(0xFF388E3C), icon = Icons.Default.Star, modifier = Modifier.weight(1.5f)) { viewModel.handleRunsForDroppedCatch(4, true) }
+                        RunButton("6 💥", color = Color(0xFF6A1B9A), icon = Icons.Default.Star, modifier = Modifier.weight(1.5f)) { viewModel.handleRunsForDroppedCatch(6, true) }
+                        RunButton("1D", modifier = Modifier.weight(1f)) { viewModel.handleRunsForDroppedCatch(1, rotateStrike = false) }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1269,7 +1396,8 @@ fun ControlsSection(viewModel: ScoringViewModel) {
                 Column {
                     val types = listOf(
                         WicketType.BOWLED, WicketType.CAUGHT, WicketType.LBW,
-                        WicketType.RUN_OUT, WicketType.STUMPED, WicketType.HIT_WICKET
+                        WicketType.RUN_OUT, WicketType.STUMPED, WicketType.HIT_WICKET,
+                        WicketType.RETIRED_HURT
                     )
                     types.forEach { type ->
                         ListItem(
@@ -1387,7 +1515,7 @@ fun ControlsSection(viewModel: ScoringViewModel) {
         Spacer(modifier = Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             RunButton("4 💥", color = Color(0xFF388E3C), icon = Icons.Default.Star, modifier = Modifier.weight(1.5f)) { viewModel.handleRuns(4) }
-            RunButton("6 💥", color = Color(0xFF1976D2), icon = Icons.Default.Star, modifier = Modifier.weight(1.5f)) { viewModel.handleRuns(6) }
+            RunButton("6 💥", color = Color(0xFF6A1B9A), icon = Icons.Default.Star, modifier = Modifier.weight(1.5f)) { viewModel.handleRuns(6) }
             RunButton("1D", modifier = Modifier.weight(1f)) { viewModel.handleRuns(1, rotateStrike = false) }
         }
 
@@ -1395,20 +1523,31 @@ fun ControlsSection(viewModel: ScoringViewModel) {
         Text("SPECIALS / EXTRAS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.Gray)
         Spacer(modifier = Modifier.height(8.dp))
         
-        Button(
-            onClick = { showWicketDialog = true },
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
-            modifier = Modifier.fillMaxWidth().height(64.dp),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.width(12.dp))
-            Text("WICKET 🚩", fontWeight = FontWeight.Black, fontSize = 20.sp, letterSpacing = 1.sp)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { showWicketDialog = true },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                modifier = Modifier.weight(1.5f).height(64.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(24.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("WICKET ☝️", fontWeight = FontWeight.Black, fontSize = 18.sp)
+            }
+            
+            Button(
+                onClick = { viewModel.handleWicket(WicketType.RETIRED_HURT) },
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
+                modifier = Modifier.weight(1f).height(64.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text("RETIRE", fontWeight = FontWeight.Black, fontSize = 16.sp)
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
         
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             ExtraButton("WD", modifier = Modifier.weight(1f)) {
                 viewModel.handleExtra(ExtrasType.WIDE)
             }
@@ -1418,6 +1557,9 @@ fun ControlsSection(viewModel: ScoringViewModel) {
             }
             ExtraButton("BYE", modifier = Modifier.weight(1f)) { viewModel.handleExtra(ExtrasType.BYE) }
             ExtraButton("LB", modifier = Modifier.weight(1f)) { viewModel.handleExtra(ExtrasType.LEG_BYE) }
+            ExtraButton("DROPPED", modifier = Modifier.weight(1.5f), color = Color(0xFFFFEB3B)) {
+                viewModel.handleDroppedCatch()
+            }
         }
     }
 }
@@ -1442,15 +1584,16 @@ fun RunButton(label: String, modifier: Modifier = Modifier, color: Color? = null
 }
 
 @Composable
-fun ExtraButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun ExtraButton(label: String, modifier: Modifier = Modifier, color: Color? = null, onClick: () -> Unit) {
     OutlinedButton(
         onClick = onClick,
         modifier = modifier.height(44.dp),
         shape = RoundedCornerShape(12.dp),
         contentPadding = PaddingValues(0.dp),
-        border = androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.outline)
+        border = androidx.compose.foundation.BorderStroke(2.dp, color ?: MaterialTheme.colorScheme.outline),
+        colors = if (color != null) ButtonDefaults.outlinedButtonColors(contentColor = Color.Black) else ButtonDefaults.outlinedButtonColors()
     ) {
-        Text(label, fontSize = 14.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Black, color = if (color != null) Color.Black else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -1551,7 +1694,8 @@ data class InningsStats(
     val fours: Int,
     val boundaryRuns: Int,
     val dotBallPercentage: Double,
-    val extras: Int
+    val extras: Int,
+    val droppedCatches: Int
 )
 
 data class PhaseStats(
@@ -1563,7 +1707,7 @@ fun calculateInningsStats(balls: List<Ball>): InningsStats {
     var ppRuns = 0; var ppWickets = 0
     var midRuns = 0; var midWickets = 0
     var finRuns = 0; var finWickets = 0
-    var sixes = 0; var fours = 0; var dotBalls = 0; var totalLegalBalls = 0; var extras = 0
+    var sixes = 0; var fours = 0; var dotBalls = 0; var totalLegalBalls = 0; var extras = 0; var dropped = 0
 
     var legalBallCount = 0
     balls.forEach { ball ->
@@ -1583,6 +1727,7 @@ fun calculateInningsStats(balls: List<Ball>): InningsStats {
 
         if (ball.runs == 6) sixes++
         if (ball.runs == 4) fours++
+        if (ball.isDroppedCatch) dropped++
         if (ball.extrasType != ExtrasType.NONE) {
             extras += ball.extraRuns + (if (ball.extrasType == ExtrasType.WIDE || ball.extrasType == ExtrasType.NO_BALL) 1 else 0)
         }
@@ -1594,7 +1739,8 @@ fun calculateInningsStats(balls: List<Ball>): InningsStats {
         final = PhaseStats(finRuns, finWickets),
         sixes = sixes, fours = fours, boundaryRuns = (sixes * 6) + (fours * 4),
         dotBallPercentage = if (totalLegalBalls > 0) (dotBalls.toDouble() / totalLegalBalls) * 100 else 0.0,
-        extras = extras
+        extras = extras,
+        droppedCatches = dropped
     )
 }
 
@@ -1810,6 +1956,7 @@ fun ScoringBreakdownCard(team1Name: String, team2Name: String, s1: InningsStats,
             BreakdownRow("Boundary Runs", "${s1.boundaryRuns}", "${s2.boundaryRuns}")
             BreakdownRow("Dot Ball %", String.format(Locale.getDefault(), "%.1f%%", s1.dotBallPercentage), String.format(Locale.getDefault(), "%.1f%%", s2.dotBallPercentage))
             BreakdownRow("Extras", "${s1.extras}", "${s2.extras}")
+            BreakdownRow("Dropped Catches", "${s1.droppedCatches}", "${s2.droppedCatches}")
         }
     }
 }

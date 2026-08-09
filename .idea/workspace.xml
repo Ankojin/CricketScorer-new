@@ -10,12 +10,16 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="61789d28-061d-4cfb-9044-cdd51be63bb1" name="Changes" comment="All fixes fixed">
-      <change afterPath="$PROJECT_DIR$/app/src/main/res/xml/file_paths.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/AndroidManifest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/AndroidManifest.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/app/build.gradle.kts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/HomeScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/HomeScreen.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/LiveScoringScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/LiveScoringScreen.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/MainActivity.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/MainActivity.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/Models.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/Models.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ScoringViewModel.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ScoringViewModel.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/TournamentDetailsScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/TournamentDetailsScreen.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/TournamentRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/TournamentRepository.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ui/theme/Theme.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ui/theme/Theme.kt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -254,7 +258,15 @@
       <option name="project" value="LOCAL" />
       <updated>1786267073434</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="All fixes fixed">
+      <option name="closed" value="true" />
+      <created>1786276607151</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1786276607151</updated>
+    </task>
+    <option name="localTasksCounter" value="8" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">

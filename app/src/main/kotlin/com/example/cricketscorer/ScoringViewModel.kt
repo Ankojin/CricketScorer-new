@@ -17,10 +17,18 @@ class ScoringViewModel : ViewModel() {
     val isDarkMode: StateFlow<Boolean?> = _isDarkMode.asStateFlow()
 
     private var pendingWicketBall: Ball? = null
+    private var pendingDroppedCatchBall: Ball? = null
 
     init {
         viewModelScope.launch {
             TournamentRepository.tournaments.collect { tournaments ->
+                if (_matchState.value == null) {
+                    val liveMatch = tournaments.flatMap { it.matches }.find { it.status == MatchStatus.LIVE }
+                    if (liveMatch != null) {
+                        loadMatch(liveMatch)
+                    }
+                }
+
                 val current = _matchState.value ?: return@collect
                 val tournamentId = current.tournamentId ?: return@collect
                 val tournament = tournaments.find { it.id == tournamentId } ?: return@collect
@@ -148,7 +156,8 @@ class ScoringViewModel : ViewModel() {
             strikerId = currentMatch.strikerId ?: return,
             nonStrikerId = currentMatch.nonStrikerId ?: return,
             bowlerId = currentMatch.currentBowlerId ?: return,
-            outPlayerId = finalOutPlayerId
+            outPlayerId = finalOutPlayerId,
+            isLegalBall = type != WicketType.RETIRED_HURT
         )
 
         val needsFielder = type == WicketType.CAUGHT || type == WicketType.RUN_OUT || type == WicketType.STUMPED
@@ -160,10 +169,38 @@ class ScoringViewModel : ViewModel() {
         }
     }
 
+    fun handleDroppedCatch() {
+        val currentMatch = _matchState.value ?: return
+        if (currentMatch.pendingAction != PendingAction.NONE) return
+        _matchState.update { it?.copy(pendingAction = PendingAction.SELECT_FIELDER_DROPPED_CATCH) }
+    }
+
     fun selectFielder(fielderId: String) {
-        val ball = pendingWicketBall ?: return
-        val updatedBall = ball.copy(fielderId = fielderId)
-        pendingWicketBall = null
+        val currentMatch = _matchState.value ?: return
+        val currentAction = currentMatch.pendingAction
+        if (currentAction == PendingAction.SELECT_FIELDER) {
+            val ball = pendingWicketBall ?: return
+            val updatedBall = ball.copy(fielderId = fielderId)
+            pendingWicketBall = null
+            recordBall(updatedBall)
+        } else if (currentAction == PendingAction.SELECT_FIELDER_DROPPED_CATCH) {
+            val ball = Ball(
+                runs = 0,
+                strikerId = currentMatch.strikerId ?: return,
+                nonStrikerId = currentMatch.nonStrikerId ?: return,
+                bowlerId = currentMatch.currentBowlerId ?: return,
+                isDroppedCatch = true,
+                fielderId = fielderId
+            )
+            pendingDroppedCatchBall = ball
+            _matchState.update { it?.copy(pendingAction = PendingAction.SELECT_RUNS_DROPPED_CATCH) }
+        }
+    }
+
+    fun handleRunsForDroppedCatch(runs: Int, rotateStrike: Boolean) {
+        val ball = pendingDroppedCatchBall ?: return
+        val updatedBall = ball.copy(runs = runs, rotateStrike = rotateStrike)
+        pendingDroppedCatchBall = null
         recordBall(updatedBall)
     }
 
@@ -219,7 +256,21 @@ class ScoringViewModel : ViewModel() {
     private fun recordBall(ball: Ball) {
         _matchState.update { current ->
             if (current == null) return@update null
-            val updatedMatch = current.copy(ballHistory = current.ballHistory + ball)
+            
+            // v1.6: Start time tracking
+            val matchWithTime = if (current.startTimeMillis == null) {
+                current.copy(startTimeMillis = System.currentTimeMillis())
+            } else current
+            
+            var updatedMatch = matchWithTime.copy(ballHistory = matchWithTime.ballHistory + ball)
+            
+            // Fix: Clear retired batter ID so it isn't restored by recalculateMatchFromHistory
+            if (ball.wicketType == WicketType.RETIRED_HURT) {
+                val outId = ball.outPlayerId ?: ball.strikerId
+                if (updatedMatch.strikerId == outId) updatedMatch = updatedMatch.copy(strikerId = null)
+                if (updatedMatch.nonStrikerId == outId) updatedMatch = updatedMatch.copy(nonStrikerId = null)
+            }
+
             val finalizedMatch = recalculateMatchFromHistory(updatedMatch)
             TournamentRepository.updateMatch(finalizedMatch.tournamentId ?: "", finalizedMatch)
             finalizedMatch
@@ -254,7 +305,7 @@ class ScoringViewModel : ViewModel() {
 
             current = current.copy(
                 totalRuns = current.totalRuns + ball.runs + ball.extraRuns,
-                totalWickets = current.totalWickets + (if (ball.wicketType != WicketType.NONE) 1 else 0),
+                totalWickets = current.totalWickets + (if (ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT) 1 else 0),
                 totalBalls = current.totalBalls + (if (ball.isLegalBall) 1 else 0),
                 wideCount = current.wideCount + (if (ball.extrasType == ExtrasType.WIDE) ball.extraRuns else 0),
                 noBallCount = current.noBallCount + (if (ball.extrasType == ExtrasType.NO_BALL) ball.extraRuns else 0),
@@ -267,9 +318,10 @@ class ScoringViewModel : ViewModel() {
             if (ball.wicketType != WicketType.NONE) {
                 val outId = ball.outPlayerId ?: ball.strikerId
                 val outName = battingTeam.players.find { it.id == outId }?.name ?: "Unknown"
+                val displayOutName = "☝️ $outName" // v1.6: Wicket emoji
                 val bName = bowlingTeam.players.find { it.id == ball.bowlerId }?.name
                 val fName = bowlingTeam.players.find { it.id == ball.fielderId }?.name
-                current = current.copy(wicketHistory = current.wicketHistory + WicketRecord(current.totalWickets, outName, current.totalRuns, "${current.totalBalls/6}.${current.totalBalls%6}", ball.wicketType, bName, fName))
+                current = current.copy(wicketHistory = current.wicketHistory + WicketRecord(current.totalWickets, displayOutName, current.totalRuns, "${current.totalBalls/6}.${current.totalBalls%6}", ball.wicketType, bName, fName))
             }
 
             var sId: String? = ball.strikerId
@@ -292,6 +344,11 @@ class ScoringViewModel : ViewModel() {
             val maxWickets = (battingTeam.players.size - 1).coerceAtLeast(1)
             val inningsEnded = current.totalWickets >= maxWickets || current.totalBalls >= current.oversPerInnings * 6
             if (current.currentInnings == 1 && inningsEnded) {
+                // v1.6: Calculate duration
+                val duration = match.innings1Data?.durationMinutes ?: current.startTimeMillis?.let { start ->
+                    ((System.currentTimeMillis() - start) / 60000).toInt()
+                } ?: 0
+
                 current = current.copy(
                     innings1Data = InningsSummary(
                         runs = current.totalRuns,
@@ -303,7 +360,8 @@ class ScoringViewModel : ViewModel() {
                         noBallCount = current.noBallCount,
                         byeCount = current.byeCount,
                         legByeCount = current.legByeCount,
-                        recordedBallsCount = current.ballHistory.indexOf(ball) + 1
+                        recordedBallsCount = current.ballHistory.indexOf(ball) + 1,
+                        durationMinutes = duration
                     ),
                     currentInnings = 2,
                     target = current.totalRuns + 1,
@@ -311,16 +369,25 @@ class ScoringViewModel : ViewModel() {
                     bowlingTeamId = current.battingTeamId,
                     totalRuns = 0, totalWickets = 0, totalBalls = 0,
                     wicketHistory = emptyList(), strikerId = null, nonStrikerId = null, currentBowlerId = null, lastBowlerId = null,
-                    pendingAction = PendingAction.START_SECOND_INNINGS
+                    pendingAction = PendingAction.START_SECOND_INNINGS,
+                    startTimeMillis = if (match.currentInnings == 2) match.startTimeMillis else System.currentTimeMillis() // Reset for 2nd innings
                 )
             } else if (current.currentInnings == 2) {
                 if (current.pendingAction == PendingAction.START_SECOND_INNINGS) {
                     current = current.copy(pendingAction = PendingAction.NONE)
                 }
                 if (current.totalRuns >= (current.target ?: 0)) {
-                    current = current.copy(status = MatchStatus.COMPLETED, winnerId = current.battingTeamId)
+                    current = current.copy(
+                        status = MatchStatus.COMPLETED, 
+                        winnerId = current.battingTeamId,
+                        endTimeMillis = match.endTimeMillis ?: System.currentTimeMillis()
+                    )
                 } else if (inningsEnded) {
-                    current = current.copy(status = MatchStatus.COMPLETED, winnerId = if (current.totalRuns < (current.target ?: 0) - 1) current.bowlingTeamId else null)
+                    current = current.copy(
+                        status = MatchStatus.COMPLETED, 
+                        winnerId = if (current.totalRuns < (current.target ?: 0) - 1) current.bowlingTeamId else null,
+                        endTimeMillis = match.endTimeMillis ?: System.currentTimeMillis()
+                    )
                 }
             }
         }
@@ -379,17 +446,23 @@ class ScoringViewModel : ViewModel() {
                         balls = p.battingStats.balls + (if (ball.isLegalBall) 1 else 0), 
                         fours = p.battingStats.fours + (if (ball.runs == 4) 1 else 0), 
                         sixes = p.battingStats.sixes + (if (ball.runs == 6) 1 else 0), 
-                        isOut = p.battingStats.isOut || isOut,
+                        isOut = p.battingStats.isOut || (isOut && ball.wicketType != WicketType.RETIRED_HURT),
+                        isRetiredHurt = ball.wicketType == WicketType.RETIRED_HURT,
                         wicketType = if (isOut) ball.wicketType else p.battingStats.wicketType,
-                        dismissalBowlerId = if (isOut && ball.wicketType != WicketType.RUN_OUT) ball.bowlerId else p.battingStats.dismissalBowlerId,
+                        dismissalBowlerId = if (isOut && ball.wicketType != WicketType.RUN_OUT && ball.wicketType != WicketType.RETIRED_HURT) ball.bowlerId else p.battingStats.dismissalBowlerId,
                         dismissalFielderId = if (isOut) ball.fielderId else p.battingStats.dismissalFielderId
                     ))
-                } else if (p.id == ball.nonStrikerId && isOut) {
-                    np = np.copy(battingStats = p.battingStats.copy(
-                        isOut = true,
-                        wicketType = ball.wicketType,
-                        dismissalFielderId = ball.fielderId
-                    ))
+                } else if (p.id == ball.nonStrikerId) {
+                    if (isOut) {
+                        np = np.copy(battingStats = p.battingStats.copy(
+                            isOut = ball.wicketType != WicketType.RETIRED_HURT,
+                            isRetiredHurt = ball.wicketType == WicketType.RETIRED_HURT,
+                            wicketType = ball.wicketType,
+                            dismissalFielderId = ball.fielderId
+                        ))
+                    } else {
+                        np = np.copy(battingStats = p.battingStats.copy(isRetiredHurt = false))
+                    }
                 }
             }
             if (isBowl && p.id == ball.bowlerId) {
@@ -408,7 +481,8 @@ class ScoringViewModel : ViewModel() {
                 np = np.copy(fieldingStats = p.fieldingStats.copy(
                     catches = p.fieldingStats.catches + (if (ball.wicketType == WicketType.CAUGHT) 1 else 0),
                     runOuts = p.fieldingStats.runOuts + (if (ball.wicketType == WicketType.RUN_OUT) 1 else 0),
-                    stumpings = p.fieldingStats.stumpings + (if (ball.wicketType == WicketType.STUMPED) 1 else 0)
+                    stumpings = p.fieldingStats.stumpings + (if (ball.wicketType == WicketType.STUMPED) 1 else 0),
+                    droppedCatches = p.fieldingStats.droppedCatches + (if (ball.isDroppedCatch) 1 else 0)
                 ))
             }
             np
@@ -428,6 +502,8 @@ class ScoringViewModel : ViewModel() {
     fun undo() {
         _matchState.update { current ->
             if (current == null || current.ballHistory.isEmpty()) return@update current
+            pendingWicketBall = null
+            pendingDroppedCatchBall = null
             val undone = current.copy(ballHistory = current.ballHistory.dropLast(1), strikerId = null, nonStrikerId = null, currentBowlerId = null)
             val finalized = recalculateMatchFromHistory(undone)
             TournamentRepository.updateMatch(finalized.tournamentId ?: "", finalized)

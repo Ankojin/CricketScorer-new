@@ -50,7 +50,7 @@ fun MainNavigation(scoringViewModel: ScoringViewModel) {
     Scaffold(
         bottomBar = {
             NavigationBar(
-                containerColor = Color.White,
+                containerColor = MaterialTheme.colorScheme.surface,
                 tonalElevation = 8.dp
             ) {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -76,15 +76,19 @@ fun MainNavigation(scoringViewModel: ScoringViewModel) {
                             selectedTextColor = MaterialTheme.colorScheme.primary,
                             unselectedIconColor = Color.Gray,
                             unselectedTextColor = Color.Gray,
-                            indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                            indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                         ),
                         onClick = {
                             navController.navigate(item.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+                                if (item.route == "home") {
+                                    popUpTo(0)
+                                } else {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
                             }
                         }
                     )
@@ -99,6 +103,7 @@ fun MainNavigation(scoringViewModel: ScoringViewModel) {
         ) {
             composable("home") {
                 HomeScreen(
+                    viewModel = scoringViewModel,
                     onNavigateToDashboard = { navController.navigate("dashboard") },
                     onNavigateToLiveScoring = { match ->
                         scoringViewModel.loadMatch(match)
@@ -117,7 +122,8 @@ fun MainNavigation(scoringViewModel: ScoringViewModel) {
             composable("live_scoring") {
                 LiveScoringScreen(
                     viewModel = scoringViewModel,
-                    onNavigateToDashboard = { navController.navigate("dashboard") }
+                    onNavigateToDashboard = { navController.navigate("dashboard") },
+                    onNavigateToMatches = { navController.navigate("dashboard") }
                 )
             }
             composable(

@@ -240,7 +240,8 @@ object TournamentRepository {
                         teamB = teamB,
                         battingTeamId = teamA.id,
                         bowlingTeamId = teamB.id,
-                        oversPerInnings = t.settings.overs
+                        oversPerInnings = t.settings.overs,
+                        dateMillis = System.currentTimeMillis()
                     )
                     t.copy(matches = t.matches + match)
                 } else t

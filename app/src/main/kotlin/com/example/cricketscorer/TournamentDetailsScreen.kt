@@ -376,12 +376,37 @@ fun TournamentStatsTab(tournament: Tournament) {
         }
 
         items(tournament.teams) { team ->
-            TeamSummaryCard(team)
+            val teamMatches = tournament.matches.filter { 
+                it.status == MatchStatus.COMPLETED && (it.teamA.id == team.id || it.teamB.id == team.id) 
+            }
+            val matchesPlayed = teamMatches.size
+            var totalTeamRuns = 0
+            var highScore = 0
+
+            teamMatches.forEach { match ->
+                val runsInMatch = if (match.initialBattingTeamId == team.id) {
+                    match.innings1Data?.runs ?: 0
+                } else {
+                    match.totalRuns
+                }
+                totalTeamRuns += runsInMatch
+                if (runsInMatch > highScore) highScore = runsInMatch
+            }
+
+            TeamSummaryCard(
+                team = team,
+                totalTeamRuns = totalTeamRuns,
+                matchesPlayed = matchesPlayed,
+                highScore = highScore
+            )
         }
         
         item {
             Box(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), contentAlignment = Alignment.Center) {
-                Text("Prepared by Ankoji", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Prepared by Ankoji", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
+                    Text("v1.9", style = MaterialTheme.typography.labelSmall, color = Color.LightGray)
+                }
             }
         }
     }
@@ -482,27 +507,28 @@ fun shareTournamentStats(context: Context, view: View) {
 }
 
 @Composable
-fun TeamSummaryCard(team: Team) {
+fun TeamSummaryCard(team: Team, totalTeamRuns: Int, matchesPlayed: Int, highScore: Int) {
     val totalSixes = team.players.sumOf { it.battingStats.sixes }
     val totalFours = team.players.sumOf { it.battingStats.fours }
-    val totalRuns = team.players.sumOf { it.battingStats.runs }
     val totalWickets = team.players.sumOf { it.bowlingStats.wickets }
 
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        shape = RoundedCornerShape(8.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(team.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.height(12.dp))
+            Text(team.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(16.dp))
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                StatItem("RUNS", "$totalRuns")
+                StatItem("MATCHES", "$matchesPlayed")
+                StatItem("RUNS", "$totalTeamRuns")
                 StatItem("6s", "$totalSixes")
                 StatItem("4s", "$totalFours")
                 StatItem("WKTS", "$totalWickets")
+                StatItem("HIGH SCORE", "$highScore")
             }
         }
     }
@@ -519,6 +545,9 @@ fun StatItem(label: String, value: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MatchRow(match: Match, onStartMatch: (Match) -> Unit, onDelete: () -> Unit) {
+    val dateFormat = remember { java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.getDefault()) }
+    val dateText = remember(match.dateMillis) { dateFormat.format(java.util.Date(match.dateMillis)) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         onClick = { onStartMatch(match) },
@@ -530,13 +559,19 @@ fun MatchRow(match: Match, onStartMatch: (Match) -> Unit, onDelete: () -> Unit) 
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = if (match.status == MatchStatus.COMPLETED) "COMPLETED" else if (match.status == MatchStatus.LIVE) "LIVE" else "UPCOMING",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = if (match.status == MatchStatus.LIVE) Color.Red else Color.Gray,
-                    modifier = Modifier.weight(1f)
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (match.status == MatchStatus.COMPLETED) "COMPLETED" else if (match.status == MatchStatus.LIVE) "LIVE" else "UPCOMING",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (match.status == MatchStatus.LIVE) Color.Red else Color.Gray
+                    )
+                    Text(
+                        text = dateText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.LightGray
+                    )
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (match.status != MatchStatus.COMPLETED) {
                         IconButton(onClick = { onStartMatch(match) }, modifier = Modifier.size(28.dp)) {

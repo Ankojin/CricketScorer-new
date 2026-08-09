@@ -14,6 +14,7 @@ data class BattingStats(
     val fours: Int = 0,
     val sixes: Int = 0,
     val isOut: Boolean = false,
+    val isRetiredHurt: Boolean = false,
     val wicketType: WicketType = WicketType.NONE,
     val dismissalBowlerId: String? = null,
     val dismissalFielderId: String? = null
@@ -45,7 +46,8 @@ data class BowlingStats(
 data class FieldingStats(
     val catches: Int = 0,
     val runOuts: Int = 0,
-    val stumpings: Int = 0
+    val stumpings: Int = 0,
+    val droppedCatches: Int = 0
 )
 
 data class Team(
@@ -64,7 +66,7 @@ enum class ExtrasType {
 }
 
 enum class WicketType {
-    NONE, BOWLED, CAUGHT, LBW, RUN_OUT, STUMPED, HIT_WICKET, HANDLED_BALL, OBSTRUCTING_FIELD
+    NONE, BOWLED, CAUGHT, LBW, RUN_OUT, STUMPED, HIT_WICKET, HANDLED_BALL, OBSTRUCTING_FIELD, RETIRED_HURT
 }
 
 data class Ball(
@@ -78,7 +80,8 @@ data class Ball(
     val fielderId: String? = null,
     val isLegalBall: Boolean = true,
     val outPlayerId: String? = null,
-    val rotateStrike: Boolean = true
+    val rotateStrike: Boolean = true,
+    val isDroppedCatch: Boolean = false
 )
 
 data class WicketRecord(
@@ -101,7 +104,8 @@ data class InningsSummary(
     val noBallCount: Int = 0,
     val byeCount: Int = 0,
     val legByeCount: Int = 0,
-    val recordedBallsCount: Int = 0
+    val recordedBallsCount: Int = 0,
+    val durationMinutes: Int = 0
 )
 
 data class Match(
@@ -141,7 +145,10 @@ data class Match(
     val manOfTheMatchId: String? = null,
     val oversPerInnings: Int = 20,
     val pendingAction: PendingAction = PendingAction.NONE,
-    val innings1Data: InningsSummary? = null
+    val innings1Data: InningsSummary? = null,
+    val startTimeMillis: Long? = null,
+    val endTimeMillis: Long? = null,
+    val dateMillis: Long = System.currentTimeMillis()
 )
 
 data class Partnership(
@@ -160,7 +167,7 @@ data class Partnership(
 enum class PendingAction {
     NONE, SELECT_STRIKER, SELECT_NON_STRIKER, SELECT_BOWLER, TOSS_REQUIRED, 
     SELECT_CAPTAIN_A, SELECT_CAPTAIN_B, SELECT_WK_A, SELECT_WK_B, SELECT_FIELDER,
-    START_SECOND_INNINGS
+    START_SECOND_INNINGS, SELECT_FIELDER_DROPPED_CATCH, SELECT_RUNS_DROPPED_CATCH
 }
 
 enum class MatchStatus {
