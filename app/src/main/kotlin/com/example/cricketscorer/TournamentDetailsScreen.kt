@@ -35,6 +35,7 @@ import java.util.Locale
 fun TournamentDetailsScreen(
     tournamentId: String,
     viewModel: TournamentViewModel,
+    scoringViewModel: ScoringViewModel,
     onBack: () -> Unit,
     onStartMatch: (Match) -> Unit
 ) {
@@ -42,6 +43,10 @@ fun TournamentDetailsScreen(
     val view = LocalView.current
     val tournaments by viewModel.tournaments.collectAsState()
     val tournament = tournaments.find { it.id == tournamentId }
+
+    val isSyncEnabled by scoringViewModel.isSyncEnabled.collectAsState()
+    val connectedEndpoints by NearbyManager.connectedEndpoints.collectAsState()
+    val hasConnections = connectedEndpoints.isNotEmpty()
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
 
@@ -61,6 +66,11 @@ fun TournamentDetailsScreen(
                         }
                     },
                     actions = {
+                        if (isSyncEnabled && hasConnections) {
+                            TextButton(onClick = { viewModel.syncTournament(context, tournamentId) }) {
+                                Text("SYNC SERIES", color = Color.White, fontWeight = FontWeight.Black)
+                            }
+                        }
                         IconButton(onClick = { shareTournamentStats(context, view) }) {
                             Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White)
                         }
@@ -405,7 +415,7 @@ fun TournamentStatsTab(tournament: Tournament) {
             Box(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Prepared by Ankoji", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
-                    Text("v1.9", style = MaterialTheme.typography.labelSmall, color = Color.LightGray)
+                    Text("v1.18", style = MaterialTheme.typography.labelSmall, color = Color.LightGray)
                 }
             }
         }

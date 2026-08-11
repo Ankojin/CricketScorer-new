@@ -16,6 +16,9 @@ class ScoringViewModel : ViewModel() {
     private val _isDarkMode = MutableStateFlow<Boolean?>(null) // null means follow system
     val isDarkMode: StateFlow<Boolean?> = _isDarkMode.asStateFlow()
 
+    private val _isSyncEnabled = MutableStateFlow(false)
+    val isSyncEnabled: StateFlow<Boolean> = _isSyncEnabled.asStateFlow()
+
     private var pendingWicketBall: Ball? = null
     private var pendingDroppedCatchBall: Ball? = null
 
@@ -49,10 +52,28 @@ class ScoringViewModel : ViewModel() {
                 }
             }
         }
+
+        NearbyManager.setMatchUpdateCallback { receivedMatch ->
+            // v1.17: Sync reliability - Recalculate and update repo immediately
+            val finalized = recalculateMatchFromHistory(receivedMatch)
+            _matchState.value = finalized
+            TournamentRepository.updateMatch(receivedMatch.tournamentId ?: "", finalized)
+        }
+
+        NearbyManager.setTournamentUpdateCallback { json ->
+            TournamentRepository.importTournament(json)
+        }
     }
 
     fun toggleTheme(dark: Boolean?) {
         _isDarkMode.value = dark
+    }
+
+    fun toggleSync(enabled: Boolean) {
+        _isSyncEnabled.value = enabled
+        if (!enabled) {
+            // Logic to stop Nearby Connections will go here
+        }
     }
 
     fun startSecondInnings() {
@@ -122,7 +143,7 @@ class ScoringViewModel : ViewModel() {
             ExtrasType.WIDE -> Ball(
                 runs = 0,
                 extrasType = type,
-                extraRuns = 1,
+                extraRuns = 1 + additionalRuns,
                 strikerId = currentMatch.strikerId ?: return,
                 nonStrikerId = currentMatch.nonStrikerId ?: return,
                 bowlerId = currentMatch.currentBowlerId ?: return,
@@ -273,6 +294,12 @@ class ScoringViewModel : ViewModel() {
 
             val finalizedMatch = recalculateMatchFromHistory(updatedMatch)
             TournamentRepository.updateMatch(finalizedMatch.tournamentId ?: "", finalizedMatch)
+            
+            // v1.8: Sync if enabled
+            if (_isSyncEnabled.value) {
+                // We'll need context for Nearby, handled via a side effect or UI trigger
+            }
+
             finalizedMatch
         }
     }
@@ -282,12 +309,16 @@ class ScoringViewModel : ViewModel() {
             return match.copy(pendingAction = PendingAction.TOSS_REQUIRED)
         }
 
+        // v1.17: Ensure player names are taken from the source match object
+        val initialTeamA = resetTeamStats(match.teamA)
+        val initialTeamB = resetTeamStats(match.teamB)
+
         var current = match.copy(
             totalRuns = 0, totalWickets = 0, totalBalls = 0,
             wideCount = 0, noBallCount = 0, byeCount = 0, legByeCount = 0,
             wicketHistory = emptyList(),
-            teamA = resetTeamStats(match.teamA),
-            teamB = resetTeamStats(match.teamB),
+            teamA = initialTeamA,
+            teamB = initialTeamB,
             status = MatchStatus.LIVE,
             currentInnings = 1,
             battingTeamId = match.initialBattingTeamId ?: match.battingTeamId,
@@ -329,7 +360,8 @@ class ScoringViewModel : ViewModel() {
             var bId: String? = ball.bowlerId
             var lbId: String? = current.lastBowlerId
 
-            if (ball.rotateStrike && ball.runs % 2 != 0) { val t = sId; sId = nsId; nsId = t }
+            val physicalRuns = if (ball.extrasType == ExtrasType.WIDE) (ball.extraRuns - 1).coerceAtLeast(0) else ball.runs
+            if (ball.rotateStrike && physicalRuns % 2 != 0) { val t = sId; sId = nsId; nsId = t }
             if (ball.isLegalBall && current.totalBalls % 6 == 0) {
                 val t = sId; sId = nsId; nsId = t; lbId = bId; bId = null
             }

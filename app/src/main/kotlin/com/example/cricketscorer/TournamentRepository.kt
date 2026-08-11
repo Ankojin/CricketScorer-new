@@ -236,6 +236,7 @@ object TournamentRepository {
                     val match = Match(
                         id = UUID.randomUUID().toString(),
                         tournamentId = tournamentId,
+                        tournamentName = t.name,
                         teamA = teamA,
                         teamB = teamB,
                         battingTeamId = teamA.id,
@@ -265,13 +266,17 @@ object TournamentRepository {
 
     fun updateMatch(tournamentId: String, updatedMatch: Match) {
         _tournaments.update { list ->
+            var found = false
             val newList = list.map { t ->
                 if (t.id == tournamentId) {
+                    found = true
                     val oldMatch = t.matches.find { it.id == updatedMatch.id }
                     val wasCompleted = oldMatch?.status == MatchStatus.COMPLETED
                     
-                    val updatedMatches = t.matches.map { m ->
-                        if (m.id == updatedMatch.id) updatedMatch else m
+                    val updatedMatches = if (t.matches.any { it.id == updatedMatch.id }) {
+                        t.matches.map { m -> if (m.id == updatedMatch.id) updatedMatch else m }
+                    } else {
+                        t.matches + updatedMatch
                     }
                     
                     var updatedTeams = t.teams
@@ -282,8 +287,22 @@ object TournamentRepository {
                     t.copy(matches = updatedMatches, teams = updatedTeams)
                 } else t
             }
-            saveToDisk(newList)
-            newList
+            
+            val finalList = if (!found && tournamentId.isNotEmpty()) {
+                val newTournament = Tournament(
+                    id = tournamentId,
+                    name = updatedMatch.tournamentName ?: "Remote Tournament",
+                    teams = listOf(updatedMatch.teamA, updatedMatch.teamB),
+                    matches = listOf(updatedMatch),
+                    settings = TournamentSettings(overs = updatedMatch.oversPerInnings)
+                )
+                newList + newTournament
+            } else {
+                newList
+            }
+            
+            saveToDisk(finalList)
+            finalList
         }
     }
 

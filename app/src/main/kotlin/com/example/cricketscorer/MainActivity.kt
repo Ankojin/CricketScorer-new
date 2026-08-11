@@ -24,10 +24,44 @@ import androidx.navigation.navArgument
 import androidx.compose.foundation.isSystemInDarkTheme
 import com.example.cricketscorer.ui.theme.CricketScorerTheme
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
+
 class MainActivity : ComponentActivity() {
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        // Handle permissions results
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        
+        // Request Nearby permissions
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_ADVERTISE,
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.NEARBY_WIFI_DEVICES
+            )
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            arrayOf(
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_ADVERTISE,
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            )
+        } else {
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION
+            )
+        }
+        requestPermissionLauncher.launch(permissions)
+
         setContent {
             val scoringViewModel: ScoringViewModel = viewModel()
             val isDarkMode by scoringViewModel.isDarkMode.collectAsState()
@@ -134,6 +168,7 @@ fun MainNavigation(scoringViewModel: ScoringViewModel) {
                 TournamentDetailsScreen(
                     tournamentId = tournamentId,
                     viewModel = tournamentViewModel,
+                    scoringViewModel = scoringViewModel,
                     onBack = { navController.popBackStack() },
                     onStartMatch = { match ->
                         scoringViewModel.loadMatch(match)

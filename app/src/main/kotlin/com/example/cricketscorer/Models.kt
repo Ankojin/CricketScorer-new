@@ -111,6 +111,7 @@ data class InningsSummary(
 data class Match(
     val id: String,
     val tournamentId: String? = null,
+    val tournamentName: String? = null,
     val teamA: Team,
     val teamB: Team,
     val tossWinnerId: String? = null,

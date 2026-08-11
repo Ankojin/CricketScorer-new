@@ -8,15 +8,14 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,6 +30,7 @@ fun HomeScreen(
     val tournaments by TournamentRepository.tournaments.collectAsState()
     val liveMatch = tournaments.flatMap { it.matches }.find { it.status == MatchStatus.LIVE }
     var showSettings by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -63,13 +63,30 @@ fun HomeScreen(
                 // Live Match Section
                 if (liveMatch != null) {
                     item {
-                        Text(
-                            "LIVE MATCH",
+                        Row(
                             modifier = Modifier.padding(16.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.error
-                        )
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "LIVE MATCH",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            val isSyncEnabled by viewModel.isSyncEnabled.collectAsState()
+                            if (isSyncEnabled) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    shape = CircleShape
+                                ) {
+                                    Row(Modifier.padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(10.dp), tint = MaterialTheme.colorScheme.secondary)
+                                        Text(" SYNC ACTIVE", style = MaterialTheme.typography.labelSmall, fontSize = 8.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                                    }
+                                }
+                            }
+                        }
                         
                         Card(
                             modifier = Modifier
@@ -77,9 +94,10 @@ fun HomeScreen(
                                 .fillMaxWidth()
                                 .clickable { onNavigateToLiveScoring(liveMatch) },
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                            shape = RoundedCornerShape(16.dp)
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
+                            Column(modifier = Modifier.padding(20.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -88,11 +106,11 @@ fun HomeScreen(
                                     Column {
                                         Text(
                                             "${liveMatch.teamA.name} vs ${liveMatch.teamB.name}",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Black
                                         )
                                         Text(
-                                            "Innings ${liveMatch.currentInnings}",
+                                            "Innings ${liveMatch.currentInnings} • Live on ${android.os.Build.MODEL}",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = Color.Gray
                                         )
@@ -100,7 +118,7 @@ fun HomeScreen(
                                     Column(horizontalAlignment = Alignment.End) {
                                         Text(
                                             "${liveMatch.totalRuns}/${liveMatch.totalWickets}",
-                                            style = MaterialTheme.typography.headlineSmall,
+                                            style = MaterialTheme.typography.headlineLarge,
                                             fontWeight = FontWeight.Black,
                                             color = MaterialTheme.colorScheme.primary
                                         )
@@ -112,14 +130,14 @@ fun HomeScreen(
                                     }
                                 }
                                 
-                                Spacer(modifier = Modifier.height(12.dp))
+                                Spacer(modifier = Modifier.height(20.dp))
                                 
                                 Button(
                                     onClick = { onNavigateToLiveScoring(liveMatch) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(8.dp)
+                                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                                    shape = RoundedCornerShape(12.dp)
                                 ) {
-                                    Text("CONTINUE SCORING")
+                                    Text("CONTINUE SCORING", fontWeight = FontWeight.Black)
                                 }
                             }
                         }
@@ -131,7 +149,7 @@ fun HomeScreen(
                         "QUICK START",
                         modifier = Modifier.padding(16.dp),
                         style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.primary
                     )
                     
@@ -140,44 +158,47 @@ fun HomeScreen(
                             .padding(horizontal = 16.dp)
                             .fillMaxWidth()
                             .clickable { onNavigateToDashboard() },
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        Column(modifier = Modifier.padding(20.dp)) {
-                            Text("Create Tournament", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                            Text("Setup teams and start scoring professional matches.", style = MaterialTheme.typography.bodyMedium)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Button(onClick = onNavigateToDashboard) {
-                                Text("Get Started")
+                        Column(modifier = Modifier.padding(24.dp)) {
+                            Text("Create Series", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text("Setup teams and manage multiple matches with full leaderboards.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = onNavigateToDashboard,
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Text("GET STARTED", fontWeight = FontWeight.Black)
                             }
                         }
                     }
                 }
 
-                // Quick Actions Horizontal
                 item {
                     Spacer(modifier = Modifier.height(24.dp))
                     Text(
                         "EXPLORE",
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.primary
                     )
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        item { QuickActionChip("Tournaments", onNavigateToDashboard) }
-                        item { QuickActionChip("Teams", onNavigateToDashboard) }
-                        item { QuickActionChip("Players", onNavigateToDashboard) }
+                        item { QuickActionChip("SERIES", onNavigateToDashboard) }
+                        item { QuickActionChip("TEAMS", onNavigateToDashboard) }
+                        item { QuickActionChip("PLAYERS", onNavigateToDashboard) }
                     }
                 }
 
                 item {
-                    Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(48.dp))
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Cricket Scorer v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                            Text("CricScore Pro v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                             Text("Prepared by Ankoji", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -187,26 +208,57 @@ fun HomeScreen(
             if (showSettings) {
                 AlertDialog(
                     onDismissRequest = { showSettings = false },
-                    title = { Text("App Settings", fontWeight = FontWeight.Black) },
+                    title = { Text("Settings", fontWeight = FontWeight.Black) },
                     text = {
-                        Column {
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Dark Mode", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                Column {
+                                    Text("Dark Mode", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                    Text("Switch to midnight theme", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                }
                                 val isDarkMode by viewModel.isDarkMode.collectAsState()
                                 Switch(
                                     checked = isDarkMode ?: androidx.compose.foundation.isSystemInDarkTheme(),
                                     onCheckedChange = { viewModel.toggleTheme(it) }
                                 )
                             }
+                            
+                            HorizontalDivider()
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("Local Sync (Beta)", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                    Text("Share scores with devices nearby", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                }
+                                val isSyncEnabled by viewModel.isSyncEnabled.collectAsState()
+                                Switch(
+                                    checked = isSyncEnabled,
+                                    onCheckedChange = { enabled ->
+                                        viewModel.toggleSync(enabled)
+                                        if (enabled) {
+                                            NearbyManager.startDiscovering(context)
+                                            if (liveMatch != null) {
+                                                NearbyManager.startBroadcasting(context, liveMatch.teamA.name + " vs " + liveMatch.teamB.name)
+                                            }
+                                        } else {
+                                            NearbyManager.stopAll(context)
+                                        }
+                                    }
+                                )
+                            }
                         }
                     },
                     confirmButton = {
-                        Button(onClick = { showSettings = false }) {
-                            Text("DONE")
+                        TextButton(onClick = { showSettings = false }) {
+                            Text("DONE", fontWeight = FontWeight.Black)
                         }
                     }
                 )
@@ -221,13 +273,15 @@ fun QuickActionChip(text: String, onClick: () -> Unit) {
         onClick = onClick,
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(12.dp),
-        shadowElevation = 2.dp
+        shadowElevation = 2.dp,
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.LightGray)
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 14.dp),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Black,
+            color = MaterialTheme.colorScheme.primary
         )
     }
 }

@@ -9,9 +9,11 @@
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="61789d28-061d-4cfb-9044-cdd51be63bb1" name="Changes" comment="All fixes fixed">
+    <list default="true" id="61789d28-061d-4cfb-9044-cdd51be63bb1" name="Changes" comment="All fixes fixed- v 1.8">
+      <change afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/NearbyManager.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/app/build.gradle.kts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/AndroidManifest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/AndroidManifest.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/HomeScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/HomeScreen.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/LiveScoringScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/LiveScoringScreen.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/MainActivity.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/MainActivity.kt" afterDir="false" />
@@ -19,7 +21,7 @@
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ScoringViewModel.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ScoringViewModel.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/TournamentDetailsScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/TournamentDetailsScreen.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/TournamentRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/TournamentRepository.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ui/theme/Theme.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ui/theme/Theme.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/TournamentViewModel.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/TournamentViewModel.kt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -101,7 +103,7 @@
   }
 }</component>
   <component name="ProblemsViewState">
-    <option name="selectedTabId" value="ProjectErrors" />
+    <option name="selectedTabId" value="CurrentFile" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;customColor&quot;: &quot;&quot;,
@@ -266,7 +268,23 @@
       <option name="project" value="LOCAL" />
       <updated>1786276607151</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="All fixes fixed- v 1.8">
+      <option name="closed" value="true" />
+      <created>1786300297950</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1786300297951</updated>
+    </task>
+    <task id="LOCAL-00009" summary="All fixes fixed- v 1.8">
+      <option name="closed" value="true" />
+      <created>1786300370922</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1786300370922</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -274,19 +292,20 @@
     <MESSAGE value="Initial commit" />
     <MESSAGE value="updated" />
     <MESSAGE value="All fixes fixed" />
-    <option name="LAST_COMMIT_MESSAGE" value="All fixes fixed" />
+    <MESSAGE value="All fixes fixed- v 1.8" />
+    <option name="LAST_COMMIT_MESSAGE" value="All fixes fixed- v 1.8" />
   </component>
   <component name="play_dynamic_filters_status">
     <option name="appIdToCheckInfo">
       <map>
         <entry key="com.example.cricketscorer">
           <value>
-            <CheckInfo lastCheckTimestamp="1786266832696" />
+            <CheckInfo lastCheckTimestamp="1786372012319" />
           </value>
         </entry>
         <entry key="com.example.cricketscorer.test">
           <value>
-            <CheckInfo lastCheckTimestamp="1786266832719" />
+            <CheckInfo lastCheckTimestamp="1786372012319" />
           </value>
         </entry>
       </map>

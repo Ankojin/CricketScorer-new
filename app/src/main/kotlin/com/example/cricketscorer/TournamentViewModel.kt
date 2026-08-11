@@ -49,4 +49,11 @@ class TournamentViewModel : ViewModel() {
     fun importTournament(json: String): Boolean {
         return TournamentRepository.importTournament(json)
     }
+
+    fun syncTournament(context: android.content.Context, tournamentId: String) {
+        val tournament = TournamentRepository.getTournament(tournamentId)
+        if (tournament != null) {
+            NearbyManager.broadcastTournament(context, tournament)
+        }
+    }
 }

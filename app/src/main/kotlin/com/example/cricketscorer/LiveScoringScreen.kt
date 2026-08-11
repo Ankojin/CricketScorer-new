@@ -52,6 +52,15 @@ fun LiveScoringScreen(
 
     val context = LocalContext.current
     val view = LocalView.current
+    val isSyncEnabled by viewModel.isSyncEnabled.collectAsState()
+    val connectedDevices by NearbyManager.connectedEndpoints.collectAsState()
+
+    // v1.15: Force broadcast on every change AND on every new connection
+    LaunchedEffect(match, connectedDevices.size) {
+        if (isSyncEnabled && match != null && connectedDevices.isNotEmpty()) {
+            NearbyManager.broadcastMatch(context, match!!)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -59,7 +68,27 @@ fun LiveScoringScreen(
                 TopAppBar(
                     title = {
                         Column {
-                            Text("Match Center", fontWeight = FontWeight.Black)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Match Center", fontWeight = FontWeight.Black)
+                                if (isSyncEnabled) {
+                                    Spacer(Modifier.width(8.dp))
+                                    val syncColor = if (connectedDevices.isNotEmpty()) Color(0xFF4CAF50) else Color(0xFFFFC107)
+                                    Icon(
+                                        Icons.Default.Refresh,
+                                        contentDescription = "Sync Status",
+                                        modifier = Modifier.size(14.dp),
+                                        tint = syncColor
+                                    )
+                                    if (connectedDevices.isNotEmpty()) {
+                                        Text(
+                                            " ${connectedDevices.size}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = syncColor,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
                             match?.let { m ->
                                 val indicator = when {
                                     m.status == MatchStatus.COMPLETED -> "MATCH COMPLETED"
@@ -1386,7 +1415,146 @@ fun ControlsSection(viewModel: ScoringViewModel) {
     var showWicketDialog by remember { mutableStateOf(false) }
     var showRunOutBatterDialog by remember { mutableStateOf(false) }
     var showExtraRunsDialog by remember { mutableStateOf(false) }
+    var showOtherRunsDialog by remember { mutableStateOf(false) }
     var pendingExtraType by remember { mutableStateOf(ExtrasType.NONE) }
+
+    fun completeRuns(runs: Int, rotateStrike: Boolean = true) {
+        if (pendingExtraType == ExtrasType.NONE) {
+            viewModel.handleRuns(runs, rotateStrike)
+        } else {
+            viewModel.handleExtra(pendingExtraType, runs)
+            pendingExtraType = ExtrasType.NONE
+        }
+        showOtherRunsDialog = false
+        showExtraRunsDialog = false
+    }
+
+    if (showOtherRunsDialog) {
+        var customRunsText by remember { mutableStateOf("") }
+        val dialogTitle = if (pendingExtraType == ExtrasType.NONE) "Other Runs / Overthrows" else "Additional Runs on ${pendingExtraType.name}"
+        
+        AlertDialog(
+            onDismissRequest = { 
+                showOtherRunsDialog = false
+                pendingExtraType = ExtrasType.NONE
+            },
+            title = { Text(dialogTitle, fontWeight = FontWeight.Black) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Section 1: Physical Runs
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "PHYSICAL RUNS (Ran only)",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Batters completed these runs by running.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilledTonalButton(
+                                onClick = { completeRuns(4) },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("Ran 4", fontWeight = FontWeight.Bold)
+                            }
+                            FilledTonalButton(
+                                onClick = { completeRuns(5) },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("Ran 5", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    // Section 2: Overthrow Awards
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "OVERTHROW AWARDS (+4)",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Runs completed + 4 for boundary overthrow.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(
+                                "1 + 4" to 5,
+                                "2 + 4" to 6,
+                                "3 + 4" to 7
+                            ).forEach { (label, runs) ->
+                                FilledTonalButton(
+                                    onClick = { completeRuns(runs) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text(label, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    // Section 3: Custom
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "CUSTOM",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        OutlinedTextField(
+                            value = customRunsText,
+                            onValueChange = { if (it.all { char -> char.isDigit() }) customRunsText = it },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            placeholder = { Text("e.g. 8, 10") }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val runs = customRunsText.toIntOrNull() ?: 0
+                        if (runs > 0) {
+                            completeRuns(runs)
+                        }
+                    },
+                    enabled = customRunsText.isNotBlank()
+                ) {
+                    Text("ADD RUNS")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showOtherRunsDialog = false
+                    pendingExtraType = ExtrasType.NONE
+                }) {
+                    Text("CANCEL")
+                }
+            }
+        )
+    }
 
     if (showWicketDialog) {
         AlertDialog(
@@ -1464,15 +1632,17 @@ fun ControlsSection(viewModel: ScoringViewModel) {
 
     if (showExtraRunsDialog) {
         AlertDialog(
-            onDismissRequest = { showExtraRunsDialog = false },
-            title = { Text("Additional Runs", fontWeight = FontWeight.Black) },
+            onDismissRequest = { 
+                showExtraRunsDialog = false
+                pendingExtraType = ExtrasType.NONE
+            },
+            title = { Text("Additional Runs on ${pendingExtraType.name}", fontWeight = FontWeight.Black) },
             text = {
                 Column {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(0, 1, 2).forEach { run ->
                             RunButton(run.toString(), modifier = Modifier.weight(1f)) {
-                                viewModel.handleExtra(pendingExtraType, run)
-                                showExtraRunsDialog = false
+                                completeRuns(run)
                             }
                         }
                     }
@@ -1480,15 +1650,20 @@ fun ControlsSection(viewModel: ScoringViewModel) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(3, 4, 6).forEach { run ->
                             RunButton(run.toString(), modifier = Modifier.weight(1f)) {
-                                viewModel.handleExtra(pendingExtraType, run)
-                                showExtraRunsDialog = false
+                                completeRuns(run)
                             }
+                        }
+                        RunButton("OTHER", modifier = Modifier.weight(1.2f)) {
+                            showOtherRunsDialog = true
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showExtraRunsDialog = false }) {
+                TextButton(onClick = { 
+                    showExtraRunsDialog = false
+                    pendingExtraType = ExtrasType.NONE
+                }) {
                     Text("CANCEL", fontWeight = FontWeight.Bold)
                 }
             }
@@ -1507,16 +1682,17 @@ fun ControlsSection(viewModel: ScoringViewModel) {
         Text("MAIN RUNS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.Gray)
         Spacer(modifier = Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            RunButton("0", modifier = Modifier.weight(1f)) { viewModel.handleRuns(0) }
-            RunButton("1", modifier = Modifier.weight(1f)) { viewModel.handleRuns(1) }
-            RunButton("2", modifier = Modifier.weight(1f)) { viewModel.handleRuns(2) }
-            RunButton("3", modifier = Modifier.weight(1f)) { viewModel.handleRuns(3) }
+            RunButton("0", modifier = Modifier.weight(1f)) { completeRuns(0) }
+            RunButton("1", modifier = Modifier.weight(1f)) { completeRuns(1) }
+            RunButton("2", modifier = Modifier.weight(1f)) { completeRuns(2) }
+            RunButton("3", modifier = Modifier.weight(1f)) { completeRuns(3) }
         }
         Spacer(modifier = Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            RunButton("4 💥", color = Color(0xFF388E3C), icon = Icons.Default.Star, modifier = Modifier.weight(1.5f)) { viewModel.handleRuns(4) }
-            RunButton("6 💥", color = Color(0xFF6A1B9A), icon = Icons.Default.Star, modifier = Modifier.weight(1.5f)) { viewModel.handleRuns(6) }
-            RunButton("1D", modifier = Modifier.weight(1f)) { viewModel.handleRuns(1, rotateStrike = false) }
+            RunButton("4 💥", color = Color(0xFF388E3C), icon = Icons.Default.Star, modifier = Modifier.weight(1.5f)) { completeRuns(4) }
+            RunButton("6 💥", color = Color(0xFF6A1B9A), icon = Icons.Default.Star, modifier = Modifier.weight(1.5f)) { completeRuns(6) }
+            RunButton("1D", modifier = Modifier.weight(1f)) { completeRuns(1, rotateStrike = false) }
+            RunButton("OTHER", modifier = Modifier.weight(1.2f)) { showOtherRunsDialog = true }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -1549,14 +1725,21 @@ fun ControlsSection(viewModel: ScoringViewModel) {
         
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             ExtraButton("WD", modifier = Modifier.weight(1f)) {
-                viewModel.handleExtra(ExtrasType.WIDE)
+                pendingExtraType = ExtrasType.WIDE
+                showExtraRunsDialog = true
             }
             ExtraButton("NB", modifier = Modifier.weight(1f)) {
                 pendingExtraType = ExtrasType.NO_BALL
                 showExtraRunsDialog = true
             }
-            ExtraButton("BYE", modifier = Modifier.weight(1f)) { viewModel.handleExtra(ExtrasType.BYE) }
-            ExtraButton("LB", modifier = Modifier.weight(1f)) { viewModel.handleExtra(ExtrasType.LEG_BYE) }
+            ExtraButton("BYE", modifier = Modifier.weight(1f)) {
+                pendingExtraType = ExtrasType.BYE
+                showExtraRunsDialog = true
+            }
+            ExtraButton("LB", modifier = Modifier.weight(1f)) {
+                pendingExtraType = ExtrasType.LEG_BYE
+                showExtraRunsDialog = true
+            }
             ExtraButton("DROPPED", modifier = Modifier.weight(1.5f), color = Color(0xFFFFEB3B)) {
                 viewModel.handleDroppedCatch()
             }
