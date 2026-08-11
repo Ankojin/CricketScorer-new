@@ -6,8 +6,8 @@ import kotlinx.coroutines.flow.StateFlow
 class TournamentViewModel : ViewModel() {
     val tournaments: StateFlow<List<Tournament>> = TournamentRepository.tournaments
 
-    fun createTournament(name: String, overs: Int) {
-        TournamentRepository.createTournament(name, overs)
+    fun createTournament(name: String, overs: Int, maxOvers: Int? = null, quotaCount: Int? = null, quotaLimit: Int? = null) {
+        TournamentRepository.createTournament(name, overs, maxOvers, quotaCount, quotaLimit)
     }
 
     fun deleteTournament(id: String) {
@@ -22,20 +22,36 @@ class TournamentViewModel : ViewModel() {
         TournamentRepository.deleteTeam(tournamentId, teamId)
     }
 
-    fun addPlayer(tournamentId: String, teamId: String, name: String) {
-        TournamentRepository.addPlayerToTeam(tournamentId, teamId, name)
+    fun addPlayer(context: android.content.Context, tournamentId: String, teamId: String, name: String, bStyle: BattingStyle, bowlStyle: BowlingStyle) {
+        val success = TournamentRepository.addPlayerToTeam(tournamentId, teamId, name, bStyle, bowlStyle)
+        if (!success) {
+            android.widget.Toast.makeText(context, "Player $name already exists in this tournament! 👤❌", android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 
     fun deletePlayer(tournamentId: String, teamId: String, playerId: String) {
         TournamentRepository.deletePlayer(tournamentId, teamId, playerId)
     }
 
-    fun updatePlayerName(tournamentId: String, teamId: String, playerId: String, newName: String) {
-        TournamentRepository.updatePlayerName(tournamentId, teamId, playerId, newName)
+    fun updatePlayerDetails(tournamentId: String, teamId: String, playerId: String, newName: String, bStyle: BattingStyle, bowlStyle: BowlingStyle) {
+        TournamentRepository.updatePlayerDetails(tournamentId, teamId, playerId, newName, bStyle, bowlStyle)
     }
 
-    fun scheduleMatch(tournamentId: String, teamAId: String, teamBId: String) {
-        TournamentRepository.scheduleMatch(tournamentId, teamAId, teamBId)
+    fun togglePlayerJokerStatus(tournamentId: String, teamId: String, playerId: String) {
+        TournamentRepository.togglePlayerJokerStatus(tournamentId, teamId, playerId)
+    }
+
+    fun scheduleMatch(
+        tournamentId: String, 
+        teamAId: String, 
+        teamBId: String, 
+        scheduledDate: Long? = null,
+        overs: Int? = null,
+        maxOvers: Int? = null,
+        quotaCount: Int? = null,
+        quotaLimit: Int? = null
+    ) {
+        TournamentRepository.scheduleMatch(tournamentId, teamAId, teamBId, scheduledDate, overs, maxOvers, quotaCount, quotaLimit)
     }
 
     fun deleteMatch(tournamentId: String, matchId: String) {

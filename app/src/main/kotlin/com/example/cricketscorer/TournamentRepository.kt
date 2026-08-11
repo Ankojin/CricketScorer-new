@@ -61,24 +61,39 @@ object TournamentRepository {
         return try {
             val type = object : TypeToken<Tournament>() {}.type
             val imported: Tournament = gson.fromJson(json, type)
+            
+            // Validate that required fields are present and not empty
+            if (imported == null || imported.id.isNullOrBlank() || imported.name.isNullOrBlank()) {
+                Log.e("TournamentRepository", "Import failed: Missing required fields in JSON")
+                return false
+            }
+
+            // Recalculate standings and stats from match history to ensure consistency
+            val recalculated = recalculateTournamentStandings(imported)
+
             _tournaments.update { list ->
-                val newList = list.filter { it.id != imported.id } + imported
+                val newList = list.filter { it.id != recalculated.id } + recalculated
                 saveToDisk(newList)
                 newList
             }
             true
         } catch (e: Exception) {
-            Log.e("TournamentRepository", "Failed to import", e)
+            Log.e("TournamentRepository", "Failed to import tournament JSON", e)
             false
         }
     }
 
-    fun createTournament(name: String, overs: Int) {
+    fun createTournament(name: String, overs: Int, maxOvers: Int? = null, quotaCount: Int? = null, quotaLimit: Int? = null) {
         _tournaments.update { list ->
             val newList = list + Tournament(
                 id = UUID.randomUUID().toString(),
                 name = name,
-                settings = TournamentSettings(overs = overs)
+                settings = TournamentSettings(
+                    overs = overs, 
+                    maxOversPerBowler = maxOvers,
+                    quotaBowlersCount = quotaCount,
+                    quotaMaxOvers = quotaLimit
+                )
             )
             saveToDisk(newList)
             newList
@@ -118,14 +133,33 @@ object TournamentRepository {
         }
     }
 
-    fun addPlayerToTeam(tournamentId: String, teamId: String, playerName: String) {
+    fun addPlayerToTeam(tournamentId: String, teamId: String, playerName: String, bStyle: BattingStyle = BattingStyle.RHB, bowlStyle: BowlingStyle = BowlingStyle.RightArm): Boolean {
+        var added = false
+        val trimmedName = playerName.trim()
+        
         _tournaments.update { list ->
+            val tournament = list.find { it.id == tournamentId } ?: return@update list
+            val isDuplicate = tournament.teams.flatMap { it.players }.any { 
+                it.name.trim().equals(trimmedName, ignoreCase = true) 
+            }
+            
+            if (isDuplicate) {
+                added = false
+                return@update list
+            }
+
+            added = true
             val newList = list.map { t ->
                 if (t.id == tournamentId) {
                     var createdPlayer: Player? = null
                     val updatedTeams = t.teams.map { team ->
                         if (team.id == teamId) {
-                            val newPlayer = Player(id = UUID.randomUUID().toString(), name = playerName)
+                            val newPlayer = Player(
+                                id = UUID.randomUUID().toString(), 
+                                name = trimmedName,
+                                battingStyle = bStyle,
+                                bowlingStyle = bowlStyle
+                            )
                             createdPlayer = newPlayer
                             team.copy(players = team.players + newPlayer)
                         } else team
@@ -135,11 +169,11 @@ object TournamentRepository {
                     val updatedMatches = if (playerToAdd != null) {
                         t.matches.map { match ->
                             if (match.status == MatchStatus.LIVE || match.status == MatchStatus.UPCOMING) {
-                                val updatedTeamA = if (match.teamA.id == teamId) {
+                                val updatedTeamA = if (match.teamA.id == teamId || playerToAdd.isJoker) {
                                     match.teamA.copy(players = match.teamA.players + playerToAdd)
                                 } else match.teamA
 
-                                val updatedTeamB = if (match.teamB.id == teamId) {
+                                val updatedTeamB = if (match.teamB.id == teamId || playerToAdd.isJoker) {
                                     match.teamB.copy(players = match.teamB.players + playerToAdd)
                                 } else match.teamB
 
@@ -154,6 +188,7 @@ object TournamentRepository {
             saveToDisk(newList)
             newList
         }
+        return added
     }
 
     fun deletePlayer(tournamentId: String, teamId: String, playerId: String) {
@@ -168,14 +203,8 @@ object TournamentRepository {
 
                     val updatedMatches = t.matches.map { match ->
                         if (match.status == MatchStatus.LIVE || match.status == MatchStatus.UPCOMING) {
-                            val updatedTeamA = if (match.teamA.id == teamId) {
-                                match.teamA.copy(players = match.teamA.players.filter { it.id != playerId })
-                            } else match.teamA
-
-                            val updatedTeamB = if (match.teamB.id == teamId) {
-                                match.teamB.copy(players = match.teamB.players.filter { it.id != playerId })
-                            } else match.teamB
-
+                            val updatedTeamA = match.teamA.copy(players = match.teamA.players.filter { it.id != playerId })
+                            val updatedTeamB = match.teamB.copy(players = match.teamB.players.filter { it.id != playerId })
                             match.copy(teamA = updatedTeamA, teamB = updatedTeamB)
                         } else match
                     }
@@ -188,14 +217,14 @@ object TournamentRepository {
         }
     }
 
-    fun updatePlayerName(tournamentId: String, teamId: String, playerId: String, newName: String) {
+    fun updatePlayerDetails(tournamentId: String, teamId: String, playerId: String, newName: String, bStyle: BattingStyle, bowlStyle: BowlingStyle) {
         _tournaments.update { list ->
             val newList = list.map { t ->
                 if (t.id == tournamentId) {
                     val updatedTeams = t.teams.map { team ->
                         if (team.id == teamId) {
                             val updatedPlayers = team.players.map { player ->
-                                if (player.id == playerId) player.copy(name = newName) else player
+                                if (player.id == playerId) player.copy(name = newName, battingStyle = bStyle, bowlingStyle = bowlStyle) else player
                             }
                             team.copy(players = updatedPlayers)
                         } else team
@@ -203,15 +232,15 @@ object TournamentRepository {
                     
                     val updatedMatches = t.matches.map { match ->
                         if (match.status == MatchStatus.LIVE || match.status == MatchStatus.UPCOMING) {
-                            val updatedTeamA = if (match.teamA.id == teamId) {
+                            val updatedTeamA = if (match.teamA.id == teamId || match.teamA.players.any { it.id == playerId }) {
                                 match.teamA.copy(players = match.teamA.players.map { p ->
-                                    if (p.id == playerId) p.copy(name = newName) else p
+                                    if (p.id == playerId) p.copy(name = newName, battingStyle = bStyle, bowlingStyle = bowlStyle) else p
                                 })
                             } else match.teamA
                             
-                            val updatedTeamB = if (match.teamB.id == teamId) {
+                            val updatedTeamB = if (match.teamB.id == teamId || match.teamB.players.any { it.id == playerId }) {
                                 match.teamB.copy(players = match.teamB.players.map { p ->
-                                    if (p.id == playerId) p.copy(name = newName) else p
+                                    if (p.id == playerId) p.copy(name = newName, battingStyle = bStyle, bowlingStyle = bowlStyle) else p
                                 })
                             } else match.teamB
                             
@@ -227,22 +256,110 @@ object TournamentRepository {
         }
     }
 
-    fun scheduleMatch(tournamentId: String, teamAId: String, teamBId: String) {
+    fun togglePlayerJokerStatus(tournamentId: String, teamId: String, playerId: String) {
+        _tournaments.update { list ->
+            val newList = list.map { t ->
+                if (t.id == tournamentId) {
+                    val updatedTeams = t.teams.map { team ->
+                        if (team.id == teamId) {
+                            val updatedPlayers = team.players.map { player ->
+                                if (player.id == playerId) player.copy(isJoker = !player.isJoker) else player
+                            }
+                            team.copy(players = updatedPlayers)
+                        } else team
+                    }
+
+                    val jokerPlayer = updatedTeams.flatMap { it.players }.find { it.id == playerId } ?: return@map t
+
+                    val updatedMatches = t.matches.map { match ->
+                        if (match.status == MatchStatus.LIVE || match.status == MatchStatus.UPCOMING) {
+                            var newTeamA = match.teamA
+                            var newTeamB = match.teamB
+
+                            if (jokerPlayer.isJoker) {
+                                // Add Joker to both teams if not already there
+                                if (newTeamA.players.none { it.id == playerId }) {
+                                    newTeamA = newTeamA.copy(players = newTeamA.players + jokerPlayer)
+                                } else {
+                                    newTeamA = newTeamA.copy(players = newTeamA.players.map { if (it.id == playerId) jokerPlayer else it })
+                                }
+                                if (newTeamB.players.none { it.id == playerId }) {
+                                    newTeamB = newTeamB.copy(players = newTeamB.players + jokerPlayer)
+                                } else {
+                                    newTeamB = newTeamB.copy(players = newTeamB.players.map { if (it.id == playerId) jokerPlayer else it })
+                                }
+                            } else {
+                                // Remove Joker from teams they don't belong to originally
+                                // (i.e., not in the updatedTeams master list for that team)
+                                val belongsInA = updatedTeams.find { it.id == newTeamA.id }?.players?.any { it.id == playerId } == true
+                                val belongsInB = updatedTeams.find { it.id == newTeamB.id }?.players?.any { it.id == playerId } == true
+
+                                newTeamA = if (belongsInA) {
+                                    newTeamA.copy(players = newTeamA.players.map { if (it.id == playerId) jokerPlayer else it })
+                                } else {
+                                    newTeamA.copy(players = newTeamA.players.filter { it.id != playerId })
+                                }
+
+                                newTeamB = if (belongsInB) {
+                                    newTeamB.copy(players = newTeamB.players.map { if (it.id == playerId) jokerPlayer else it })
+                                } else {
+                                    newTeamB.copy(players = newTeamB.players.filter { it.id != playerId })
+                                }
+                            }
+                            match.copy(teamA = newTeamA, teamB = newTeamB)
+                        } else match
+                    }
+
+                    t.copy(teams = updatedTeams, matches = updatedMatches)
+                } else t
+            }
+            saveToDisk(newList)
+            newList
+        }
+    }
+
+    fun scheduleMatch(
+        tournamentId: String, 
+        teamAId: String, 
+        teamBId: String, 
+        scheduledDate: Long? = null,
+        matchOvers: Int? = null,
+        matchMaxOvers: Int? = null,
+        matchQuotaCount: Int? = null,
+        matchQuotaLimit: Int? = null
+    ) {
         _tournaments.update { list ->
             val newList = list.map { t ->
                 if (t.id == tournamentId) {
                     val teamA = t.teams.find { it.id == teamAId } ?: return@map t
                     val teamB = t.teams.find { it.id == teamBId } ?: return@map t
+                    
+                    val jokers = t.teams.flatMap { it.players }.filter { it.isJoker }
+                    var matchTeamA = teamA
+                    var matchTeamB = teamB
+                    
+                    jokers.forEach { joker ->
+                        if (matchTeamA.players.none { it.id == joker.id }) {
+                            matchTeamA = matchTeamA.copy(players = matchTeamA.players + joker)
+                        }
+                        if (matchTeamB.players.none { it.id == joker.id }) {
+                            matchTeamB = matchTeamB.copy(players = matchTeamB.players + joker)
+                        }
+                    }
+
                     val match = Match(
                         id = UUID.randomUUID().toString(),
                         tournamentId = tournamentId,
                         tournamentName = t.name,
-                        teamA = teamA,
-                        teamB = teamB,
-                        battingTeamId = teamA.id,
-                        bowlingTeamId = teamB.id,
-                        oversPerInnings = t.settings.overs,
-                        dateMillis = System.currentTimeMillis()
+                        teamA = matchTeamA,
+                        teamB = matchTeamB,
+                        battingTeamId = matchTeamA.id,
+                        bowlingTeamId = matchTeamB.id,
+                        oversPerInnings = matchOvers ?: t.settings.overs,
+                        maxOversPerBowler = matchMaxOvers ?: t.settings.maxOversPerBowler,
+                        quotaBowlersCount = matchQuotaCount ?: t.settings.quotaBowlersCount,
+                        quotaMaxOvers = matchQuotaLimit ?: t.settings.quotaMaxOvers,
+                        dateMillis = scheduledDate ?: System.currentTimeMillis()
                     )
                     t.copy(matches = t.matches + match)
                 } else t
@@ -256,7 +373,8 @@ object TournamentRepository {
         _tournaments.update { list ->
             val newList = list.map { t ->
                 if (t.id == tournamentId) {
-                    t.copy(matches = t.matches.filter { it.id != matchId })
+                    val filteredMatches = t.matches.filter { it.id != matchId }
+                    recalculateTournamentStandings(t.copy(matches = filteredMatches))
                 } else t
             }
             saveToDisk(newList)
@@ -267,24 +385,16 @@ object TournamentRepository {
     fun updateMatch(tournamentId: String, updatedMatch: Match) {
         _tournaments.update { list ->
             var found = false
-            val newList = list.map { t ->
+            val updatedList = list.map { t ->
                 if (t.id == tournamentId) {
                     found = true
-                    val oldMatch = t.matches.find { it.id == updatedMatch.id }
-                    val wasCompleted = oldMatch?.status == MatchStatus.COMPLETED
-                    
                     val updatedMatches = if (t.matches.any { it.id == updatedMatch.id }) {
                         t.matches.map { m -> if (m.id == updatedMatch.id) updatedMatch else m }
                     } else {
                         t.matches + updatedMatch
                     }
                     
-                    var updatedTeams = t.teams
-                    if (updatedMatch.status == MatchStatus.COMPLETED && !wasCompleted) {
-                        updatedTeams = updateTournamentPointsAndStats(t.teams, updatedMatch)
-                    }
-                    
-                    t.copy(matches = updatedMatches, teams = updatedTeams)
+                    recalculateTournamentStandings(t.copy(matches = updatedMatches))
                 } else t
             }
             
@@ -294,16 +404,47 @@ object TournamentRepository {
                     name = updatedMatch.tournamentName ?: "Remote Tournament",
                     teams = listOf(updatedMatch.teamA, updatedMatch.teamB),
                     matches = listOf(updatedMatch),
-                    settings = TournamentSettings(overs = updatedMatch.oversPerInnings)
+                    settings = TournamentSettings(
+                        overs = updatedMatch.oversPerInnings,
+                        maxOversPerBowler = updatedMatch.maxOversPerBowler,
+                        quotaBowlersCount = updatedMatch.quotaBowlersCount,
+                        quotaMaxOvers = updatedMatch.quotaMaxOvers
+                    )
                 )
-                newList + newTournament
+                updatedList + recalculateTournamentStandings(newTournament)
             } else {
-                newList
+                updatedList
             }
             
             saveToDisk(finalList)
             finalList
         }
+    }
+
+    private fun resetTeamStats(team: Team): Team {
+        return team.copy(
+            matchesPlayed = 0,
+            wins = 0,
+            losses = 0,
+            points = 0,
+            nrr = 0.0,
+            players = team.players.map { player ->
+                player.copy(
+                    battingStats = BattingStats(),
+                    bowlingStats = BowlingStats(),
+                    fieldingStats = FieldingStats()
+                )
+            }
+        )
+    }
+
+    private fun recalculateTournamentStandings(tournament: Tournament): Tournament {
+        val resetTeams = tournament.teams.map { resetTeamStats(it) }
+        var currentTeams = resetTeams
+        tournament.matches.filter { it.status == MatchStatus.COMPLETED }.forEach { match ->
+            currentTeams = updateTournamentPointsAndStats(currentTeams, match)
+        }
+        return tournament.copy(teams = currentTeams)
     }
 
     private fun updateTournamentPointsAndStats(teams: List<Team>, match: Match): List<Team> {
@@ -354,5 +495,22 @@ object TournamentRepository {
 
     fun getTournament(id: String): Tournament? {
         return _tournaments.value.find { it.id == id }
+    }
+
+    fun updateTournamentSettings(tournamentId: String, overs: Int, maxOvers: Int?, quotaCount: Int?, quotaLimit: Int?) {
+        _tournaments.update { list ->
+            val newList = list.map { t ->
+                if (t.id == tournamentId) {
+                    t.copy(settings = t.settings.copy(
+                        overs = overs, 
+                        maxOversPerBowler = maxOvers,
+                        quotaBowlersCount = quotaCount,
+                        quotaMaxOvers = quotaLimit
+                    ))
+                } else t
+            }
+            saveToDisk(newList)
+            newList
+        }
     }
 }

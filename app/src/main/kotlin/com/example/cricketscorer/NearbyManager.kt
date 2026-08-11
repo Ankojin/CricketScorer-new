@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 object NearbyManager {
-    private const val SERVICE_ID = "com.example.cricketscorer.SYNC.v1.18" // Bumped to 1.18
+    private const val SERVICE_ID = "com.example.cricketscorer.SYNC.v1.20" // Bumped to 1.20
     private val STRATEGY_TYPE = Strategy.P2P_STAR
     
     private val _connectedEndpoints = MutableStateFlow<Set<String>>(emptySet())
@@ -32,6 +32,12 @@ object NearbyManager {
 
     fun setOnConnectedCallback(callback: () -> Unit) {
         onConnectedCallback = callback
+    }
+
+    fun startSync(context: Context, name: String) {
+        stopAll(context)
+        startBroadcasting(context, name)
+        startDiscovering(context)
     }
 
     fun startBroadcasting(context: Context, matchName: String) {

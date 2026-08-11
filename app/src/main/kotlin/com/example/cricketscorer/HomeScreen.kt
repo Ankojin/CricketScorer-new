@@ -1,5 +1,8 @@
 package com.example.cricketscorer
 
+import android.content.Context
+import android.location.LocationManager
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -95,7 +98,8 @@ fun HomeScreen(
                                 .clickable { onNavigateToLiveScoring(liveMatch) },
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-                            shape = RoundedCornerShape(16.dp)
+                            shape = RoundedCornerShape(16.dp),
+                            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
                         ) {
                             Column(modifier = Modifier.padding(20.dp)) {
                                 Row(
@@ -159,7 +163,8 @@ fun HomeScreen(
                             .fillMaxWidth()
                             .clickable { onNavigateToDashboard() },
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
                     ) {
                         Column(modifier = Modifier.padding(24.dp)) {
                             Text("Create Series", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onPrimaryContainer)
@@ -229,6 +234,9 @@ fun HomeScreen(
                             
                             HorizontalDivider()
 
+                            val isSyncEnabled by viewModel.isSyncEnabled.collectAsState()
+                            val connectedEndpoints by NearbyManager.connectedEndpoints.collectAsState()
+
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -238,20 +246,37 @@ fun HomeScreen(
                                     Text("Local Sync (Beta)", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                                     Text("Share scores with devices nearby", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                                 }
-                                val isSyncEnabled by viewModel.isSyncEnabled.collectAsState()
+                                
                                 Switch(
                                     checked = isSyncEnabled,
                                     onCheckedChange = { enabled ->
-                                        viewModel.toggleSync(enabled)
                                         if (enabled) {
-                                            NearbyManager.startDiscovering(context)
-                                            if (liveMatch != null) {
-                                                NearbyManager.startBroadcasting(context, liveMatch.teamA.name + " vs " + liveMatch.teamB.name)
+                                            val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                                            val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                                            val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+                                            
+                                            if (!isGpsEnabled && !isNetworkEnabled) {
+                                                Toast.makeText(context, "Please turn on GPS/Location to use Sync.", Toast.LENGTH_LONG).show()
+                                                return@Switch
                                             }
+                                            
+                                            viewModel.toggleSync(true)
+                                            NearbyManager.startSync(context, "CricScore: " + android.os.Build.MODEL)
                                         } else {
+                                            viewModel.toggleSync(false)
                                             NearbyManager.stopAll(context)
                                         }
                                     }
+                                )
+                            }
+                            
+                            if (isSyncEnabled && connectedEndpoints.isEmpty()) {
+                                Text(
+                                    "Status: Searching for devices...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 4.dp)
                                 )
                             }
                         }

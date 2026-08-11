@@ -8,7 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF64B5F6),
+    primary = Color(0xFF74B9FF),
     onPrimary = Color(0xFF001D36),
     primaryContainer = Color(0xFF0D47A1),
     onPrimaryContainer = Color(0xFFD1E4FF),
@@ -17,26 +17,27 @@ private val DarkColorScheme = darkColorScheme(
     secondaryContainer = Color(0xFF01579B),
     onSecondaryContainer = Color(0xFFB3E5FC),
     surface = Color(0xFF1B263B),
-    background = Color(0xFF0D1B2A),
+    background = Color(0xFF0A192F),
     onSurface = Color.White,
     onBackground = Color.White,
     error = Color(0xFFFF5252)
 )
 
-private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF003366), // Cricinfo Navy
+val LightColorScheme = lightColorScheme(
+    primary = Color(0xFF001D3D), // Deep Midnight Navy
     onPrimary = Color.White,
     primaryContainer = Color(0xFFE3F2FD),
-    onPrimaryContainer = Color(0xFF003366),
-    secondary = Color(0xFF03A9F4), // Sky Blue
+    onPrimaryContainer = Color(0xFF001D3D),
+    secondary = Color(0xFF003566), // Royal Blue
     onSecondary = Color.White,
     secondaryContainer = Color(0xFFB3E5FC),
-    onSecondaryContainer = Color(0xFF01579B),
+    onSecondaryContainer = Color(0xFF003566),
+    tertiary = Color(0xFFFFC300), // Gold
     surface = Color.White,
-    background = Color(0xFFF8F9FA), // Clean Background
+    background = Color(0xFFF0F4F8), // Soft Blue-Grey
     onSurface = Color(0xFF1A1A1A),
     onBackground = Color(0xFF1A1A1A),
-    error = Color(0xFFD32F2F) // Live Red
+    error = Color(0xFFD32F2F)
 )
 
 @Composable

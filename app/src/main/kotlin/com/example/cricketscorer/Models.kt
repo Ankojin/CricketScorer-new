@@ -1,12 +1,24 @@
 package com.example.cricketscorer
 
+
 data class Player(
     val id: String,
     val name: String,
     val battingStats: BattingStats = BattingStats(),
     val bowlingStats: BowlingStats = BowlingStats(),
-    val fieldingStats: FieldingStats = FieldingStats()
+    val fieldingStats: FieldingStats = FieldingStats(),
+    val isJoker: Boolean = false,
+    val battingStyle: BattingStyle? = BattingStyle.RHB,
+    val bowlingStyle: BowlingStyle? = BowlingStyle.RightArm
 )
+
+enum class BattingStyle {
+    RHB, LHB
+}
+
+enum class BowlingStyle {
+    RightArm, LeftArm
+}
 
 data class BattingStats(
     val runs: Int = 0,
@@ -105,7 +117,8 @@ data class InningsSummary(
     val byeCount: Int = 0,
     val legByeCount: Int = 0,
     val recordedBallsCount: Int = 0,
-    val durationMinutes: Int = 0
+    val durationMinutes: Int = 0,
+    val battingOrder: List<String> = emptyList()
 )
 
 data class Match(
@@ -145,8 +158,13 @@ data class Match(
     val winnerId: String? = null,
     val manOfTheMatchId: String? = null,
     val oversPerInnings: Int = 20,
-    val pendingAction: PendingAction = PendingAction.NONE,
+    val maxOversPerBowler: Int? = null,
+    val quotaBowlersCount: Int? = null,
+    val quotaMaxOvers: Int? = null,
+    val pendingAction: PendingAction? = PendingAction.NONE,
     val innings1Data: InningsSummary? = null,
+    val isSecondInningsStarted: Boolean = false,
+    val battingOrder: List<String> = emptyList(),
     val startTimeMillis: Long? = null,
     val endTimeMillis: Long? = null,
     val dateMillis: Long = System.currentTimeMillis()
@@ -168,7 +186,8 @@ data class Partnership(
 enum class PendingAction {
     NONE, SELECT_STRIKER, SELECT_NON_STRIKER, SELECT_BOWLER, TOSS_REQUIRED, 
     SELECT_CAPTAIN_A, SELECT_CAPTAIN_B, SELECT_WK_A, SELECT_WK_B, SELECT_FIELDER,
-    START_SECOND_INNINGS, SELECT_FIELDER_DROPPED_CATCH, SELECT_RUNS_DROPPED_CATCH
+    START_SECOND_INNINGS, SELECT_FIELDER_DROPPED_CATCH, SELECT_RUNS_DROPPED_CATCH,
+    REPLACE_STRIKER, REPLACE_NON_STRIKER, REPLACE_BOWLER
 }
 
 enum class MatchStatus {
@@ -186,5 +205,8 @@ data class Tournament(
 data class TournamentSettings(
     val overs: Int = 20,
     val ballType: String = "Leather",
-    val powerplayOvers: Int = 6
+    val powerplayOvers: Int = 6,
+    val maxOversPerBowler: Int? = null,
+    val quotaBowlersCount: Int? = null,
+    val quotaMaxOvers: Int? = null
 )
