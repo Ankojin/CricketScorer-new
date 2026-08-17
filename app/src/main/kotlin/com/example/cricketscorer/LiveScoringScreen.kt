@@ -1345,7 +1345,7 @@ fun PlayerSelectionOverlay(match: Match, viewModel: ScoringViewModel) {
                                     (if (player.isJoker) " 🃏" else "") + 
                                     (if (isCaptain) " (c)" else "") + 
                                     (if (isWK) " 🧤" else "") +
-                                    (if (isRH) " (Retired Hurt) 🤕" else "") +
+                                    (if (isRH && (currentAction == PendingAction.SELECT_STRIKER || currentAction == PendingAction.SELECT_NON_STRIKER || currentAction == PendingAction.REPLACE_STRIKER || currentAction == PendingAction.REPLACE_NON_STRIKER)) " (Retired Hurt) 🤕" else "") +
                                     (if (showSpellCompleted) " (Spell Completed) 🛑" else "")
                                 ) 
                             },
@@ -1655,7 +1655,10 @@ fun ControlsSection(
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("🏏 WICKET", fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🏏 ", style = MaterialTheme.typography.titleMedium)
+                    Text("WICKET", fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
+                }
             }
             Button(
                 onClick = onShowRetireHurt,
@@ -1931,7 +1934,7 @@ fun BallBox(ball: Ball, onClick: () -> Unit) {
 @Composable
 private fun CardBranding() {
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-        Text("Prepared by Ankoji | v1.59", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
+        Text("Prepared by Ankoji | v1.61", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
     }
 }
 

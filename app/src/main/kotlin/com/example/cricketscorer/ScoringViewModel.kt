@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 
 class ScoringViewModel : ViewModel() {
@@ -24,6 +25,7 @@ class ScoringViewModel : ViewModel() {
 
     private var pendingWicketBall: Ball? = null
     private var pendingDroppedCatchBall: Ball? = null
+    private var lastNotifiedBowlerId: String? = null
     private val notifiedBowlerIds = mutableSetOf<String>()
 
     init {
@@ -97,27 +99,27 @@ class ScoringViewModel : ViewModel() {
     }
 
     fun startSecondInnings() {
-        _matchState.update { current ->
-            val updated = current?.copy(
+        val updated = _matchState.updateAndGet { current ->
+            current?.copy(
                 isSecondInningsStarted = true,
                 pendingAction = PendingAction.NONE
             )
-            if (updated != null) {
-                TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)
-            }
-            updated
+        }
+        if (updated != null) {
+            TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)
         }
     }
 
     fun swapStrike() {
-        _matchState.update { current ->
-            if (current == null || current.strikerId == null || current.nonStrikerId == null) return@update current
-            val updated = current.copy(
+        val updated = _matchState.updateAndGet { current ->
+            if (current == null || current.strikerId == null || current.nonStrikerId == null) return@updateAndGet current
+            current.copy(
                 strikerId = current.nonStrikerId,
                 nonStrikerId = current.strikerId
             )
+        }
+        if (updated != null) {
             TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)
-            updated
         }
     }
 
@@ -159,8 +161,10 @@ class ScoringViewModel : ViewModel() {
                 nonStrikerId = null,
                 currentBowlerId = null
             )
-            TournamentRepository.updateMatch(current.tournamentId ?: "", updatedMatch)
             updatedMatch
+        }
+        _matchState.value?.let { 
+            TournamentRepository.updateMatch(it.tournamentId ?: "", it)
         }
     }
 
@@ -285,8 +289,10 @@ class ScoringViewModel : ViewModel() {
             newHistory[index] = updatedBall
             val updatedMatch = current.copy(ballHistory = newHistory)
             val finalizedMatch = recalculateMatchFromHistory(updatedMatch)
-            TournamentRepository.updateMatch(finalizedMatch.tournamentId ?: "", finalizedMatch)
             finalizedMatch
+        }
+        _matchState.value?.let { 
+            TournamentRepository.updateMatch(it.tournamentId ?: "", it)
         }
     }
 
@@ -310,9 +316,10 @@ class ScoringViewModel : ViewModel() {
                 else -> current
             }
             
-            val finalizedMatch = recalculateMatchFromHistory(withSelection)
-            TournamentRepository.updateMatch(finalizedMatch.tournamentId ?: "", finalizedMatch)
-            finalizedMatch
+            recalculateMatchFromHistory(withSelection)
+        }
+        _matchState.value?.let { 
+            TournamentRepository.updateMatch(it.tournamentId ?: "", it)
         }
     }
 
@@ -337,8 +344,11 @@ class ScoringViewModel : ViewModel() {
     }
 
     private fun recordBall(ball: Ball) {
-        _matchState.update { current ->
-            if (current == null) return@update null
+        var notificationText: String? = null
+        var bowlerToNotifyId: String? = null
+
+        val finalizedMatch = _matchState.updateAndGet { current ->
+            if (current == null) return@updateAndGet null
             
             // v1.6: Start time tracking
             val matchWithTime = if (current.startTimeMillis == null) {
@@ -354,36 +364,52 @@ class ScoringViewModel : ViewModel() {
                 if (updatedMatch.nonStrikerId == outId) updatedMatch = updatedMatch.copy(nonStrikerId = null)
             }
 
-            val finalizedMatch = recalculateMatchFromHistory(updatedMatch)
-            TournamentRepository.updateMatch(finalizedMatch.tournamentId ?: "", finalizedMatch)
+            val result = recalculateMatchFromHistory(updatedMatch)
             
-            // v1.35: Trigger spell notification ONLY here (once per ball)
-            if (finalizedMatch.status == MatchStatus.LIVE && ball.isLegalBall && finalizedMatch.totalBalls % 6 == 0 && _bowlerNotification.value == null) {
-                val bowlingTeam = if (finalizedMatch.bowlingTeamId == finalizedMatch.teamA.id) finalizedMatch.teamA else finalizedMatch.teamB
-                val bPlayer = bowlingTeam.players.find { it.id == ball.bowlerId }
-                if (bPlayer != null && finalizedMatch.maxOversPerBowler != null && !notifiedBowlerIds.contains(bPlayer.id)) {
-                    val base = finalizedMatch.maxOversPerBowler!!
-                    val qLimit = finalizedMatch.quotaMaxOvers ?: base
-                    val qCount = finalizedMatch.quotaBowlersCount ?: 0
+            // v1.61: Prepare spell notification logic (Side-effect free preparation)
+            if (result.status == MatchStatus.LIVE && ball.isLegalBall && result.totalBalls % 6 == 0 && _bowlerNotification.value == null) {
+                val bowlingTeam = if (result.bowlingTeamId == result.teamA.id) result.teamA else result.teamB
+                val ballBowlerId = ball.bowlerId ?: ""
+                val bPlayer = bowlingTeam.players.find { it.id == ballBowlerId }
+                if (bPlayer != null && result.maxOversPerBowler != null && result.lastNotifiedBowlerId != bPlayer.id) {
+                    val base = result.maxOversPerBowler!!
+                    val qLimit = result.quotaMaxOvers ?: base
+                    val qCount = result.quotaBowlersCount ?: 0
                     
                     val pOvers = bPlayer.bowlingStats.overs
                     val othersUsingQuota = bowlingTeam.players.count { p ->
-                        p.id != ball.bowlerId && (p.bowlingStats.overs > base || (p.bowlingStats.overs == base && p.bowlingStats.balls > 0))
+                        p.id != ballBowlerId && (p.bowlingStats.overs > base || (p.bowlingStats.overs == base && p.bowlingStats.balls > 0))
                     }
                     
                     if (pOvers >= qLimit || (pOvers >= base && othersUsingQuota >= qCount)) {
-                        _bowlerNotification.value = "${bPlayer.name} has completed their spell! 🛑"
-                        notifiedBowlerIds.add(bPlayer.id)
+                        notificationText = "${bPlayer.name} has completed their spell! 🛑"
+                        bowlerToNotifyId = bPlayer.id
                     }
                 }
             }
+            result
+        }
 
-            // v1.8: Sync if enabled
-            if (_isSyncEnabled.value) {
-                // We'll need context for Nearby, handled via a side effect or UI trigger
+        // Apply side effects outside of update block
+        if (finalizedMatch != null) {
+            val finalWithNotification = if (bowlerToNotifyId != null) {
+                finalizedMatch.copy(lastNotifiedBowlerId = bowlerToNotifyId)
+            } else finalizedMatch
+
+            TournamentRepository.updateMatch(finalWithNotification.tournamentId ?: "", finalWithNotification)
+            
+            notificationText?.let { text ->
+                _bowlerNotification.value = text
+                bowlerToNotifyId?.let { id -> 
+                    notifiedBowlerIds.add(id)
+                    lastNotifiedBowlerId = id
+                }
             }
-
-            finalizedMatch
+            
+            // If we updated the match with lastNotifiedBowlerId, ensure state is updated
+            if (bowlerToNotifyId != null) {
+                _matchState.update { finalWithNotification }
+            }
         }
     }
 
@@ -409,6 +435,8 @@ class ScoringViewModel : ViewModel() {
             bowlingTeamId = match.initialBowlingTeamId ?: match.bowlingTeamId,
             innings1Data = null, target = null, winnerId = null,
             strikerId = null, nonStrikerId = null, currentBowlerId = null, lastBowlerId = null,
+            isSecondInningsStarted = false,
+            lastNotifiedBowlerId = null,
             pendingAction = PendingAction.NONE
         )
 
@@ -420,8 +448,12 @@ class ScoringViewModel : ViewModel() {
 
             // Track batting order
             val newBattingOrder = current.battingOrder.toMutableList()
-            if (ball.strikerId.isNotEmpty() && !newBattingOrder.contains(ball.strikerId)) newBattingOrder.add(ball.strikerId)
-            if (ball.nonStrikerId.isNotEmpty() && !newBattingOrder.contains(ball.nonStrikerId)) newBattingOrder.add(ball.nonStrikerId)
+            val strikerId = ball.strikerId ?: ""
+            val nonStrikerId = ball.nonStrikerId ?: ""
+            val bowlerId = ball.bowlerId ?: ""
+            
+            if (strikerId.isNotEmpty() && !newBattingOrder.contains(strikerId)) newBattingOrder.add(strikerId)
+            if (nonStrikerId.isNotEmpty() && !newBattingOrder.contains(nonStrikerId)) newBattingOrder.add(nonStrikerId)
 
             current = current.copy(
                 totalRuns = current.totalRuns + ball.runs + ball.extraRuns,
@@ -440,7 +472,7 @@ class ScoringViewModel : ViewModel() {
                 val outId = ball.outPlayerId ?: ball.strikerId
                 val outName = battingTeam.players.find { it.id == outId }?.name ?: "Unknown"
                 val displayOutName = "☝️ $outName" // v1.6: Wicket emoji
-                val bName = bowlingTeam.players.find { it.id == ball.bowlerId }?.name
+                val bName = bowlingTeam.players.find { it.id == bowlerId }?.name
                 val fName = bowlingTeam.players.find { it.id == ball.fielderId }?.name
                 current = current.copy(wicketHistory = current.wicketHistory + WicketRecord(current.totalWickets, displayOutName, current.totalRuns, "${current.totalBalls/6}.${current.totalBalls%6}", ball.wicketType, bName, fName))
             }
@@ -469,8 +501,8 @@ class ScoringViewModel : ViewModel() {
 
             if (ball.wicketType != WicketType.NONE) {
                 val outId = ball.outPlayerId ?: ball.strikerId
-                if (sId == outId) sId = null
-                else if (nsId == outId) nsId = null
+                if (sId == outId && sId != null) sId = null
+                else if (nsId == outId && nsId != null) nsId = null
             }
 
             current = current.copy(strikerId = sId, nonStrikerId = nsId, currentBowlerId = bId, lastBowlerId = lbId)
@@ -507,6 +539,7 @@ class ScoringViewModel : ViewModel() {
                     battingOrder = emptyList(),
                     strikerId = null, nonStrikerId = null, currentBowlerId = null, lastBowlerId = null,
                     pendingAction = if (match.isSecondInningsStarted) PendingAction.NONE else PendingAction.START_SECOND_INNINGS,
+                    isSecondInningsStarted = match.isSecondInningsStarted,
                     startTimeMillis = if (match.currentInnings == 2) match.startTimeMillis else System.currentTimeMillis() // Reset for 2nd innings
                 )
             } else if (current.currentInnings == 2) {
@@ -561,17 +594,19 @@ class ScoringViewModel : ViewModel() {
                 else if (match.teamBCaptainId == null) final = final.copy(pendingAction = PendingAction.SELECT_CAPTAIN_B)
             }
             
-            if ((final.pendingAction ?: PendingAction.NONE) == PendingAction.NONE) {
-                if (final.bowlingTeamId == final.teamA.id && final.teamAWicketKeeperId == null) final = final.copy(pendingAction = PendingAction.SELECT_WK_A)
-                else if (final.bowlingTeamId == final.teamB.id && final.teamBWicketKeeperId == null) final = final.copy(pendingAction = PendingAction.SELECT_WK_B)
-            }
+            if (final.currentInnings == 1 || final.isSecondInningsStarted) {
+                if ((final.pendingAction ?: PendingAction.NONE) == PendingAction.NONE) {
+                    if (final.bowlingTeamId == final.teamA.id && final.teamAWicketKeeperId == null) final = final.copy(pendingAction = PendingAction.SELECT_WK_A)
+                    else if (final.bowlingTeamId == final.teamB.id && final.teamBWicketKeeperId == null) final = final.copy(pendingAction = PendingAction.SELECT_WK_B)
+                }
 
-            if ((final.pendingAction ?: PendingAction.NONE) == PendingAction.NONE) {
-                final = when {
-                    final.strikerId == null -> final.copy(pendingAction = PendingAction.SELECT_STRIKER)
-                    final.nonStrikerId == null -> final.copy(pendingAction = PendingAction.SELECT_NON_STRIKER)
-                    final.currentBowlerId == null -> final.copy(pendingAction = PendingAction.SELECT_BOWLER)
-                    else -> final.copy(pendingAction = PendingAction.NONE)
+                if ((final.pendingAction ?: PendingAction.NONE) == PendingAction.NONE) {
+                    final = when {
+                        final.strikerId == null -> final.copy(pendingAction = PendingAction.SELECT_STRIKER)
+                        final.nonStrikerId == null -> final.copy(pendingAction = PendingAction.SELECT_NON_STRIKER)
+                        final.currentBowlerId == null -> final.copy(pendingAction = PendingAction.SELECT_BOWLER)
+                        else -> final.copy(pendingAction = PendingAction.NONE)
+                    }
                 }
             }
         }
@@ -672,9 +707,10 @@ class ScoringViewModel : ViewModel() {
                 quotaBowlersCount = newQuotaCount,
                 quotaMaxOvers = newQuotaLimit
             )
-            val finalizedMatch = recalculateMatchFromHistory(updatedMatch)
-            TournamentRepository.updateMatch(finalizedMatch.tournamentId ?: "", finalizedMatch)
-            finalizedMatch
+            recalculateMatchFromHistory(updatedMatch)
+        }
+        _matchState.value?.let { 
+            TournamentRepository.updateMatch(it.tournamentId ?: "", it)
         }
     }
 
@@ -685,9 +721,10 @@ class ScoringViewModel : ViewModel() {
             pendingDroppedCatchBall = null
             notifiedBowlerIds.clear()
             val undone = current.copy(ballHistory = current.ballHistory.dropLast(1), strikerId = null, nonStrikerId = null, currentBowlerId = null)
-            val finalized = recalculateMatchFromHistory(undone)
-            TournamentRepository.updateMatch(finalized.tournamentId ?: "", finalized)
-            finalized
+            recalculateMatchFromHistory(undone)
+        }
+        _matchState.value?.let { 
+            TournamentRepository.updateMatch(it.tournamentId ?: "", it)
         }
     }
 
@@ -721,9 +758,10 @@ class ScoringViewModel : ViewModel() {
             } else state.teamB
 
             val updatedMatch = state.copy(teamA = updatedTeamA, teamB = updatedTeamB)
-            val finalizedMatch = recalculateMatchFromHistory(updatedMatch)
-            TournamentRepository.updateMatch(finalizedMatch.tournamentId ?: "", finalizedMatch)
-            finalizedMatch
+            recalculateMatchFromHistory(updatedMatch)
+        }
+        _matchState.value?.let { 
+            TournamentRepository.updateMatch(it.tournamentId ?: "", it)
         }
     }
 
@@ -741,24 +779,22 @@ class ScoringViewModel : ViewModel() {
 
             val teamId = if (current.teamA.players.any { it.id == playerId }) current.teamA.id else current.teamB.id
 
-            val updatedTeamA = current.teamA.copy(players = current.teamA.players.filter { it.id != playerId })
-            val updatedTeamB = current.teamB.copy(players = current.teamB.players.filter { it.id != playerId })
+            // Update repository
+            TournamentRepository.deletePlayer(current.tournamentId ?: "", teamId, playerId)
 
             val updatedMatch = current.copy(
-                teamA = updatedTeamA,
-                teamB = updatedTeamB,
+                teamA = current.teamA.copy(players = current.teamA.players.filter { it.id != playerId }),
+                teamB = current.teamB.copy(players = current.teamB.players.filter { it.id != playerId }),
                 teamACaptainId = if (current.teamACaptainId == playerId) null else current.teamACaptainId,
                 teamBCaptainId = if (current.teamBCaptainId == playerId) null else current.teamBCaptainId,
                 teamAWicketKeeperId = if (current.teamAWicketKeeperId == playerId) null else current.teamAWicketKeeperId,
                 teamBWicketKeeperId = if (current.teamBWicketKeeperId == playerId) null else current.teamBWicketKeeperId
             )
 
-            // Update repository
-            TournamentRepository.deletePlayer(current.tournamentId ?: "", teamId, playerId)
-
-            val finalizedMatch = recalculateMatchFromHistory(updatedMatch)
-            TournamentRepository.updateMatch(finalizedMatch.tournamentId ?: "", finalizedMatch)
-            finalizedMatch
+            recalculateMatchFromHistory(updatedMatch)
+        }
+        _matchState.value?.let { 
+            TournamentRepository.updateMatch(it.tournamentId ?: "", it)
         }
     }
 }

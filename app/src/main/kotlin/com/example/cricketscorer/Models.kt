@@ -164,6 +164,7 @@ data class Match(
     val pendingAction: PendingAction? = PendingAction.NONE,
     val innings1Data: InningsSummary? = null,
     val isSecondInningsStarted: Boolean = false,
+    val lastNotifiedBowlerId: String? = null,
     val battingOrder: List<String> = emptyList(),
     val startTimeMillis: Long? = null,
     val endTimeMillis: Long? = null,
