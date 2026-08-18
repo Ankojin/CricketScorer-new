@@ -470,10 +470,13 @@ class ScoringViewModel : ViewModel() {
 
             if (ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT) {
                 val outId = ball.outPlayerId ?: ball.strikerId
-                val outName = battingTeam.players.find { it.id == outId }?.name ?: "Unknown"
+                val outName = battingTeam.players.find { it.id == outId }?.name 
+                    ?: outId?.let { if (!it.contains("-") || it.contains(" ")) it else "Unknown" } ?: "Unknown"
                 val displayOutName = "☝️ $outName" // v1.6: Wicket emoji
                 val bName = bowlingTeam.players.find { it.id == bowlerId }?.name
+                    ?: (if (bowlerId.isNotEmpty() && (!bowlerId.contains("-") || bowlerId.contains(" "))) bowlerId else null)
                 val fName = bowlingTeam.players.find { it.id == ball.fielderId }?.name
+                    ?: (ball.fielderId?.let { if (!it.contains("-") || it.contains(" ")) it else null })
                 current = current.copy(wicketHistory = current.wicketHistory + WicketRecord(current.totalWickets, displayOutName, current.totalRuns, "${current.totalBalls/6}.${current.totalBalls%6}", ball.wicketType, bName, fName))
             }
 

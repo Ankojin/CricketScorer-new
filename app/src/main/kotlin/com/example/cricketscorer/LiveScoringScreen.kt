@@ -650,7 +650,8 @@ fun BattingTable(match: Match, players: List<Player>, strikerId: String?, nonStr
         }
         
         val sortedPlayers = players.sortedBy { player ->
-            val idx = battingOrder.indexOf(player.id)
+            val pId = player.id as String?
+            val idx = if (pId != null) battingOrder.indexOf(pId) else -1
             if (idx == -1) Int.MAX_VALUE else idx
         }
         
@@ -673,8 +674,10 @@ fun BattingTable(match: Match, players: List<Player>, strikerId: String?, nonStr
                             fontWeight = FontWeight.Bold,
                             color = if (player.battingStats.isOut) Color.Gray else Color.Black
                         )
-                        val dismissalBowlerName = bowlers.find { it.id == player.battingStats.dismissalBowlerId }?.name
-                        val dismissalFielderName = bowlers.find { it.id == player.battingStats.dismissalFielderId }?.name ?: players.find { it.id == player.battingStats.dismissalFielderId }?.name
+                        val dbId = player.battingStats.dismissalBowlerId
+                        val dismissalBowlerName = bowlers.find { it.id == dbId }?.name ?: dbId?.let { if (!it.contains("-") || it.contains(" ")) it else null }
+                        val dfId = player.battingStats.dismissalFielderId
+                        val dismissalFielderName = bowlers.find { it.id == dfId }?.name ?: players.find { it.id == dfId }?.name ?: dfId?.let { if (!it.contains("-") || it.contains(" ")) it else null }
                         
                         val type = player.battingStats.wicketType
                         val dismissalText = when (type) {
@@ -861,13 +864,13 @@ fun OversTab(match: Match, viewModel: ScoringViewModel, graphicsLayer: GraphicsL
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     val overNum = overs.size - index
                                     val bowlerId = overBalls.firstOrNull()?.second?.bowlerId
-                                    val bowlerName = bowlingTeamPlayers.find { it.id == bowlerId }?.name ?: "Unknown"
+                                    val bowlerName = bowlingTeamPlayers.find { it.id == bowlerId }?.name ?: bowlerId?.let { if (!it.contains("-") || it.contains(" ")) it else "Unknown" } ?: "Unknown"
 
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Column {
                                             Text("Over $overNum", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
                                             val bowlersInOver = overBalls.groupBy { it.second.bowlerId }.map { (id, balls) ->
-                                                val name = bowlingTeamPlayers.find { it.id == id }?.name ?: "Unknown"
+                                                val name = bowlingTeamPlayers.find { it.id == id }?.name ?: id?.let { if (!it.contains("-") || it.contains(" ")) it else "Unknown" } ?: "Unknown"
                                                 "$name (${balls.count { it.second.isLegalBall }})"
                                             }.joinToString(", ")
                                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1011,7 +1014,8 @@ fun MatchSummaryCard(match: Match) {
     val teamB = match.teamB
     val i1Data = match.innings1Data
 
-    fun getScoreString(teamId: String): String {
+    fun getScoreString(teamId: String?): String {
+        if (teamId == null) return "DNB"
         return if (match.initialBattingTeamId == teamId) {
             if (match.currentInnings == 1) {
                 "${match.totalRuns}/${match.totalWickets} (${match.totalBalls / 6}.${match.totalBalls % 6})"
@@ -1037,13 +1041,13 @@ fun MatchSummaryCard(match: Match) {
             Text("MATCH SUMMARY", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(12.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(teamA.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
-                Text(getScoreString(teamA.id), fontWeight = FontWeight.Black, style = MaterialTheme.typography.bodyLarge)
+                Text(teamA?.name ?: "Team A", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                Text(getScoreString(teamA?.id), fontWeight = FontWeight.Black, style = MaterialTheme.typography.bodyLarge)
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(teamB.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
-                Text(getScoreString(teamB.id), fontWeight = FontWeight.Black, style = MaterialTheme.typography.bodyLarge)
+                Text(teamB?.name ?: "Team B", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                Text(getScoreString(teamB?.id), fontWeight = FontWeight.Black, style = MaterialTheme.typography.bodyLarge)
             }
             if (match.status == MatchStatus.COMPLETED) {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1822,6 +1826,7 @@ fun calculatePartnerships(balls: List<Ball>, teamPlayers: List<Player>): List<Pa
     var currentB2Id: String? = null
     var runs1 = 0; var balls1 = 0
     var runs2 = 0; var balls2 = 0
+    var pExtras = 0
     
     balls.forEach { ball ->
         if (currentB1Id == null) {
@@ -1837,26 +1842,29 @@ fun calculatePartnerships(balls: List<Ball>, teamPlayers: List<Player>): List<Pa
             balls2 += if (ball.extrasType != ExtrasType.WIDE) 1 else 0
         }
         
+        pExtras += ball.extraRuns
+        
         if (ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT) {
-            val b1Name = teamPlayers.find { it.id == currentB1Id }?.name ?: "Unknown"
-            val b2Name = teamPlayers.find { it.id == currentB2Id }?.name ?: "Unknown"
+            val b1Name = teamPlayers.find { it.id == currentB1Id }?.name ?: currentB1Id?.let { if (!it.contains("-") || it.contains(" ")) it else "Unknown" } ?: "Unknown"
+            val b2Name = teamPlayers.find { it.id == currentB2Id }?.name ?: currentB2Id?.let { if (!it.contains("-") || it.contains(" ")) it else "Unknown" } ?: "Unknown"
             partnerships.add(Partnership(
-                currentB1Id, b1Name, runs1, balls1,
-                currentB2Id!!, b2Name, runs2, balls2,
-                runs1 + runs2 + ball.extraRuns, balls1 + balls2
+                currentB1Id ?: "", b1Name, runs1, balls1,
+                currentB2Id ?: "", b2Name, runs2, balls2,
+                runs1 + runs2 + pExtras, balls1 + balls2
             ))
             currentB1Id = null; currentB2Id = null
             runs1 = 0; balls1 = 0; runs2 = 0; balls2 = 0
+            pExtras = 0
         }
     }
     
     if (currentB1Id != null) {
-        val b1Name = teamPlayers.find { it.id == currentB1Id }?.name ?: "Unknown"
-        val b2Name = teamPlayers.find { it.id == currentB2Id }?.name ?: "Unknown"
+        val b1Name = teamPlayers.find { it.id == currentB1Id }?.name ?: currentB1Id?.let { if (!it.contains("-") || it.contains(" ")) it else "Unknown" } ?: "Unknown"
+        val b2Name = teamPlayers.find { it.id == currentB2Id }?.name ?: currentB2Id?.let { if (!it.contains("-") || it.contains(" ")) it else "Unknown" } ?: "Unknown"
         partnerships.add(Partnership(
-            currentB1Id, b1Name, runs1, balls1,
-            currentB2Id!!, b2Name, runs2, balls2,
-            runs1 + runs2, balls1 + balls2
+            currentB1Id ?: "", b1Name, runs1, balls1,
+            currentB2Id ?: "", b2Name, runs2, balls2,
+            runs1 + runs2 + pExtras, balls1 + balls2
         ))
     }
     
@@ -1865,18 +1873,64 @@ fun calculatePartnerships(balls: List<Ball>, teamPlayers: List<Player>): List<Pa
 
 @Composable
 fun PartnershipsSection(match: Match, team1: Team, team2: Team) {
-    val battingTeam = if (match.battingTeamId == team1.id) team1 else team2
     val splitIdx = match.innings1Data?.recordedBallsCount ?: match.ballHistory.size
-    val currentInningsBalls = if (match.currentInnings == 1) match.ballHistory.take(splitIdx) else match.ballHistory.drop(splitIdx)
-    val partnerships = calculatePartnerships(currentInningsBalls, battingTeam.players)
+    val i1Balls = match.ballHistory.take(splitIdx)
+    val i2Balls = match.ballHistory.drop(splitIdx)
+    
+    val inningsPairs = listOf(
+        "1st Innings 🏏" to i1Balls,
+        "2nd Innings 🚀" to i2Balls
+    )
 
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("PARTNERSHIPS", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.height(12.dp))
-            partnerships.forEach { p ->
-                PartnershipRow(p)
-                HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
+            Text("PARTNERSHIPS ⚖️", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+            
+            inningsPairs.forEach { (label, balls) ->
+                if (balls.isNotEmpty()) {
+                    val isFirst = label == "1st Innings"
+                    val battingTeam = if (isFirst) team1 else team2
+                    val partnerships = calculatePartnerships(balls, battingTeam.players)
+                    
+                    if (partnerships.isNotEmpty()) {
+                        val inningsTotalRuns = balls.sumOf { it.runs + it.extraRuns }
+                        val inningsTotalWickets = balls.count { it.wicketType != WicketType.NONE && it.wicketType != WicketType.RETIRED_HURT }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Innings Header with distinct background
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), RoundedCornerShape(6.dp))
+                                .padding(vertical = 6.dp, horizontal = 10.dp)
+                        ) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    label.uppercase(),
+                                    fontWeight = FontWeight.ExtraBold,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    "${battingTeam.name.uppercase()}  $inningsTotalRuns/$inningsTotalWickets",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.DarkGray
+                                )
+                            }
+                        }
+                        
+                        partnerships.forEach { p ->
+                            PartnershipRow(p)
+                            HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.4f))
+                        }
+                    }
+                }
             }
         }
     }
@@ -2066,7 +2120,7 @@ fun BallBox(ball: Ball, onClick: () -> Unit) {
 @Composable
 private fun CardBranding() {
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-        Text("Prepared by Ankoji | v1.63", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
+        Text("Prepared by Ankoji | v1.64 🏅", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
     }
 }
 

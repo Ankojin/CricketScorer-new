@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.cricketscorer"
         minSdk = 24
         targetSdk = 35
-        versionCode = 33
-        versionName = "1.62"
+        versionCode = 35
+        versionName = "1.65"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
