@@ -1,5 +1,6 @@
 package com.example.cricketscorer
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -667,7 +668,7 @@ fun BattingTable(match: Match, players: List<Player>, strikerId: String?, nonStr
                         val isJoker = player.isJoker
                         val bStyle = (player.battingStyle ?: BattingStyle.RHB).name.take(1)
                         Text(
-                            text = "🏏 " + player.name + " ($bStyle)" + (if (isJoker) " 🃏" else "") + (if (isCaptain) " (c)" else "") + (if (isWK) " 🧤" else "") + (if (isCurrentBatter && !player.battingStats.isOut) "*" else "") + (if (isRH) " (Retired Hurt) 🤕" else ""),
+                            text = "🏏 " + player.name + " ($bStyle)" + (if (isJoker) " 🃏" else "") + (if (isCaptain) " (c)" else "") + (if (isWK) " 🧤" else "") + (if (isCurrentBatter && !player.battingStats.isOut) "*" else ""),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             color = if (player.battingStats.isOut) Color.Gray else Color.Black
@@ -993,13 +994,69 @@ fun CricketBallIcon(modifier: Modifier = Modifier) {
         modifier = modifier.size(12.dp),
         shape = CircleShape,
         color = Color(0xFFC62828), // Cricket Red
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
     ) {
         Box(contentAlignment = Alignment.Center) {
             HorizontalDivider(
                 modifier = Modifier.fillMaxWidth().height(1.dp),
                 color = Color.White.copy(alpha = 0.5f)
             )
+        }
+    }
+}
+
+@Composable
+fun MatchSummaryCard(match: Match) {
+    val teamA = match.teamA
+    val teamB = match.teamB
+    val i1Data = match.innings1Data
+
+    fun getScoreString(teamId: String): String {
+        return if (match.initialBattingTeamId == teamId) {
+            if (match.currentInnings == 1) {
+                "${match.totalRuns}/${match.totalWickets} (${match.totalBalls / 6}.${match.totalBalls % 6})"
+            } else {
+                i1Data?.let { "${it.runs}/${it.wickets} (${it.balls / 6}.${it.balls % 6})" } ?: "DNB"
+            }
+        } else {
+            if (match.currentInnings == 1) {
+                "Yet to bat"
+            } else {
+                "${match.totalRuns}/${match.totalWickets} (${match.totalBalls / 6}.${match.totalBalls % 6})"
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FA)),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.5f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("MATCH SUMMARY", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(teamA.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                Text(getScoreString(teamA.id), fontWeight = FontWeight.Black, style = MaterialTheme.typography.bodyLarge)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(teamB.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                Text(getScoreString(teamB.id), fontWeight = FontWeight.Black, style = MaterialTheme.typography.bodyLarge)
+            }
+            if (match.status == MatchStatus.COMPLETED) {
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(8.dp))
+                val winnerTeam = if (match.winnerId == teamA.id) teamA else if (match.winnerId == teamB.id) teamB else null
+                Text(
+                    text = if (winnerTeam != null) "${winnerTeam.name} won! 🏆" else "Match Drawn! 🤝",
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.secondary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
         }
     }
 }
@@ -1059,9 +1116,10 @@ fun StatsTab(match: Match, graphicsLayer: GraphicsLayer) {
             ) {
                 CaptureArea {
                     Column(modifier = Modifier.fillMaxWidth().background(Color.White).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        ScoringBreakdownCard(i1Stats, i2Stats)
-                        BestPerformancesBatters(i1Team, i2Team)
-                        BestPerformancesBowlers(i1Team, i2Team)
+                        MatchSummaryCard(match)
+                        ScoringBreakdownCard(match, i1Stats, i2Stats)
+                        BestPerformancesBatters(teamA, teamB)
+                        BestPerformancesBowlers(teamA, teamB)
                         PartnershipsSection(match, i1Team, i2Team)
                         CardBranding()
                         Spacer(modifier = Modifier.height(32.dp))
@@ -1652,12 +1710,13 @@ fun ControlsSection(
             Button(
                 onClick = onShowWicket,
                 modifier = Modifier.weight(1.5f).height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
-                shape = RoundedCornerShape(12.dp)
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F), contentColor = Color.White),
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(0.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("🏏 ", style = MaterialTheme.typography.titleMedium)
-                    Text("WICKET", fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Text("🏏", fontSize = 18.sp)
+                    Text("WICKET", fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 0.5.sp)
                 }
             }
             Button(
@@ -1816,42 +1875,56 @@ fun PartnershipsSection(match: Match, team1: Team, team2: Team) {
             Text("PARTNERSHIPS", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(12.dp))
             partnerships.forEach { p ->
-                PartnershipRow(p, match)
-                HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray)
+                PartnershipRow(p)
+                HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
             }
         }
     }
 }
 
 @Composable
-fun PartnershipRow(p: Partnership, match: Match) {
-    val battingTeam = if (match.battingTeamId == match.teamA.id) match.teamA else match.teamB
-    val b1 = battingTeam.players.find { it.id == p.batter1Id }
-    val b2 = battingTeam.players.find { it.id == p.batter2Id }
-    val b1Style = b1?.battingStyle?.name?.take(1) ?: "R"
-    val b2Style = b2?.battingStyle?.name?.take(1) ?: "R"
-
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+fun PartnershipRow(p: Partnership) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(p.batter1Name + " ($b1Style)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+            Text(p.batter1Name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
             Text("${p.batter1Runs} (${p.batter1Balls})", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
         }
-        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("${p.totalRuns}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
-            Text("${p.totalBalls} balls", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+        
+        Column(
+            modifier = Modifier
+                .width(80.dp)
+                .background(Color(0xFFF0F4F8), RoundedCornerShape(8.dp))
+                .padding(vertical = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("${p.totalRuns}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+            Text("${p.totalBalls}b", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.Gray)
         }
+        
         Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
-            Text(p.batter2Name + " ($b2Style)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+            Text(p.batter2Name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
             Text("${p.batter2Runs} (${p.batter2Balls})", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
         }
     }
 }
 
 @Composable
-fun ScoringBreakdownCard(i1Stats: InningsStats, i2Stats: InningsStats) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
+fun ScoringBreakdownCard(match: Match, i1Stats: InningsStats, i2Stats: InningsStats) {
+    val teamA = match.teamA
+    val teamB = match.teamB
+    val i1Name = if (match.initialBattingTeamId == teamA.id) teamA.name else teamB.name
+    val i2Name = if (match.initialBattingTeamId == teamA.id) teamB.name else teamA.name
+
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), shape = RoundedCornerShape(12.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("SCORING BREAKDOWN", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+            Text("SCORING BREAKDOWN", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                Spacer(modifier = Modifier.weight(1f))
+                Text(i1Name.take(8), modifier = Modifier.width(60.dp), textAlign = TextAlign.End, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.Gray)
+                Text(i2Name.take(8), modifier = Modifier.width(60.dp), textAlign = TextAlign.End, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.Gray)
+            }
+            HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
             Spacer(modifier = Modifier.height(8.dp))
             BreakdownRow("Dots", "${i1Stats.dots}", "${i2Stats.dots}")
             BreakdownRow("1s", "${i1Stats.singles}", "${i2Stats.singles}")
@@ -1873,26 +1946,85 @@ fun BreakdownRow(label: String, v1: String, v2: String) {
 
 @Composable
 fun BestPerformancesBatters(teamA: Team, teamB: Team) {
-    val allBatters = (teamA.players + teamB.players).filter { it.battingStats.balls > 0 }.sortedByDescending { it.battingStats.runs }.take(3)
-    Column {
-        Text("TOP BATTERS", fontWeight = FontWeight.Black)
-        Spacer(modifier = Modifier.height(8.dp))
-        allBatters.forEach { player ->
-            Text("${player.name} (${(player.battingStyle ?: BattingStyle.RHB).name.take(1)}): ${player.battingStats.runs} (${player.battingStats.balls})", style = MaterialTheme.typography.bodySmall)
+    val allBatters = (teamA.players + teamB.players)
+        .filter { it.battingStats.balls > 0 }
+        .sortedByDescending { it.battingStats.runs }
+        .take(5)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("TOP BATTERS", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+            Spacer(modifier = Modifier.height(12.dp))
+            allBatters.forEach { player ->
+                val teamName = if (teamA.players.any { it.id == player.id }) teamA.name else teamB.name
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(player.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                        Text(teamName, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${player.battingStats.runs}", fontWeight = FontWeight.Black, style = MaterialTheme.typography.bodyLarge)
+                        Text(" (${player.battingStats.balls})", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Spacer(Modifier.width(12.dp))
+                        if (player.battingStats.fours > 0) {
+                            Text("4s: ${player.battingStats.fours}", style = MaterialTheme.typography.labelSmall, color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        if (player.battingStats.sixes > 0) {
+                            Text("6s: ${player.battingStats.sixes}", style = MaterialTheme.typography.labelSmall, color = Color(0xFF1565C0), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                if (player != allBatters.last()) {
+                    HorizontalDivider(thickness = 0.5.dp, color = Color(0xFFEEEEEE))
+                }
+            }
         }
     }
 }
 
 @Composable
 fun BestPerformancesBowlers(teamA: Team, teamB: Team) {
-    val allBowlers = (teamA.players + teamB.players).filter { it.bowlingStats.overs > 0 || it.bowlingStats.balls > 0 }.sortedByDescending { it.bowlingStats.wickets }.take(3)
-    Column {
-        Text("TOP BOWLERS", fontWeight = FontWeight.Black)
-        Spacer(modifier = Modifier.height(8.dp))
-        allBowlers.forEach { player ->
-            val bStyle = (player.battingStyle ?: BattingStyle.RHB).name.take(1)
-            val bowlStyle = if ((player.bowlingStyle ?: BowlingStyle.RightArm) == BowlingStyle.RightArm) "RA" else "LA"
-            Text("${player.name} ($bStyle, $bowlStyle): ${player.bowlingStats.wickets}/${player.bowlingStats.runsConceded}", style = MaterialTheme.typography.bodySmall)
+    val allBowlers = (teamA.players + teamB.players)
+        .filter { it.bowlingStats.overs > 0 || it.bowlingStats.balls > 0 }
+        .sortedWith(compareByDescending<Player> { it.bowlingStats.wickets }.thenBy { it.bowlingStats.runsConceded })
+        .take(5)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("TOP BOWLERS", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+            Spacer(modifier = Modifier.height(12.dp))
+            allBowlers.forEach { player ->
+                val teamName = if (teamA.players.any { it.id == player.id }) teamA.name else teamB.name
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(player.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                        Text(teamName, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${player.bowlingStats.wickets}/${player.bowlingStats.runsConceded}", fontWeight = FontWeight.Black, style = MaterialTheme.typography.bodyLarge)
+                        Spacer(Modifier.width(12.dp))
+                        Text("${player.bowlingStats.overs}.${player.bowlingStats.balls} ov", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
+                        if (player.bowlingStats.dotBalls > 0) {
+                            Spacer(Modifier.width(8.dp))
+                            Text("● ${player.bowlingStats.dotBalls}", style = MaterialTheme.typography.labelSmall, color = Color(0xFF5D4037))
+                        }
+                    }
+                }
+                if (player != allBowlers.last()) {
+                    HorizontalDivider(thickness = 0.5.dp, color = Color(0xFFEEEEEE))
+                }
+            }
         }
     }
 }
@@ -1934,7 +2066,7 @@ fun BallBox(ball: Ball, onClick: () -> Unit) {
 @Composable
 private fun CardBranding() {
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-        Text("Prepared by Ankoji | v1.61", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
+        Text("Prepared by Ankoji | v1.63", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
     }
 }
 

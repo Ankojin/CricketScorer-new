@@ -468,7 +468,7 @@ class ScoringViewModel : ViewModel() {
                 teamB = updateTeamStats(current.teamB, ball, current.battingTeamId == current.teamB.id, current.bowlingTeamId == current.teamB.id)
             )
 
-            if (ball.wicketType != WicketType.NONE) {
+            if (ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT) {
                 val outId = ball.outPlayerId ?: ball.strikerId
                 val outName = battingTeam.players.find { it.id == outId }?.name ?: "Unknown"
                 val displayOutName = "☝️ $outName" // v1.6: Wicket emoji
@@ -567,37 +567,49 @@ class ScoringViewModel : ViewModel() {
             final = final.copy(pendingAction = PendingAction.NONE)
         } else {
             // Restore manual selections if they are valid
-            if (final.strikerId == null && isBatterAvailable(final, match.strikerId)) {
-                final = final.copy(strikerId = match.strikerId)
-                val newOrder = final.battingOrder.toMutableList()
-                match.strikerId?.let { if (!newOrder.contains(it)) newOrder.add(it) }
-                final = final.copy(battingOrder = newOrder)
-            }
-            if (final.nonStrikerId == null && isBatterAvailable(final, match.nonStrikerId)) {
-                final = final.copy(nonStrikerId = match.nonStrikerId)
-                val newOrder = final.battingOrder.toMutableList()
-                match.nonStrikerId?.let { if (!newOrder.contains(it)) newOrder.add(it) }
-                final = final.copy(battingOrder = newOrder)
-            }
-            
-            // Restore bowler: supports both start-of-over and mid-over manual changes
-            val manualBowlerId = match.currentBowlerId
-            if (manualBowlerId != null && manualBowlerId != final.currentBowlerId && isBowlerAvailable(final, manualBowlerId)) {
-                final = final.copy(currentBowlerId = manualBowlerId)
-            } else if (final.currentBowlerId == null && isBowlerAvailable(final, manualBowlerId)) {
-                final = final.copy(currentBowlerId = manualBowlerId)
-            }
-
-            // Auto-advance Captain selection
-            if (final.totalBalls == 0 && final.currentInnings == 1) {
-                if (match.teamACaptainId == null) final = final.copy(pendingAction = PendingAction.SELECT_CAPTAIN_A)
-                else if (match.teamBCaptainId == null) final = final.copy(pendingAction = PendingAction.SELECT_CAPTAIN_B)
-            }
-            
             if (final.currentInnings == 1 || final.isSecondInningsStarted) {
+                if (final.strikerId == null && isBatterAvailable(final, match.strikerId)) {
+                    final = final.copy(strikerId = match.strikerId)
+                    val newOrder = final.battingOrder.toMutableList()
+                    match.strikerId?.let { if (!newOrder.contains(it)) newOrder.add(it) }
+                    final = final.copy(battingOrder = newOrder)
+                }
+                if (final.nonStrikerId == null && isBatterAvailable(final, match.nonStrikerId)) {
+                    final = final.copy(nonStrikerId = match.nonStrikerId)
+                    val newOrder = final.battingOrder.toMutableList()
+                    match.nonStrikerId?.let { if (!newOrder.contains(it)) newOrder.add(it) }
+                    final = final.copy(battingOrder = newOrder)
+                }
+
+                // Restore bowler: supports both start-of-over and mid-over manual changes
+                val manualBowlerId = match.currentBowlerId
+                if (manualBowlerId != null && manualBowlerId != final.currentBowlerId && isBowlerAvailable(
+                        final,
+                        manualBowlerId
+                    )
+                ) {
+                    final = final.copy(currentBowlerId = manualBowlerId)
+                } else if (final.currentBowlerId == null && isBowlerAvailable(
+                        final,
+                        manualBowlerId
+                    )
+                ) {
+                    final = final.copy(currentBowlerId = manualBowlerId)
+                }
+
+                // Auto-advance Captain selection
+                if (final.totalBalls == 0 && final.currentInnings == 1) {
+                    if (match.teamACaptainId == null) final =
+                        final.copy(pendingAction = PendingAction.SELECT_CAPTAIN_A)
+                    else if (match.teamBCaptainId == null) final =
+                        final.copy(pendingAction = PendingAction.SELECT_CAPTAIN_B)
+                }
+
                 if ((final.pendingAction ?: PendingAction.NONE) == PendingAction.NONE) {
-                    if (final.bowlingTeamId == final.teamA.id && final.teamAWicketKeeperId == null) final = final.copy(pendingAction = PendingAction.SELECT_WK_A)
-                    else if (final.bowlingTeamId == final.teamB.id && final.teamBWicketKeeperId == null) final = final.copy(pendingAction = PendingAction.SELECT_WK_B)
+                    if (final.bowlingTeamId == final.teamA.id && final.teamAWicketKeeperId == null) final =
+                        final.copy(pendingAction = PendingAction.SELECT_WK_A)
+                    else if (final.bowlingTeamId == final.teamB.id && final.teamBWicketKeeperId == null) final =
+                        final.copy(pendingAction = PendingAction.SELECT_WK_B)
                 }
 
                 if ((final.pendingAction ?: PendingAction.NONE) == PendingAction.NONE) {
