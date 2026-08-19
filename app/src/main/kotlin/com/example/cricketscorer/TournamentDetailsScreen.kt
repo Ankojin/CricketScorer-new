@@ -547,7 +547,7 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
 @Composable
 private fun CardBranding() {
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-        Text("Prepared by Ankoji | v1.59", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
+        Text("Prepared by Ankoji | v1.77 🏏🚀⚖️🏅", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
     }
 }
 

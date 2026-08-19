@@ -106,7 +106,10 @@ class ScoringViewModel : ViewModel() {
             )
         }
         if (updated != null) {
-            TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)
+            // v1.72: Definitive Transition Fix - Recalculate immediately to trigger selection overlays
+            val finalized = recalculateMatchFromHistory(updated)
+            _matchState.value = finalized
+            TournamentRepository.updateMatch(finalized.tournamentId ?: "", finalized)
         }
     }
 
@@ -413,12 +416,38 @@ class ScoringViewModel : ViewModel() {
         }
     }
 
+    private fun healLegacyId(id: String?, match: Match, team: Team): String? {
+        if (id.isNullOrEmpty()) return null
+        // If it's a UUID (typical length > 30, no spaces, contains hyphens), it's likely not legacy
+        if (id.length > 30 && id.contains("-") && !id.contains(" ")) return id
+        // Otherwise, try to find a player by name in the provided team
+        return team.players.find { it.name.equals(id, ignoreCase = true) }?.id ?: id
+    }
+
     private fun recalculateMatchFromHistory(match: Match): Match {
         if (match.tossWinnerId == null) {
             return match.copy(pendingAction = PendingAction.TOSS_REQUIRED)
         }
 
-        // v1.17: Ensure player names are taken from the source match object
+        // v1.75: Robust Match Engine Overhaul
+        val wasSecondInningsStarted = match.isSecondInningsStarted
+
+        // v1.75: Infer 1st innings team if missing
+        var inferredInitialBattingTeamId = match.initialBattingTeamId
+        var inferredInitialBowlingTeamId = match.initialBowlingTeamId
+        if (inferredInitialBattingTeamId == null) {
+            val firstBallStrikerId = match.ballHistory.firstOrNull()?.strikerId
+            if (firstBallStrikerId != null) {
+                if (match.teamA.players.any { it.id == firstBallStrikerId }) {
+                    inferredInitialBattingTeamId = match.teamA.id
+                    inferredInitialBowlingTeamId = match.teamB.id
+                } else if (match.teamB.players.any { it.id == firstBallStrikerId }) {
+                    inferredInitialBattingTeamId = match.teamB.id
+                    inferredInitialBowlingTeamId = match.teamA.id
+                }
+            }
+        }
+
         val initialTeamA = resetTeamStats(match.teamA)
         val initialTeamB = resetTeamStats(match.teamB)
 
@@ -431,14 +460,18 @@ class ScoringViewModel : ViewModel() {
             teamB = initialTeamB,
             status = MatchStatus.LIVE,
             currentInnings = 1,
-            battingTeamId = match.initialBattingTeamId ?: match.battingTeamId,
-            bowlingTeamId = match.initialBowlingTeamId ?: match.bowlingTeamId,
+            battingTeamId = inferredInitialBattingTeamId ?: match.battingTeamId,
+            bowlingTeamId = inferredInitialBowlingTeamId ?: match.bowlingTeamId,
+            initialBattingTeamId = inferredInitialBattingTeamId,
+            initialBowlingTeamId = inferredInitialBowlingTeamId,
             innings1Data = null, target = null, winnerId = null,
             strikerId = null, nonStrikerId = null, currentBowlerId = null, lastBowlerId = null,
-            isSecondInningsStarted = false,
+            isSecondInningsStarted = wasSecondInningsStarted,
             lastNotifiedBowlerId = null,
             pendingAction = PendingAction.NONE
         )
+
+        var ballsProcessedInInnings1 = 0
 
         match.ballHistory.forEach { ball ->
             if (current.status == MatchStatus.COMPLETED) return@forEach
@@ -446,78 +479,95 @@ class ScoringViewModel : ViewModel() {
             val battingTeam = if (current.battingTeamId == current.teamA.id) current.teamA else current.teamB
             val bowlingTeam = if (current.bowlingTeamId == current.teamA.id) current.teamA else current.teamB
 
-            // Track batting order
-            val newBattingOrder = current.battingOrder.toMutableList()
-            val strikerId = ball.strikerId ?: ""
-            val nonStrikerId = ball.nonStrikerId ?: ""
-            val bowlerId = ball.bowlerId ?: ""
-            
-            if (strikerId.isNotEmpty() && !newBattingOrder.contains(strikerId)) newBattingOrder.add(strikerId)
-            if (nonStrikerId.isNotEmpty() && !newBattingOrder.contains(nonStrikerId)) newBattingOrder.add(nonStrikerId)
+            // Legacy ID Healing - v1.74 Fix
+            val sHealed = healLegacyId(ball.strikerId, match, battingTeam)
+            val nsHealed = healLegacyId(ball.nonStrikerId, match, battingTeam)
+            val bHealed = healLegacyId(ball.bowlerId, match, bowlingTeam)
+            val oHealed = healLegacyId(ball.outPlayerId, match, battingTeam)
+            val fHealed = healLegacyId(ball.fielderId, match, bowlingTeam)
 
-            current = current.copy(
-                totalRuns = current.totalRuns + ball.runs + ball.extraRuns,
-                totalWickets = current.totalWickets + (if (ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT) 1 else 0),
-                totalBalls = current.totalBalls + (if (ball.isLegalBall) 1 else 0),
-                wideCount = current.wideCount + (if (ball.extrasType == ExtrasType.WIDE) ball.extraRuns else 0),
-                noBallCount = current.noBallCount + (if (ball.extrasType == ExtrasType.NO_BALL) ball.extraRuns else 0),
-                byeCount = current.byeCount + (if (ball.extrasType == ExtrasType.BYE) ball.extraRuns else 0),
-                legByeCount = current.legByeCount + (if (ball.extrasType == ExtrasType.LEG_BYE) ball.extraRuns else 0),
-                battingOrder = newBattingOrder,
-                teamA = updateTeamStats(current.teamA, ball, current.battingTeamId == current.teamA.id, current.bowlingTeamId == current.teamA.id),
-                teamB = updateTeamStats(current.teamB, ball, current.battingTeamId == current.teamB.id, current.bowlingTeamId == current.teamB.id)
+            val healedBall = ball.copy(
+                strikerId = sHealed,
+                nonStrikerId = nsHealed,
+                bowlerId = bHealed,
+                outPlayerId = oHealed,
+                fielderId = fHealed
             )
 
-            if (ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT) {
-                val outId = ball.outPlayerId ?: ball.strikerId
+            // Track batting order
+            val newBattingOrder = current.battingOrder.toMutableList()
+            healedBall.strikerId?.let { id -> if (id.isNotEmpty() && !newBattingOrder.contains(id)) newBattingOrder.add(id) }
+            healedBall.nonStrikerId?.let { id -> if (id.isNotEmpty() && !newBattingOrder.contains(id)) newBattingOrder.add(id) }
+            
+            val outId = healedBall.outPlayerId ?: (if (healedBall.wicketType != WicketType.NONE && healedBall.wicketType != WicketType.RETIRED_HURT) healedBall.strikerId else null)
+            if (!outId.isNullOrEmpty() && !newBattingOrder.contains(outId)) newBattingOrder.add(outId)
+
+            current = current.copy(
+                totalRuns = current.totalRuns + healedBall.runs + healedBall.extraRuns,
+                totalWickets = current.totalWickets + (if (healedBall.wicketType != WicketType.NONE && healedBall.wicketType != WicketType.RETIRED_HURT) 1 else 0),
+                totalBalls = current.totalBalls + (if (healedBall.isLegalBall) 1 else 0),
+                wideCount = current.wideCount + (if (healedBall.extrasType == ExtrasType.WIDE) healedBall.extraRuns else 0),
+                noBallCount = current.noBallCount + (if (healedBall.extrasType == ExtrasType.NO_BALL) healedBall.extraRuns else 0),
+                byeCount = current.byeCount + (if (healedBall.extrasType == ExtrasType.BYE) healedBall.extraRuns else 0),
+                legByeCount = current.legByeCount + (if (healedBall.extrasType == ExtrasType.LEG_BYE) healedBall.extraRuns else 0),
+                battingOrder = newBattingOrder,
+                teamA = updateTeamStats(current.teamA, healedBall, current.battingTeamId == current.teamA.id, current.bowlingTeamId == current.teamA.id),
+                teamB = updateTeamStats(current.teamB, healedBall, current.battingTeamId == current.teamB.id, current.bowlingTeamId == current.teamB.id)
+            )
+
+            if (current.currentInnings == 1) {
+                ballsProcessedInInnings1++
+            }
+
+            if (healedBall.wicketType != WicketType.NONE && healedBall.wicketType != WicketType.RETIRED_HURT) {
                 val outName = battingTeam.players.find { it.id == outId }?.name 
                     ?: outId?.let { if (!it.contains("-") || it.contains(" ")) it else "Unknown" } ?: "Unknown"
-                val displayOutName = "☝️ $outName" // v1.6: Wicket emoji
-                val bName = bowlingTeam.players.find { it.id == bowlerId }?.name
-                    ?: (if (bowlerId.isNotEmpty() && (!bowlerId.contains("-") || bowlerId.contains(" "))) bowlerId else null)
-                val fName = bowlingTeam.players.find { it.id == ball.fielderId }?.name
-                    ?: (ball.fielderId?.let { if (!it.contains("-") || it.contains(" ")) it else null })
-                current = current.copy(wicketHistory = current.wicketHistory + WicketRecord(current.totalWickets, displayOutName, current.totalRuns, "${current.totalBalls/6}.${current.totalBalls%6}", ball.wicketType, bName, fName))
+                val displayOutName = "☝️ $outName"
+                val bName = bowlingTeam.players.find { it.id == healedBall.bowlerId }?.name
+                    ?: (healedBall.bowlerId?.let { if (!it.contains("-") || it.contains(" ")) it else null })
+                val fName = bowlingTeam.players.find { it.id == healedBall.fielderId }?.name
+                    ?: (healedBall.fielderId?.let { if (!it.contains("-") || it.contains(" ")) it else null })
+                current = current.copy(wicketHistory = current.wicketHistory + WicketRecord(current.totalWickets, displayOutName, current.totalRuns, "${current.totalBalls/6}.${current.totalBalls%6}", healedBall.wicketType, bName, fName))
             }
 
-            var sId: String? = ball.strikerId
-            var nsId: String? = ball.nonStrikerId
-            var bId: String? = ball.bowlerId
+            var sId: String? = healedBall.strikerId
+            var nsId: String? = healedBall.nonStrikerId
+            var bId: String? = healedBall.bowlerId
             var lbId: String? = current.lastBowlerId
 
-            val physicalRuns = when (ball.extrasType) {
-                ExtrasType.WIDE -> (ball.extraRuns - 1).coerceAtLeast(0)
-                ExtrasType.BYE, ExtrasType.LEG_BYE -> ball.extraRuns
-                else -> ball.runs
+            val physicalRuns = when (healedBall.extrasType) {
+                ExtrasType.WIDE -> (healedBall.extraRuns - 1).coerceAtLeast(0)
+                ExtrasType.BYE, ExtrasType.LEG_BYE -> healedBall.extraRuns
+                else -> healedBall.runs
             }
             
-            val rotateOnRuns = ball.rotateStrike && physicalRuns % 2 != 0
-            val overEnd = ball.isLegalBall && current.totalBalls % 6 == 0
+            val rotateOnRuns = healedBall.rotateStrike && physicalRuns % 2 != 0
+            val overEnd = healedBall.isLegalBall && current.totalBalls % 6 == 0
             
             if (overEnd) {
-                // v1.47: Smart Strike Rotation - NS always becomes striker for next over
                 val t = sId; sId = nsId; nsId = t
                 lbId = bId; bId = null
             } else if (rotateOnRuns) {
                 val t = sId; sId = nsId; nsId = t
             }
 
-            if (ball.wicketType != WicketType.NONE) {
-                val outId = ball.outPlayerId ?: ball.strikerId
-                if (sId == outId && sId != null) sId = null
-                else if (nsId == outId && nsId != null) nsId = null
+            if (healedBall.wicketType != WicketType.NONE) {
+                val actualOutId = healedBall.outPlayerId ?: healedBall.strikerId
+                if (sId == actualOutId && sId != null) sId = null
+                else if (nsId == actualOutId && nsId != null) nsId = null
             }
 
             current = current.copy(strikerId = sId, nonStrikerId = nsId, currentBowlerId = bId, lastBowlerId = lbId)
 
             val maxWickets = (battingTeam.players.size - 1).coerceAtLeast(1)
             val inningsEnded = current.totalWickets >= maxWickets || current.totalBalls >= current.oversPerInnings * 6
+            
             if (current.currentInnings == 1 && inningsEnded) {
-                // v1.6: Calculate duration
                 val duration = match.innings1Data?.durationMinutes ?: current.startTimeMillis?.let { start ->
                     ((System.currentTimeMillis() - start) / 60000).toInt()
                 } ?: 0
 
+                // v1.74 Transition Guard
                 current = current.copy(
                     innings1Data = InningsSummary(
                         runs = current.totalRuns,
@@ -529,7 +579,7 @@ class ScoringViewModel : ViewModel() {
                         noBallCount = current.noBallCount,
                         byeCount = current.byeCount,
                         legByeCount = current.legByeCount,
-                        recordedBallsCount = current.ballHistory.indexOf(ball) + 1,
+                        recordedBallsCount = ballsProcessedInInnings1,
                         durationMinutes = duration,
                         battingOrder = current.battingOrder
                     ),
@@ -541,9 +591,9 @@ class ScoringViewModel : ViewModel() {
                     wicketHistory = emptyList(),
                     battingOrder = emptyList(),
                     strikerId = null, nonStrikerId = null, currentBowlerId = null, lastBowlerId = null,
-                    pendingAction = if (match.isSecondInningsStarted) PendingAction.NONE else PendingAction.START_SECOND_INNINGS,
-                    isSecondInningsStarted = match.isSecondInningsStarted,
-                    startTimeMillis = if (match.currentInnings == 2) match.startTimeMillis else System.currentTimeMillis() // Reset for 2nd innings
+                    pendingAction = if (wasSecondInningsStarted) PendingAction.NONE else PendingAction.START_SECOND_INNINGS,
+                    isSecondInningsStarted = wasSecondInningsStarted,
+                    startTimeMillis = if (match.currentInnings == 2) match.startTimeMillis else System.currentTimeMillis()
                 )
             } else if (current.currentInnings == 2) {
                 if ((current.pendingAction ?: PendingAction.NONE) == PendingAction.START_SECOND_INNINGS && match.isSecondInningsStarted) {
@@ -565,67 +615,74 @@ class ScoringViewModel : ViewModel() {
             }
         }
 
-        var final = current
-        if (final.status == MatchStatus.COMPLETED) {
-            final = final.copy(pendingAction = PendingAction.NONE)
+        // v1.75 Safety Lock: Definitive Transition Logic
+        if (current.currentInnings == 2 && !current.isSecondInningsStarted && !wasSecondInningsStarted) {
+            current = current.copy(pendingAction = PendingAction.START_SECOND_INNINGS)
+        } else if (current.currentInnings == 2 && (current.isSecondInningsStarted || wasSecondInningsStarted)) {
+            if (current.pendingAction == PendingAction.START_SECOND_INNINGS) {
+                current = current.copy(pendingAction = PendingAction.NONE)
+            }
+        }
+
+        if (current.currentInnings == 1) {
+            val nextPendingAction = when {
+                current.tossWinnerId == null -> PendingAction.TOSS_REQUIRED
+                current.teamACaptainId == null -> PendingAction.SELECT_CAPTAIN_A
+                current.teamBCaptainId == null -> PendingAction.SELECT_CAPTAIN_B
+                else -> PendingAction.NONE
+            }
+            current = current.copy(isSecondInningsStarted = false, pendingAction = nextPendingAction)
+        }
+
+        var finalMatch = current
+        if (finalMatch.status == MatchStatus.COMPLETED) {
+            finalMatch = finalMatch.copy(pendingAction = PendingAction.NONE)
         } else {
-            // Restore manual selections if they are valid
-            if (final.currentInnings == 1 || final.isSecondInningsStarted) {
-                if (final.strikerId == null && isBatterAvailable(final, match.strikerId)) {
-                    final = final.copy(strikerId = match.strikerId)
-                    val newOrder = final.battingOrder.toMutableList()
+            // Restore manual selections if they are valid for the CURRENT innings
+            if (finalMatch.currentInnings == 1 || finalMatch.isSecondInningsStarted) {
+                // v1.74 Smart Strike Restoration: isBatterAvailable and isBowlerAvailable implicitly check team context
+                if (finalMatch.strikerId == null && isBatterAvailable(finalMatch, match.strikerId)) {
+                    finalMatch = finalMatch.copy(strikerId = match.strikerId)
+                    val newOrder = finalMatch.battingOrder.toMutableList()
                     match.strikerId?.let { if (!newOrder.contains(it)) newOrder.add(it) }
-                    final = final.copy(battingOrder = newOrder)
+                    finalMatch = finalMatch.copy(battingOrder = newOrder)
                 }
-                if (final.nonStrikerId == null && isBatterAvailable(final, match.nonStrikerId)) {
-                    final = final.copy(nonStrikerId = match.nonStrikerId)
-                    val newOrder = final.battingOrder.toMutableList()
+                if (finalMatch.nonStrikerId == null && isBatterAvailable(finalMatch, match.nonStrikerId)) {
+                    finalMatch = finalMatch.copy(nonStrikerId = match.nonStrikerId)
+                    val newOrder = finalMatch.battingOrder.toMutableList()
                     match.nonStrikerId?.let { if (!newOrder.contains(it)) newOrder.add(it) }
-                    final = final.copy(battingOrder = newOrder)
+                    finalMatch = finalMatch.copy(battingOrder = newOrder)
                 }
 
-                // Restore bowler: supports both start-of-over and mid-over manual changes
-                val manualBowlerId = match.currentBowlerId
-                if (manualBowlerId != null && manualBowlerId != final.currentBowlerId && isBowlerAvailable(
-                        final,
-                        manualBowlerId
-                    )
-                ) {
-                    final = final.copy(currentBowlerId = manualBowlerId)
-                } else if (final.currentBowlerId == null && isBowlerAvailable(
-                        final,
-                        manualBowlerId
-                    )
-                ) {
-                    final = final.copy(currentBowlerId = manualBowlerId)
+                if (finalMatch.currentBowlerId == null && isBowlerAvailable(finalMatch, match.currentBowlerId)) {
+                    finalMatch = finalMatch.copy(currentBowlerId = match.currentBowlerId)
+                } else if (match.currentBowlerId != null && match.currentBowlerId != finalMatch.currentBowlerId && isBowlerAvailable(finalMatch, match.currentBowlerId)) {
+                    // Manual mid-over change restoration
+                    finalMatch = finalMatch.copy(currentBowlerId = match.currentBowlerId)
                 }
 
                 // Auto-advance Captain selection
-                if (final.totalBalls == 0 && final.currentInnings == 1) {
-                    if (match.teamACaptainId == null) final =
-                        final.copy(pendingAction = PendingAction.SELECT_CAPTAIN_A)
-                    else if (match.teamBCaptainId == null) final =
-                        final.copy(pendingAction = PendingAction.SELECT_CAPTAIN_B)
+                if (finalMatch.totalBalls == 0 && finalMatch.currentInnings == 1) {
+                    if (match.teamACaptainId == null) finalMatch = finalMatch.copy(pendingAction = PendingAction.SELECT_CAPTAIN_A)
+                    else if (match.teamBCaptainId == null) finalMatch = finalMatch.copy(pendingAction = PendingAction.SELECT_CAPTAIN_B)
                 }
 
-                if ((final.pendingAction ?: PendingAction.NONE) == PendingAction.NONE) {
-                    if (final.bowlingTeamId == final.teamA.id && final.teamAWicketKeeperId == null) final =
-                        final.copy(pendingAction = PendingAction.SELECT_WK_A)
-                    else if (final.bowlingTeamId == final.teamB.id && final.teamBWicketKeeperId == null) final =
-                        final.copy(pendingAction = PendingAction.SELECT_WK_B)
+                if ((finalMatch.pendingAction ?: PendingAction.NONE) == PendingAction.NONE) {
+                    if (finalMatch.bowlingTeamId == finalMatch.teamA.id && finalMatch.teamAWicketKeeperId == null) finalMatch = finalMatch.copy(pendingAction = PendingAction.SELECT_WK_A)
+                    else if (finalMatch.bowlingTeamId == finalMatch.teamB.id && finalMatch.teamBWicketKeeperId == null) finalMatch = finalMatch.copy(pendingAction = PendingAction.SELECT_WK_B)
                 }
 
-                if ((final.pendingAction ?: PendingAction.NONE) == PendingAction.NONE) {
-                    final = when {
-                        final.strikerId == null -> final.copy(pendingAction = PendingAction.SELECT_STRIKER)
-                        final.nonStrikerId == null -> final.copy(pendingAction = PendingAction.SELECT_NON_STRIKER)
-                        final.currentBowlerId == null -> final.copy(pendingAction = PendingAction.SELECT_BOWLER)
-                        else -> final.copy(pendingAction = PendingAction.NONE)
+                if ((finalMatch.pendingAction ?: PendingAction.NONE) == PendingAction.NONE) {
+                    finalMatch = when {
+                        finalMatch.strikerId == null -> finalMatch.copy(pendingAction = PendingAction.SELECT_STRIKER)
+                        finalMatch.nonStrikerId == null -> finalMatch.copy(pendingAction = PendingAction.SELECT_NON_STRIKER)
+                        finalMatch.currentBowlerId == null -> finalMatch.copy(pendingAction = PendingAction.SELECT_BOWLER)
+                        else -> finalMatch.copy(pendingAction = PendingAction.NONE)
                     }
                 }
             }
         }
-        return final
+        return finalMatch
     }
 
     private fun isBatterAvailable(m: Match, pId: String?): Boolean {
@@ -640,9 +697,9 @@ class ScoringViewModel : ViewModel() {
         if (pId == null) return false
         val team = if (m.bowlingTeamId == m.teamA.id) m.teamA else m.teamB
         val player = team.players.find { it.id == pId } ?: return false
-        val isWK = pId == (if (team.id == m.teamA.id) m.teamAWicketKeeperId else m.teamBWicketKeeperId)
+        val wkId = if (team.id == m.teamA.id) m.teamAWicketKeeperId else m.teamBWicketKeeperId
         // v1.49: Permissive check to allow selection of bowlers who completed their spell
-        return pId != m.lastBowlerId && !isWK
+        return pId != m.lastBowlerId && pId != wkId
     }
 
     private fun resetTeamStats(team: Team) = team.copy(players = team.players.map { it.copy(battingStats = BattingStats(), bowlingStats = BowlingStats(), fieldingStats = FieldingStats()) })

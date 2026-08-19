@@ -496,7 +496,7 @@ fun ScorecardTab(
                                 numericRuns = match.innings1Data?.runs ?: (if (match.currentInnings == 1) match.totalRuns else 0),
                                 numericBalls = match.innings1Data?.balls ?: (if (match.currentInnings == 1) match.totalBalls else 0),
                                 durationMinutes = match.innings1Data?.durationMinutes ?: 0,
-                                battingOrder = match.innings1Data?.battingOrder ?: (if (match.currentInnings == 1) match.battingOrder else emptyList())
+                                battingOrder = (match.innings1Data?.battingOrder ?: match.battingOrder) ?: emptyList()
                             )
                         } else {
                             val i2Team = if (match.initialBattingTeamId == teamA.id) teamB else teamA
@@ -524,7 +524,7 @@ fun ScorecardTab(
                                 numericRuns = if (match.currentInnings == 2) match.totalRuns else 0,
                                 numericBalls = if (match.currentInnings == 2) match.totalBalls else 0,
                                 durationMinutes = i2Duration,
-                                battingOrder = if (match.currentInnings == 2) match.battingOrder else emptyList()
+                                battingOrder = (if (match.currentInnings == 2) match.battingOrder else emptyList()) ?: emptyList()
                             )
                         }
                         CardBranding()
@@ -542,20 +542,24 @@ fun InningsScorecard(
     team: Team,
     strikerId: String?,
     nonStrikerId: String?,
-    wicketHistory: List<WicketRecord>,
+    wicketHistory: List<WicketRecord>?,
     wideCount: Int,
     noBallCount: Int,
     byeCount: Int,
     legByeCount: Int,
     totalScore: String?,
     totalOvers: String?,
-    bowlingTeamPlayers: List<Player>,
+    bowlingTeamPlayers: List<Player>?,
     maxBalls: Int,
     numericRuns: Int,
     numericBalls: Int,
     durationMinutes: Int,
-    battingOrder: List<String>
+    battingOrder: List<String>?
 ) {
+    val safeBattingOrder = battingOrder ?: emptyList()
+    val safeWicketHistory = wicketHistory ?: emptyList()
+    val safeBowlingPlayers = bowlingTeamPlayers ?: emptyList()
+
     Column(modifier = Modifier.fillMaxWidth().background(Color.White)) {
         Box(
             modifier = Modifier.fillMaxWidth().background(Color(0xFFE3F2FD)).padding(16.dp)
@@ -566,7 +570,7 @@ fun InningsScorecard(
             }
         }
         
-        BattingTable(match, team.players, strikerId, nonStrikerId, bowlingTeamPlayers, battingOrder)
+        BattingTable(match, team.players, strikerId, nonStrikerId, safeBowlingPlayers, safeBattingOrder)
         
         val totalExtras = wideCount + noBallCount + byeCount + legByeCount
         Row(
@@ -621,22 +625,23 @@ fun InningsScorecard(
             HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray)
         }
 
-        if (wicketHistory.isNotEmpty()) {
+        if (safeWicketHistory.isNotEmpty()) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("☝️ FALL OF WICKETS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.Gray)
-                Text(text = wicketHistory.joinToString { "☝️ ${it.wicketNumber}-${it.totalRuns} (${it.batterName}, ${it.over} ov) 🚩" }, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp), lineHeight = 20.sp)
+                Text(text = safeWicketHistory.joinToString { "☝️ ${it.wicketNumber}-${it.totalRuns} (${it.batterName}, ${it.over} ov) 🚩" }, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp), lineHeight = 20.sp)
             }
             HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        BowlingTable(match, bowlingTeamPlayers)
+        BowlingTable(match, safeBowlingPlayers)
         Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
 @Composable
-fun BattingTable(match: Match, players: List<Player>, strikerId: String?, nonStrikerId: String?, bowlers: List<Player>, battingOrder: List<String>) {
+fun BattingTable(match: Match, players: List<Player>, strikerId: String?, nonStrikerId: String?, bowlers: List<Player>, battingOrder: List<String>?) {
+    val safeOrder = battingOrder ?: emptyList()
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().background(Color(0xFFF5F5F5)).padding(horizontal = 16.dp, vertical = 8.dp)
@@ -649,10 +654,14 @@ fun BattingTable(match: Match, players: List<Player>, strikerId: String?, nonStr
             Text("SR", modifier = Modifier.width(45.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, color = Color.Gray)
         }
         
-        val sortedPlayers = players.sortedBy { player ->
-            val pId = player.id as String?
-            val idx = if (pId != null) battingOrder.indexOf(pId) else -1
-            if (idx == -1) Int.MAX_VALUE else idx
+        val sortedPlayers = try {
+            if (safeOrder.isEmpty()) players else players.sortedBy { player ->
+                val pId = player.id
+                val idx = if (pId != null) safeOrder.indexOf(pId) else -1
+                if (idx == -1) Int.MAX_VALUE else idx
+            }
+        } catch (e: Exception) {
+            players
         }
         
         sortedPlayers.forEach { player ->
@@ -675,9 +684,9 @@ fun BattingTable(match: Match, players: List<Player>, strikerId: String?, nonStr
                             color = if (player.battingStats.isOut) Color.Gray else Color.Black
                         )
                         val dbId = player.battingStats.dismissalBowlerId
-                        val dismissalBowlerName = bowlers.find { it.id == dbId }?.name ?: dbId?.let { if (!it.contains("-") || it.contains(" ")) it else null }
+                        val dismissalBowlerName = recoverName(dbId, match, "Bowler")
                         val dfId = player.battingStats.dismissalFielderId
-                        val dismissalFielderName = bowlers.find { it.id == dfId }?.name ?: players.find { it.id == dfId }?.name ?: dfId?.let { if (!it.contains("-") || it.contains(" ")) it else null }
+                        val dismissalFielderName = recoverName(dfId, match, "Fielder")
                         
                         val type = player.battingStats.wicketType
                         val dismissalText = when (type) {
@@ -863,14 +872,10 @@ fun OversTab(match: Match, viewModel: ScoringViewModel, graphicsLayer: GraphicsL
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     val overNum = overs.size - index
-                                    val bowlerId = overBalls.firstOrNull()?.second?.bowlerId
-                                    val bowlerName = bowlingTeamPlayers.find { it.id == bowlerId }?.name ?: bowlerId?.let { if (!it.contains("-") || it.contains(" ")) it else "Unknown" } ?: "Unknown"
-
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Column {
                                             Text("Over $overNum", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
-                                            val bowlersInOver = overBalls.groupBy { it.second.bowlerId }.map { (id, balls) ->
-                                                val name = bowlingTeamPlayers.find { it.id == id }?.name ?: id?.let { if (!it.contains("-") || it.contains(" ")) it else "Unknown" } ?: "Unknown"
+                                            val bowlersInOver = overBalls.groupBy { recoverName(it.second.bowlerId, match, "Bowler") }.map { (name, balls) ->
                                                 "$name (${balls.count { it.second.isLegalBall }})"
                                             }.joinToString(", ")
                                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -881,6 +886,11 @@ fun OversTab(match: Match, viewModel: ScoringViewModel, graphicsLayer: GraphicsL
                                         val overRuns = overBalls.sumOf { it.second.runs + it.second.extraRuns }
                                         val overWickets = overBalls.count { it.second.wicketType != WicketType.NONE && it.second.wicketType != WicketType.RETIRED_HURT }
                                         Text("$overRuns Runs" + (if (overWickets > 0) ", $overWickets Wkts" else ""), fontWeight = FontWeight.Bold, color = Color.DarkGray)
+                                    }
+                                    val droppedInOver = overBalls.filter { it.second.isDroppedCatch }
+                                    if (droppedInOver.isNotEmpty()) {
+                                        val droppedNames = droppedInOver.map { recoverName(it.second.fielderId, match, "Fielder") }.joinToString(", ")
+                                        Text("🤲 Dropped by: $droppedNames", style = MaterialTheme.typography.labelSmall, color = Color(0xFFE65100), fontWeight = FontWeight.Bold)
                                     }
                                     Spacer(modifier = Modifier.height(12.dp))
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1384,7 +1394,9 @@ fun PlayerSelectionOverlay(match: Match, viewModel: ScoringViewModel) {
                         PendingAction.REPLACE_STRIKER, PendingAction.REPLACE_NON_STRIKER -> 
                             !player.battingStats.isOut && player.id != match.strikerId && player.id != match.nonStrikerId
                         PendingAction.SELECT_BOWLER, PendingAction.REPLACE_BOWLER -> 
-                            player.id != match.lastBowlerId && player.id != (if (team.id == match.teamA.id) match.teamAWicketKeeperId else match.teamBWicketKeeperId)
+                            player.id != match.lastBowlerId && 
+                            player.id != (if (team.id == match.teamA.id) match.teamAWicketKeeperId else match.teamBWicketKeeperId) &&
+                            !viewModel.isSpellCompleted(player, match)
                         else -> true
                     }
                     if (isAvailable) {
@@ -1719,8 +1731,8 @@ fun ControlsSection(
                 contentPadding = PaddingValues(0.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text("🏏", fontSize = 18.sp)
-                    Text("WICKET", fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 0.5.sp)
+                    Text("🏏", fontSize = 22.sp)
+                    Text("WICKET", fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 0.5.sp)
                 }
             }
             Button(
@@ -1796,14 +1808,16 @@ data class InningsStats(
     val sixes: Int = 0,
     val dots: Int = 0,
     val extras: Int = 0,
-    val wickets: Int = 0
+    val wickets: Int = 0,
+    val droppedCatches: Int = 0
 )
 
 fun calculateInningsStats(balls: List<Ball>): InningsStats {
-    var singles = 0; var doubles = 0; var triples = 0; var fours = 0; var sixes = 0; var dots = 0; var extras = 0; var wickets = 0
+    var singles = 0; var doubles = 0; var triples = 0; var fours = 0; var sixes = 0; var dots = 0; var extras = 0; var wickets = 0; var droppedCatches = 0
     balls.forEach { ball ->
         if (ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT) wickets++
         if (ball.extrasType != ExtrasType.NONE) extras += ball.extraRuns
+        if (ball.isDroppedCatch) droppedCatches++
         
         val runs = ball.runs
         when (runs) {
@@ -1815,10 +1829,23 @@ fun calculateInningsStats(balls: List<Ball>): InningsStats {
             6 -> sixes++
         }
     }
-    return InningsStats(singles, doubles, triples, fours, sixes, dots, extras, wickets)
+    return InningsStats(singles, doubles, triples, fours, sixes, dots, extras, wickets, droppedCatches)
 }
 
-fun calculatePartnerships(balls: List<Ball>, teamPlayers: List<Player>): List<Partnership> {
+fun recoverName(id: String?, match: Match, defaultName: String = "Player"): String {
+    if (id.isNullOrEmpty()) return defaultName
+    
+    // Priority 1: Check both teams comprehensively (v1.75 Fix)
+    match.teamA.players.find { it.id == id }?.name?.let { return it }
+    match.teamB.players.find { it.id == id }?.name?.let { return it }
+    
+    // Priority 2: ID itself (if legacy name)
+    if (id.length < 30 || id.contains(" ")) return id
+    
+    return "Guest Player"
+}
+
+fun calculatePartnerships(balls: List<Ball>, match: Match): List<Partnership> {
     val partnerships = mutableListOf<Partnership>()
     if (balls.isEmpty()) return partnerships
     
@@ -1845,8 +1872,8 @@ fun calculatePartnerships(balls: List<Ball>, teamPlayers: List<Player>): List<Pa
         pExtras += ball.extraRuns
         
         if (ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT) {
-            val b1Name = teamPlayers.find { it.id == currentB1Id }?.name ?: currentB1Id?.let { if (!it.contains("-") || it.contains(" ")) it else "Unknown" } ?: "Unknown"
-            val b2Name = teamPlayers.find { it.id == currentB2Id }?.name ?: currentB2Id?.let { if (!it.contains("-") || it.contains(" ")) it else "Unknown" } ?: "Unknown"
+            val b1Name = recoverName(currentB1Id, match, "Striker")
+            val b2Name = recoverName(currentB2Id, match, "Non-Striker")
             partnerships.add(Partnership(
                 currentB1Id ?: "", b1Name, runs1, balls1,
                 currentB2Id ?: "", b2Name, runs2, balls2,
@@ -1859,8 +1886,8 @@ fun calculatePartnerships(balls: List<Ball>, teamPlayers: List<Player>): List<Pa
     }
     
     if (currentB1Id != null) {
-        val b1Name = teamPlayers.find { it.id == currentB1Id }?.name ?: currentB1Id?.let { if (!it.contains("-") || it.contains(" ")) it else "Unknown" } ?: "Unknown"
-        val b2Name = teamPlayers.find { it.id == currentB2Id }?.name ?: currentB2Id?.let { if (!it.contains("-") || it.contains(" ")) it else "Unknown" } ?: "Unknown"
+        val b1Name = recoverName(currentB1Id, match, "Striker")
+        val b2Name = recoverName(currentB2Id, match, "Non-Striker")
         partnerships.add(Partnership(
             currentB1Id ?: "", b1Name, runs1, balls1,
             currentB2Id ?: "", b2Name, runs2, balls2,
@@ -1888,13 +1915,12 @@ fun PartnershipsSection(match: Match, team1: Team, team2: Team) {
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("PARTNERSHIPS ⚖️", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+            Text("PARTNERSHIPS 🏏🤝", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
             
             inningsPairs.forEach { (label, balls) ->
                 if (balls.isNotEmpty()) {
-                    val isFirst = label == "1st Innings"
-                    val battingTeam = if (isFirst) team1 else team2
-                    val partnerships = calculatePartnerships(balls, battingTeam.players)
+                    val isFirst = label.contains("1st")
+                    val partnerships = calculatePartnerships(balls, match)
                     
                     if (partnerships.isNotEmpty()) {
                         val inningsTotalRuns = balls.sumOf { it.runs + it.extraRuns }
@@ -1916,8 +1942,13 @@ fun PartnershipsSection(match: Match, team1: Team, team2: Team) {
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary
                                 )
+                                val teamName = if (isFirst) {
+                                    if (match.initialBattingTeamId == match.teamA.id) match.teamA.name else match.teamB.name
+                                } else {
+                                    if (match.initialBattingTeamId == match.teamA.id) match.teamB.name else match.teamA.name
+                                }
                                 Text(
-                                    "${battingTeam.name.uppercase()}  $inningsTotalRuns/$inningsTotalWickets",
+                                    "${teamName.uppercase()}  $inningsTotalRuns/$inningsTotalWickets",
                                     fontWeight = FontWeight.Bold,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = Color.DarkGray
@@ -1985,6 +2016,7 @@ fun ScoringBreakdownCard(match: Match, i1Stats: InningsStats, i2Stats: InningsSt
             BreakdownRow("4s", "${i1Stats.fours}", "${i2Stats.fours}")
             BreakdownRow("6s", "${i1Stats.sixes}", "${i2Stats.sixes}")
             BreakdownRow("Extras", "${i1Stats.extras}", "${i2Stats.extras}")
+            BreakdownRow("Drops 🤲", "${i1Stats.droppedCatches}", "${i2Stats.droppedCatches}")
         }
     }
 }
@@ -2087,17 +2119,20 @@ fun BestPerformancesBowlers(teamA: Team, teamB: Team) {
 fun BallBox(ball: Ball, onClick: () -> Unit) {
     val bgColor = when {
         ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT -> Color(0xFFFFEBEE)
+        ball.isDroppedCatch -> Color(0xFFFFF3E0)
         ball.extrasType != ExtrasType.NONE -> Color(0xFFFFF3E0)
         else -> Color.White
     }
     val textColor = when {
         ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT -> Color.Red
+        ball.isDroppedCatch -> Color(0xFFFF9800)
         ball.extrasType != ExtrasType.NONE -> Color(0xFFE65100)
         else -> Color.Black
     }
     val text = when {
         ball.wicketType == WicketType.RETIRED_HURT -> "RH"
         ball.wicketType != WicketType.NONE -> "W"
+        ball.isDroppedCatch -> "🤲${ball.runs}"
         ball.extrasType == ExtrasType.WIDE -> "${ball.runs + ball.extraRuns}wd"
         ball.extrasType == ExtrasType.NO_BALL -> "${ball.runs + ball.extraRuns}nb"
         ball.extrasType == ExtrasType.BYE -> "${ball.runs}b"
@@ -2120,7 +2155,7 @@ fun BallBox(ball: Ball, onClick: () -> Unit) {
 @Composable
 private fun CardBranding() {
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-        Text("Prepared by Ankoji | v1.64 🏅", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
+        Text("Prepared by Ankoji | v1.77 🏏🚀⚖️🏅", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
     }
 }
 

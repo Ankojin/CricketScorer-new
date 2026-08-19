@@ -119,7 +119,7 @@ fun DashboardScreen(
                             Text("Create Sample League")
                         }
                         Spacer(modifier = Modifier.height(32.dp))
-                        Text("Prepared by Ankoji | v1.59", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
+                        Text("Prepared by Ankoji | v1.77 🏏🚀⚖️🏅", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
                     }
                 }
             } else {
@@ -138,7 +138,7 @@ fun DashboardScreen(
                     item {
                         Spacer(modifier = Modifier.height(24.dp))
                         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            Text("Prepared by Ankoji | v1.59", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
+                            Text("Prepared by Ankoji | v1.77 🏏🚀⚖️🏅", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
