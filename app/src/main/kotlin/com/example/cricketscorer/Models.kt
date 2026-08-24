@@ -8,8 +8,10 @@ data class Player(
     val bowlingStats: BowlingStats = BowlingStats(),
     val fieldingStats: FieldingStats = FieldingStats(),
     val isJoker: Boolean = false,
+    val isCaptain: Boolean = false,
+    val isViceCaptain: Boolean = false,
     val battingStyle: BattingStyle? = BattingStyle.RHB,
-    val bowlingStyle: BowlingStyle? = BowlingStyle.RightArm
+    val bowlingStyle: BowlingStyle? = BowlingStyle.RFM
 )
 
 enum class BattingStyle {
@@ -17,7 +19,7 @@ enum class BattingStyle {
 }
 
 enum class BowlingStyle {
-    RightArm, LeftArm
+    RAM, RAF, RFM, RAS, LAM, LAF, LFM, LAS
 }
 
 data class BattingStats(
@@ -186,9 +188,10 @@ data class Partnership(
 
 enum class PendingAction {
     NONE, SELECT_STRIKER, SELECT_NON_STRIKER, SELECT_BOWLER, TOSS_REQUIRED, 
-    SELECT_CAPTAIN_A, SELECT_CAPTAIN_B, SELECT_WK_A, SELECT_WK_B, SELECT_FIELDER,
+    SELECT_WK_A, SELECT_WK_B, SELECT_FIELDER,
     START_SECOND_INNINGS, SELECT_FIELDER_DROPPED_CATCH, SELECT_RUNS_DROPPED_CATCH,
-    REPLACE_STRIKER, REPLACE_NON_STRIKER, REPLACE_BOWLER
+    REPLACE_STRIKER, REPLACE_NON_STRIKER, REPLACE_BOWLER,
+    SELECT_RUNS_WICKET
 }
 
 enum class MatchStatus {

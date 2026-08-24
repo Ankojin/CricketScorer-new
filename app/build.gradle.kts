@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.cricketscorer"
         minSdk = 24
         targetSdk = 35
-        versionCode = 38
-        versionName = "1.77"
+        versionCode = 64
+        versionName = "2.25"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -63,6 +63,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("com.google.code.gson:gson:2.14.0")
     implementation("com.google.android.gms:play-services-nearby:19.0.0")
     testImplementation("junit:junit:4.13.2")

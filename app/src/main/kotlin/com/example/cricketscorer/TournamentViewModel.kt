@@ -22,8 +22,8 @@ class TournamentViewModel : ViewModel() {
         TournamentRepository.deleteTeam(tournamentId, teamId)
     }
 
-    fun addPlayer(context: android.content.Context, tournamentId: String, teamId: String, name: String, bStyle: BattingStyle, bowlStyle: BowlingStyle) {
-        val success = TournamentRepository.addPlayerToTeam(tournamentId, teamId, name, bStyle, bowlStyle)
+    fun addPlayer(context: android.content.Context, tournamentId: String, teamId: String, name: String, bStyle: BattingStyle, bowlStyle: BowlingStyle, isCaptain: Boolean = false, isViceCaptain: Boolean = false) {
+        val success = TournamentRepository.addPlayerToTeam(tournamentId, teamId, name, bStyle, bowlStyle, isCaptain, isViceCaptain)
         if (!success) {
             android.widget.Toast.makeText(context, "Player $name already exists in this tournament! 👤❌", android.widget.Toast.LENGTH_SHORT).show()
         }
@@ -33,8 +33,8 @@ class TournamentViewModel : ViewModel() {
         TournamentRepository.deletePlayer(tournamentId, teamId, playerId)
     }
 
-    fun updatePlayerDetails(tournamentId: String, teamId: String, playerId: String, newName: String, bStyle: BattingStyle, bowlStyle: BowlingStyle) {
-        TournamentRepository.updatePlayerDetails(tournamentId, teamId, playerId, newName, bStyle, bowlStyle)
+    fun updatePlayerDetails(tournamentId: String, teamId: String, playerId: String, newName: String, bStyle: BattingStyle, bowlStyle: BowlingStyle, isCaptain: Boolean, isViceCaptain: Boolean) {
+        TournamentRepository.updatePlayerDetails(tournamentId, teamId, playerId, newName, bStyle, bowlStyle, isCaptain, isViceCaptain)
     }
 
     fun togglePlayerJokerStatus(tournamentId: String, teamId: String, playerId: String) {
@@ -45,17 +45,14 @@ class TournamentViewModel : ViewModel() {
         tournamentId: String, 
         teamAId: String, 
         teamBId: String, 
-        scheduledDate: Long? = null,
-        overs: Int? = null,
-        maxOvers: Int? = null,
-        quotaCount: Int? = null,
-        quotaLimit: Int? = null
+        scheduledDate: Long? = null
     ) {
-        TournamentRepository.scheduleMatch(tournamentId, teamAId, teamBId, scheduledDate, overs, maxOvers, quotaCount, quotaLimit)
+        TournamentRepository.scheduleMatch(tournamentId, teamAId, teamBId, scheduledDate)
     }
 
-    fun deleteMatch(tournamentId: String, matchId: String) {
+    fun deleteMatch(tournamentId: String, matchId: String, scoringViewModel: ScoringViewModel? = null) {
         TournamentRepository.deleteMatch(tournamentId, matchId)
+        scoringViewModel?.clearIfDeleted(matchId)
     }
 
     fun exportTournament(id: String): String? {
