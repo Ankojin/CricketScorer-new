@@ -119,7 +119,7 @@ fun DashboardScreen(
                             Text("Create Sample League")
                         }
                         Spacer(modifier = Modifier.height(32.dp))
-                        Text("Prepared by Ankoji | v1.77 🏏🚀⚖️🏅", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
+                        Text("Prepared by Ankoji | v1.98 🏏🚀⚖️🏅", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
                     }
                 }
             } else {
@@ -138,7 +138,7 @@ fun DashboardScreen(
                     item {
                         Spacer(modifier = Modifier.height(24.dp))
                         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            Text("Prepared by Ankoji | v1.77 🏏🚀⚖️🏅", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
+                            Text("Prepared by Ankoji | v1.98 🏏🚀⚖️🏅", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -336,8 +336,10 @@ fun TournamentCard(
                                 val sendIntent = Intent().apply {
                                     action = Intent.ACTION_SEND
                                     putExtra(Intent.EXTRA_STREAM, uri)
-                                    type = "application/octet-stream"
+                                    type = "application/json"
                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    putExtra(Intent.EXTRA_SUBJECT, "CricScore Pro Series Backup")
+                                    putExtra(Intent.EXTRA_TEXT, "Here is the backup for ${tournament.name}")
                                 }
                                 val shareIntent = Intent.createChooser(sendIntent, "Export Series Data")
                                 context.startActivity(shareIntent)

@@ -133,7 +133,7 @@ object TournamentRepository {
         }
     }
 
-    fun addPlayerToTeam(tournamentId: String, teamId: String, playerName: String, bStyle: BattingStyle = BattingStyle.RHB, bowlStyle: BowlingStyle = BowlingStyle.RightArm): Boolean {
+    fun addPlayerToTeam(tournamentId: String, teamId: String, playerName: String, bStyle: BattingStyle = BattingStyle.RHB, bowlStyle: BowlingStyle = BowlingStyle.RFM, isCaptain: Boolean = false, isViceCaptain: Boolean = false, canBowl: Boolean = true): Boolean {
         var added = false
         val trimmedName = playerName.trim()
         
@@ -158,7 +158,10 @@ object TournamentRepository {
                                 id = UUID.randomUUID().toString(), 
                                 name = trimmedName,
                                 battingStyle = bStyle,
-                                bowlingStyle = bowlStyle
+                                bowlingStyle = bowlStyle,
+                                isCaptain = isCaptain,
+                                isViceCaptain = isViceCaptain,
+                                canBowl = canBowl
                             )
                             createdPlayer = newPlayer
                             team.copy(players = team.players + newPlayer)
@@ -217,14 +220,14 @@ object TournamentRepository {
         }
     }
 
-    fun updatePlayerDetails(tournamentId: String, teamId: String, playerId: String, newName: String, bStyle: BattingStyle, bowlStyle: BowlingStyle) {
+    fun updatePlayerDetails(tournamentId: String, teamId: String, playerId: String, newName: String, bStyle: BattingStyle, bowlStyle: BowlingStyle, isCaptain: Boolean, isViceCaptain: Boolean, canBowl: Boolean = true) {
         _tournaments.update { list ->
             val newList = list.map { t ->
                 if (t.id == tournamentId) {
                     val updatedTeams = t.teams.map { team ->
                         if (team.id == teamId) {
                             val updatedPlayers = team.players.map { player ->
-                                if (player.id == playerId) player.copy(name = newName, battingStyle = bStyle, bowlingStyle = bowlStyle) else player
+                                if (player.id == playerId) player.copy(name = newName, battingStyle = bStyle, bowlingStyle = bowlStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain, canBowl = canBowl) else player
                             }
                             team.copy(players = updatedPlayers)
                         } else team
@@ -234,13 +237,13 @@ object TournamentRepository {
                         if (match.status == MatchStatus.LIVE || match.status == MatchStatus.UPCOMING) {
                             val updatedTeamA = if (match.teamA.id == teamId || match.teamA.players.any { it.id == playerId }) {
                                 match.teamA.copy(players = match.teamA.players.map { p ->
-                                    if (p.id == playerId) p.copy(name = newName, battingStyle = bStyle, bowlingStyle = bowlStyle) else p
+                                    if (p.id == playerId) p.copy(name = newName, battingStyle = bStyle, bowlingStyle = bowlStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain, canBowl = canBowl) else p
                                 })
                             } else match.teamA
                             
                             val updatedTeamB = if (match.teamB.id == teamId || match.teamB.players.any { it.id == playerId }) {
                                 match.teamB.copy(players = match.teamB.players.map { p ->
-                                    if (p.id == playerId) p.copy(name = newName, battingStyle = bStyle, bowlingStyle = bowlStyle) else p
+                                    if (p.id == playerId) p.copy(name = newName, battingStyle = bStyle, bowlingStyle = bowlStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain, canBowl = canBowl) else p
                                 })
                             } else match.teamB
                             
@@ -347,12 +350,16 @@ object TournamentRepository {
                         }
                     }
 
+                    // v1.92: structural Hard Reset - Deep Clean squads for new match
+                    val cleanedTeamA = resetTeamStats(matchTeamA)
+                    val cleanedTeamB = resetTeamStats(matchTeamB)
+
                     val match = Match(
                         id = UUID.randomUUID().toString(),
                         tournamentId = tournamentId,
                         tournamentName = t.name,
-                        teamA = matchTeamA,
-                        teamB = matchTeamB,
+                        teamA = cleanedTeamA,
+                        teamB = cleanedTeamB,
                         battingTeamId = matchTeamA.id,
                         bowlingTeamId = matchTeamB.id,
                         oversPerInnings = matchOvers ?: t.settings.overs,

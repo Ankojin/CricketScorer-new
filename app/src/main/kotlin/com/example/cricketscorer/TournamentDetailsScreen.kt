@@ -5,6 +5,7 @@ import android.app.TimePickerDialog
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -472,7 +473,7 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
                         val player = item.first
                         val team = item.second
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(player.name + " (${(player.battingStyle ?: BattingStyle.RHB).name.take(1)})", modifier = Modifier.weight(3f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text(player.name + " (${(player.battingStyle ?: BattingStyle.RHB).name})", modifier = Modifier.weight(3f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
                             Text(getTeamAbbr(team.name), modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, color = Color.Gray, textAlign = TextAlign.Center)
                             Text("${player.battingStats.runs}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Black, textAlign = TextAlign.End)
                             Text(String.format(Locale.getDefault(), "%.0f", player.battingStats.strikeRate), modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
@@ -489,9 +490,9 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
                         val player = item.first
                         val team = item.second
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            val bStyle = (player.battingStyle ?: BattingStyle.RHB).name.take(1)
-                            val bowlStyle = if ((player.bowlingStyle ?: BowlingStyle.RightArm) == BowlingStyle.RightArm) "RA" else "LA"
-                            Text(player.name + " ($bStyle, $bowlStyle)", modifier = Modifier.weight(3f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                            val roleSuffix = if (player.isCaptain) " (c)" else if (player.isViceCaptain) " (vc)" else ""
+                            val bowlStyle = (player.bowlingStyle ?: BowlingStyle.RFM).name
+                            Text(player.name + roleSuffix + " ($bowlStyle)", modifier = Modifier.weight(3f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
                             Text(getTeamAbbr(team.name), modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, color = Color.Gray, textAlign = TextAlign.Center)
                             Text("${player.bowlingStats.wickets}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Black, color = Color(0xFFD32F2F), textAlign = TextAlign.End)
                             Text(String.format(Locale.getDefault(), "%.2f", player.bowlingStats.economy), modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
@@ -547,7 +548,7 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
 @Composable
 private fun CardBranding() {
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-        Text("Prepared by Ankoji | v1.77 🏏🚀⚖️🏅", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
+        Text("Prepared by Ankoji | v1.98 🏏🚀⚖️🏅", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -602,7 +603,7 @@ fun BoundaryBox(title: String, players: List<Pair<Player, Team>>, modifier: Modi
             Spacer(modifier = Modifier.height(8.dp))
             players.forEach { p ->
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(p.first.name + " (${(p.first.battingStyle ?: BattingStyle.RHB).name.take(1)})", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
+                    Text(p.first.name + " (${(p.first.battingStyle ?: BattingStyle.RHB).name})", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
                     Text("${statSelector(p)}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.secondary)
                 }
                 Spacer(modifier = Modifier.height(4.dp))
@@ -909,7 +910,10 @@ fun TeamCard(
     var playerToEdit by remember { mutableStateOf<Player?>(null) }
     var editedPlayerName by remember { mutableStateOf("") }
     var editedPlayerBattingStyle by remember { mutableStateOf(BattingStyle.RHB) }
-    var editedPlayerBowlingStyle by remember { mutableStateOf(BowlingStyle.RightArm) }
+    var editedPlayerBowlingStyle by remember { mutableStateOf(BowlingStyle.RFM) }
+    var editedIsCaptain by remember { mutableStateOf(false) }
+    var editedIsViceCaptain by remember { mutableStateOf(false) }
+    var editedCanBowl by remember { mutableStateOf(true) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -977,7 +981,10 @@ fun TeamCard(
                                         playerToEdit = player
                                         editedPlayerName = player.name
                                         editedPlayerBattingStyle = player.battingStyle ?: BattingStyle.RHB
-                                        editedPlayerBowlingStyle = player.bowlingStyle ?: BowlingStyle.RightArm
+                                        editedPlayerBowlingStyle = player.bowlingStyle ?: BowlingStyle.RFM
+                                        editedIsCaptain = player.isCaptain
+                                        editedIsViceCaptain = player.isViceCaptain
+                                        editedCanBowl = player.canBowl
                                         showEditPlayerDialog = true
                                     },
                                     onDelete = { viewModel.deletePlayer(tournamentId, team.id, player.id) },
@@ -995,12 +1002,15 @@ fun TeamCard(
 
         if (showAddPlayerDialog) {
             var selectedBattingStyle by remember { mutableStateOf(BattingStyle.RHB) }
-            var selectedBowlingStyle by remember { mutableStateOf(BowlingStyle.RightArm) }
+            var selectedBowlingStyle by remember { mutableStateOf(BowlingStyle.RFM) }
+            var isCaptain by remember { mutableStateOf(false) }
+            var isViceCaptain by remember { mutableStateOf(false) }
+            var canBowl by remember { mutableStateOf(true) }
             AlertDialog(
                 onDismissRequest = { showAddPlayerDialog = false },
                 title = { Text("Register Player", fontWeight = FontWeight.Bold) },
                 text = {
-                    Column {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                         OutlinedTextField(
                             value = playerNameToAdd,
                             onValueChange = { playerNameToAdd = it },
@@ -1022,15 +1032,33 @@ fun TeamCard(
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Text("Bowling Style", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             BowlingStyle.entries.forEach { style ->
                                 FilterChip(
                                     selected = selectedBowlingStyle == style,
                                     onClick = { selectedBowlingStyle = style },
-                                    label = { Text(if (style == BowlingStyle.RightArm) "Right Arm" else "Left Arm") },
-                                    modifier = Modifier.weight(1f)
+                                    label = { Text(style.name) }
                                 )
                             }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Switch(checked = isCaptain, onCheckedChange = { isCaptain = it; if (it) isViceCaptain = false })
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Capt (C)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Switch(checked = isViceCaptain, onCheckedChange = { isViceCaptain = it; if (it) isCaptain = false })
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("VC", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Switch(checked = canBowl, onCheckedChange = { canBowl = it })
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Can Bowl? ⚾", fontWeight = FontWeight.Bold)
                         }
                     }
                 },
@@ -1039,7 +1067,7 @@ fun TeamCard(
                     Button(
                         onClick = {
                             if (playerNameToAdd.isNotBlank()) {
-                                viewModel.addPlayer(context, tournamentId, team.id, playerNameToAdd, selectedBattingStyle, selectedBowlingStyle)
+                                viewModel.addPlayer(context, tournamentId, team.id, playerNameToAdd, selectedBattingStyle, selectedBowlingStyle, isCaptain, isViceCaptain, canBowl)
                                 playerNameToAdd = ""
                                 showAddPlayerDialog = false
                             }
@@ -1064,7 +1092,7 @@ fun TeamCard(
                 onDismissRequest = { showEditPlayerDialog = false },
                 title = { Text("Edit Player", fontWeight = FontWeight.Bold) },
                 text = {
-                    Column {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                         OutlinedTextField(
                             value = editedPlayerName,
                             onValueChange = { editedPlayerName = it },
@@ -1086,15 +1114,33 @@ fun TeamCard(
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Text("Bowling Style", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             BowlingStyle.entries.forEach { style ->
                                 FilterChip(
                                     selected = editedPlayerBowlingStyle == style,
                                     onClick = { editedPlayerBowlingStyle = style },
-                                    label = { Text(if (style == BowlingStyle.RightArm) "Right Arm" else "Left Arm") },
-                                    modifier = Modifier.weight(1f)
+                                    label = { Text(style.name) }
                                 )
                             }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Switch(checked = editedIsCaptain, onCheckedChange = { editedIsCaptain = it; if (it) editedIsViceCaptain = false })
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Capt (C)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Switch(checked = editedIsViceCaptain, onCheckedChange = { editedIsViceCaptain = it; if (it) editedIsCaptain = false })
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("VC", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Switch(checked = editedCanBowl, onCheckedChange = { editedCanBowl = it })
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Can Bowl? ⚾", fontWeight = FontWeight.Bold)
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Row(
@@ -1122,7 +1168,10 @@ fun TeamCard(
                                     currentPlayerState.id,
                                     editedPlayerName,
                                     editedPlayerBattingStyle,
-                                    editedPlayerBowlingStyle
+                                    editedPlayerBowlingStyle,
+                                    editedIsCaptain,
+                                    editedIsViceCaptain,
+                                    editedCanBowl
                                 )
                                 showEditPlayerDialog = false
                             }
@@ -1144,8 +1193,9 @@ fun TeamCard(
 
 @Composable
 fun PlayerChip(player: Player, onEdit: () -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
-    val bStyle = (player.battingStyle ?: BattingStyle.RHB).name.take(1)
-    val bowlStyle = if ((player.bowlingStyle ?: BowlingStyle.RightArm) == BowlingStyle.RightArm) "RA" else "LA"
+    val bStyle = (player.battingStyle ?: BattingStyle.RHB).name
+    val bowlStyle = (player.bowlingStyle ?: BowlingStyle.RFM).name
+    val roleSuffix = if (player.isCaptain) " (c)" else if (player.isViceCaptain) " (vc)" else ""
 
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -1164,12 +1214,12 @@ fun PlayerChip(player: Player, onEdit: () -> Unit, onDelete: () -> Unit, modifie
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = (if (player.isJoker) "${player.name} 🃏" else player.name) + " ($bStyle, $bowlStyle)",
+                text = (if (player.isJoker) "${player.name} 🃏" else player.name) + "$roleSuffix ($bStyle, $bowlStyle)",
                 modifier = Modifier
                     .weight(1f)
                     .clickable { onEdit() },
                 style = MaterialTheme.typography.bodySmall,
-                fontWeight = if (player.isJoker) FontWeight.Black else FontWeight.Medium,
+                fontWeight = if (player.isJoker || player.isCaptain) FontWeight.Black else FontWeight.Medium,
                 maxLines = 1
             )
             IconButton(onClick = onDelete, modifier = Modifier.size(16.dp)) {
