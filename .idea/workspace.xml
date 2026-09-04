@@ -9,18 +9,25 @@
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="61789d28-061d-4cfb-9044-cdd51be63bb1" name="Changes" comment="local Sync- v 1.97">
+    <list default="true" id="61789d28-061d-4cfb-9044-cdd51be63bb1" name="Changes" comment="Merge remote-tracking branch 'origin/master'&#10;&#10;# Conflicts:&#10;#&#9;.idea/workspace.xml&#10;#&#9;app/build.gradle.kts&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/DashboardScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/HomeScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/LiveScoringScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/Models.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/ScoringViewModel.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/TournamentDetailsScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/TournamentRepository.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/TournamentViewModel.kt">
+      <change afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ExploreScreens.kt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ui/Branding.kt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/app/src/test/kotlin/com/example/cricketscorer/ScoringViewModelTest.kt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/version.properties" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/caches/deviceStreaming.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/caches/deviceStreaming.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/deploymentTargetSelector.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/deploymentTargetSelector.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/app/build.gradle.kts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/DashboardScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/DashboardScreen.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/HomeScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/HomeScreen.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/LiveScoringScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/LiveScoringScreen.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/MainActivity.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/MainActivity.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/Models.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/Models.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ScoringViewModel.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ScoringViewModel.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/TournamentDetailsScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/TournamentDetailsScreen.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/TournamentRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/TournamentRepository.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/TournamentViewModel.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/TournamentViewModel.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/build.gradle.kts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cricscore_v1.85_fixed.apk" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cricscore_v2.25.apk" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -30,7 +37,7 @@
   <component name="ClangdSettings">
     <option name="formatViaClangd" value="false" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[LocalEmulator::path=C:\Users\AnkojiRaoNagisetty\.android\avd\Pixel_10_Pro.avd]" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[LocalEmulator::path=C:\Users\AnkojiRaoNagisetty\.android\avd\Pixel_10_Pro_XL.avd]" />
   <component name="ExternalProjectsData">
     <projectState path="$PROJECT_DIR$">
       <ProjectState />
@@ -48,17 +55,6 @@
               <path>
                 <item name="" type="6a2764b6:ExternalProjectsStructure$RootNode" />
                 <item name="CricketScorer" type="f1a62948:ProjectNode" />
-              </path>
-              <path>
-                <item name="" type="6a2764b6:ExternalProjectsStructure$RootNode" />
-                <item name="CricketScorer" type="f1a62948:ProjectNode" />
-                <item name="Tasks" type="e4a08cd1:TasksNode" />
-              </path>
-              <path>
-                <item name="" type="6a2764b6:ExternalProjectsStructure$RootNode" />
-                <item name="CricketScorer" type="f1a62948:ProjectNode" />
-                <item name="Tasks" type="e4a08cd1:TasksNode" />
-                <item name="other" type="c8890929:TasksNode$1" />
               </path>
               <path>
                 <item name="" type="6a2764b6:ExternalProjectsStructure$RootNode" />
@@ -116,28 +112,28 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Android App.androidTest.executor": "Run",
-    "Android App.app.executor": "Run",
-    "GradleDaemonJvmCriteriaMigrationNotification.isNotificationDisabled": "true",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.cidr.known.project.marker": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.readMode.enableVisualFormatting": "true",
-    "cf.first.check.clang-format": "false",
-    "cidr.known.project.marker": "true",
-    "com.google.services.firebase.aqiPopupShown": "true",
-    "deletionFromPopupRequiresConfirmation": "false",
-    "full.screen.before.presentation.mode": "false",
-    "git-widget-placeholder": "master",
-    "ignore.virus.scanning.warn.message": "true",
-    "kotlin-language-version-configured": "true",
-    "settings.editor.selected.configurable": "templates.modelproviders.configurable"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Android App.androidTest.executor&quot;: &quot;Run&quot;,
+    &quot;Android App.app.executor&quot;: &quot;Run&quot;,
+    &quot;GradleDaemonJvmCriteriaMigrationNotification.isNotificationDisabled&quot;: &quot;true&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
+    &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
+    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;com.google.services.firebase.aqiPopupShown&quot;: &quot;true&quot;,
+    &quot;deletionFromPopupRequiresConfirmation&quot;: &quot;false&quot;,
+    &quot;full.screen.before.presentation.mode&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;templates.modelproviders.configurable&quot;
   }
-}]]></component>
+}</component>
   <component name="RunManager">
     <configuration name="app" type="AndroidRunConfigurationType" factoryName="Android App" activateToolWindowBeforeRun="false">
       <module name="CricketScorer.app" />
@@ -350,7 +346,31 @@
       <option name="project" value="LOCAL" />
       <updated>1787599644118</updated>
     </task>
-    <option name="localTasksCounter" value="18" />
+    <task id="LOCAL-00018" summary="local Sync- v 2.25">
+      <option name="closed" value="true" />
+      <created>1788027767658</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1788027767658</updated>
+    </task>
+    <task id="LOCAL-00019" summary="Merge remote-tracking branch 'origin/master'&#10;&#10;# Conflicts:&#10;#&#9;.idea/workspace.xml&#10;#&#9;app/build.gradle.kts&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/DashboardScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/HomeScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/LiveScoringScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/Models.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/ScoringViewModel.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/TournamentDetailsScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/TournamentRepository.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/TournamentViewModel.kt">
+      <option name="closed" value="true" />
+      <created>1788027835944</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1788027835944</updated>
+    </task>
+    <task id="LOCAL-00020" summary="Merge remote-tracking branch 'origin/master'&#10;&#10;# Conflicts:&#10;#&#9;.idea/workspace.xml&#10;#&#9;app/build.gradle.kts&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/DashboardScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/HomeScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/LiveScoringScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/Models.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/ScoringViewModel.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/TournamentDetailsScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/TournamentRepository.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/TournamentViewModel.kt">
+      <option name="closed" value="true" />
+      <created>1788027854649</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1788027854649</updated>
+    </task>
+    <option name="localTasksCounter" value="21" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -366,7 +386,10 @@
     <MESSAGE value="local Sync- v 1.65" />
     <MESSAGE value="local Sync- v 1.77" />
     <MESSAGE value="local Sync- v 1.97" />
-    <option name="LAST_COMMIT_MESSAGE" value="local Sync- v 1.97" />
+    <MESSAGE value="local Sync- v 2.25" />
+    <MESSAGE value="Merge remote-tracking branch 'origin/master'&#10;&#10;# Conflicts:&#10;#&#9;.idea/workspace.xml&#10;#&#9;app/build.gradle.kts&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/DashboardScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/HomeScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/LiveScoringScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/Models.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/ScoringViewModel.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/TournamentDetailsScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/TournamentRepository.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/TournamentViewModel.kt" />
+    <option name="LAST_COMMIT_MESSAGE" value="Merge remote-tracking branch 'origin/master'&#10;&#10;# Conflicts:&#10;#&#9;.idea/workspace.xml&#10;#&#9;app/build.gradle.kts&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/DashboardScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/HomeScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/LiveScoringScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/Models.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/ScoringViewModel.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/TournamentDetailsScreen.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/TournamentRepository.kt&#10;#&#9;app/src/main/kotlin/com/example/cricketscorer/TournamentViewModel.kt" />
+    <option name="GROUP_MULTIFILE_MERGE_BY_DIRECTORY" value="true" />
   </component>
   <component name="play_dynamic_filters_status">
     <option name="appIdToCheckInfo">

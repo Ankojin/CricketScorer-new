@@ -76,7 +76,7 @@ data class Team(
 )
 
 enum class ExtrasType {
-    NONE, WIDE, NO_BALL, BYE, LEG_BYE
+    NONE, WIDE, NO_BALL, BYE, LEG_BYE, GRANTED
 }
 
 enum class WicketType {
@@ -95,7 +95,8 @@ data class Ball(
     val isLegalBall: Boolean = true,
     val outPlayerId: String? = null,
     val rotateStrike: Boolean = true,
-    val isDroppedCatch: Boolean = false
+    val isDroppedCatch: Boolean = false,
+    val dismissalReason: String? = null
 )
 
 data class WicketRecord(
@@ -105,7 +106,8 @@ data class WicketRecord(
     val over: String,
     val wicketType: WicketType = WicketType.NONE,
     val bowlerName: String? = null,
-    val fielderName: String? = null
+    val fielderName: String? = null,
+    val dismissalReason: String? = null
 )
 
 data class InningsSummary(
@@ -166,6 +168,8 @@ data class Match(
     val pendingAction: PendingAction? = PendingAction.NONE,
     val innings1Data: InningsSummary? = null,
     val isSecondInningsStarted: Boolean = false,
+    val innings1EndTimeMillis: Long? = null,
+    val innings2StartTimeMillis: Long? = null,
     val lastNotifiedBowlerId: String? = null,
     val battingOrder: List<String> = emptyList(),
     val startTimeMillis: Long? = null,
@@ -191,7 +195,7 @@ enum class PendingAction {
     SELECT_WK_A, SELECT_WK_B, SELECT_FIELDER,
     START_SECOND_INNINGS, SELECT_FIELDER_DROPPED_CATCH, SELECT_RUNS_DROPPED_CATCH,
     REPLACE_STRIKER, REPLACE_NON_STRIKER, REPLACE_BOWLER,
-    SELECT_RUNS_WICKET
+    SELECT_RUNS_WICKET, SELECT_MATCH_SETTINGS
 }
 
 enum class MatchStatus {

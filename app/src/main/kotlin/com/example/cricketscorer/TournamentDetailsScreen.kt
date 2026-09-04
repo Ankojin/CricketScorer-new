@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import com.example.cricketscorer.ui.CardBranding
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 import com.example.cricketscorer.ui.CaptureArea
@@ -545,12 +546,6 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
     }
 }
 
-@Composable
-private fun CardBranding() {
-    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-        Text("Prepared by Ankoji | v2.25 (Innings Revert & Undo Fixed) 🏏🚀⚖️🏅", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
-    }
-}
 
 @Composable
 fun <T> LeaderboardCard(title: String, headers: List<String>, items: List<T>, content: @Composable (T) -> Unit) {

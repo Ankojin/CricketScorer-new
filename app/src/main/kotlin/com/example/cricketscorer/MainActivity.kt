@@ -142,7 +142,10 @@ fun MainNavigation(scoringViewModel: ScoringViewModel) {
                     onNavigateToLiveScoring = { match ->
                         scoringViewModel.loadMatch(match)
                         navController.navigate("live_scoring")
-                    }
+                    },
+                    onNavigateToMatches = { navController.navigate("all_matches") },
+                    onNavigateToTeams = { navController.navigate("all_teams") },
+                    onNavigateToPlayers = { navController.navigate("all_players") }
                 )
             }
             composable("dashboard") {
@@ -152,6 +155,21 @@ fun MainNavigation(scoringViewModel: ScoringViewModel) {
                         navController.navigate("tournament_details/$tournamentId")
                     }
                 )
+            }
+            composable("all_matches") {
+                AllMatchesScreen(
+                    onBack = { navController.popBackStack() },
+                    onMatchClick = { match ->
+                        scoringViewModel.loadMatch(match)
+                        navController.navigate("live_scoring")
+                    }
+                )
+            }
+            composable("all_teams") {
+                AllTeamsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("all_players") {
+                AllPlayersScreen(onBack = { navController.popBackStack() })
             }
             composable("live_scoring") {
                 LiveScoringScreen(

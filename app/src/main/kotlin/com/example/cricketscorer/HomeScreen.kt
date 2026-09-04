@@ -22,13 +22,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.cricketscorer.ui.CardBranding
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: ScoringViewModel,
     onNavigateToDashboard: () -> Unit,
-    onNavigateToLiveScoring: (Match) -> Unit
+    onNavigateToLiveScoring: (Match) -> Unit,
+    onNavigateToMatches: () -> Unit,
+    onNavigateToTeams: () -> Unit,
+    onNavigateToPlayers: () -> Unit
 ) {
     val tournaments by TournamentRepository.tournaments.collectAsState()
     val liveMatch = tournaments.flatMap { it.matches }.find { it.status == MatchStatus.LIVE }
@@ -194,18 +198,15 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         item { QuickActionChip("SERIES", onNavigateToDashboard) }
-                        item { QuickActionChip("TEAMS", onNavigateToDashboard) }
-                        item { QuickActionChip("PLAYERS", onNavigateToDashboard) }
+                        item { QuickActionChip("MATCHES", onNavigateToMatches) }
+                        item { QuickActionChip("TEAMS", onNavigateToTeams) }
+                        item { QuickActionChip("PLAYERS", onNavigateToPlayers) }
                     }
                 }
 
                 item {
                     Spacer(modifier = Modifier.height(48.dp))
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Prepared by Ankoji | v2.25 (Innings Revert & Undo Fixed) 🏏🚀⚖️🏅", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
-                        }
-                    }
+                    CardBranding()
                 }
             }
 
