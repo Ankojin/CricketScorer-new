@@ -133,7 +133,7 @@ object TournamentRepository {
         }
     }
 
-    fun addPlayerToTeam(tournamentId: String, teamId: String, playerName: String, bStyle: BattingStyle = BattingStyle.RHB, bowlStyle: BowlingStyle = BowlingStyle.RFM, isCaptain: Boolean = false, isViceCaptain: Boolean = false): Boolean {
+    fun addPlayerToTeam(tournamentId: String, teamId: String, playerName: String, bStyle: BattingStyle = BattingStyle.RHB, isCaptain: Boolean = false, isViceCaptain: Boolean = false): Boolean {
         var added = false
         val trimmedName = playerName.trim()
         
@@ -158,7 +158,6 @@ object TournamentRepository {
                                 id = UUID.randomUUID().toString(), 
                                 name = trimmedName,
                                 battingStyle = bStyle,
-                                bowlingStyle = bowlStyle,
                                 isCaptain = isCaptain,
                                 isViceCaptain = isViceCaptain
                             )
@@ -219,14 +218,14 @@ object TournamentRepository {
         }
     }
 
-    fun updatePlayerDetails(tournamentId: String, teamId: String, playerId: String, newName: String, bStyle: BattingStyle, bowlStyle: BowlingStyle, isCaptain: Boolean, isViceCaptain: Boolean) {
+    fun updatePlayerDetails(tournamentId: String, teamId: String, playerId: String, newName: String, bStyle: BattingStyle, isCaptain: Boolean, isViceCaptain: Boolean) {
         _tournaments.update { list ->
             val newList = list.map { t ->
                 if (t.id == tournamentId) {
                     val updatedTeams = t.teams.map { team ->
                         if (team.id == teamId) {
                             val updatedPlayers = team.players.map { player ->
-                                if (player.id == playerId) player.copy(name = newName, battingStyle = bStyle, bowlingStyle = bowlStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain) else player
+                                if (player.id == playerId) player.copy(name = newName, battingStyle = bStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain) else player
                             }
                             team.copy(players = updatedPlayers)
                         } else team
@@ -236,13 +235,13 @@ object TournamentRepository {
                         if (match.status == MatchStatus.LIVE || match.status == MatchStatus.UPCOMING) {
                             val updatedTeamA = if (match.teamA.id == teamId || match.teamA.players.any { it.id == playerId }) {
                                 match.teamA.copy(players = match.teamA.players.map { p ->
-                                    if (p.id == playerId) p.copy(name = newName, battingStyle = bStyle, bowlingStyle = bowlStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain) else p
+                                    if (p.id == playerId) p.copy(name = newName, battingStyle = bStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain) else p
                                 })
                             } else match.teamA
                             
                             val updatedTeamB = if (match.teamB.id == teamId || match.teamB.players.any { it.id == playerId }) {
                                 match.teamB.copy(players = match.teamB.players.map { p ->
-                                    if (p.id == playerId) p.copy(name = newName, battingStyle = bStyle, bowlingStyle = bowlStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain) else p
+                                    if (p.id == playerId) p.copy(name = newName, battingStyle = bStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain) else p
                                 })
                             } else match.teamB
                             

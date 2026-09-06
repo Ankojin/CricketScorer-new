@@ -6,5 +6,6 @@ class CricketScorerApp : Application() {
     override fun onCreate() {
         super.onCreate()
         TournamentRepository.init(this)
+        GlobalPlayerRepository.init(this)
     }
 }

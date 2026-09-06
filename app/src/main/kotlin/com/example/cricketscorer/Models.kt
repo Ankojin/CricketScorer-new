@@ -10,16 +10,11 @@ data class Player(
     val isJoker: Boolean = false,
     val isCaptain: Boolean = false,
     val isViceCaptain: Boolean = false,
-    val battingStyle: BattingStyle? = BattingStyle.RHB,
-    val bowlingStyle: BowlingStyle? = BowlingStyle.RFM
+    val battingStyle: BattingStyle? = BattingStyle.RHB
 )
 
 enum class BattingStyle {
     RHB, LHB
-}
-
-enum class BowlingStyle {
-    RAM, RAF, RFM, RAS, LAM, LAF, LFM, LAS
 }
 
 data class BattingStats(
@@ -95,9 +90,16 @@ data class Ball(
     val isLegalBall: Boolean = true,
     val outPlayerId: String? = null,
     val rotateStrike: Boolean = true,
+    val hadCrossed: Boolean = false, // v2.27.1: True if batters crossed for the ATTEMPTED run where wicket fell 🏏🚀⚖️🏅
     val isDroppedCatch: Boolean = false,
-    val dismissalReason: String? = null
-)
+    val dismissalReason: String? = null,
+    val isAdjustment: Boolean = false,
+    val adjustmentSlot: String? = null, // "STRIKER", "NON_STRIKER", "BOWLER"
+    val adjustmentPlayerId: String? = null
+) {
+    val isPhysicalBall: Boolean
+        get() = !isAdjustment && extrasType != ExtrasType.WIDE && extrasType != ExtrasType.NO_BALL
+}
 
 data class WicketRecord(
     val wicketNumber: Int,

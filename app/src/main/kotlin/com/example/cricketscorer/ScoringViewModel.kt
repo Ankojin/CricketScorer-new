@@ -52,7 +52,6 @@ class ScoringViewModel : ViewModel() {
                                     if (masterP != null) p.copy(
                                         name = masterP.name,
                                         battingStyle = masterP.battingStyle,
-                                        bowlingStyle = masterP.bowlingStyle,
                                         isCaptain = masterP.isCaptain,
                                         isViceCaptain = masterP.isViceCaptain
                                     ) else p
@@ -69,7 +68,6 @@ class ScoringViewModel : ViewModel() {
                                     if (masterP != null) p.copy(
                                         name = masterP.name,
                                         battingStyle = masterP.battingStyle,
-                                        bowlingStyle = masterP.bowlingStyle,
                                         isCaptain = masterP.isCaptain,
                                         isViceCaptain = masterP.isViceCaptain
                                     ) else p
@@ -148,16 +146,11 @@ class ScoringViewModel : ViewModel() {
     }
 
     fun swapStrike() {
-        val updated = _matchState.updateAndGet { current ->
-            if (current == null || current.strikerId == null || current.nonStrikerId == null) return@updateAndGet current
-            current.copy(
-                strikerId = current.nonStrikerId,
-                nonStrikerId = current.strikerId
-            )
-        }
-        if (updated != null) {
-            TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)
-        }
+        val current = _matchState.value ?: return
+        if (current.strikerId == null || current.nonStrikerId == null) return
+        
+        val adjustment = Ball(runs = 0, isLegalBall = false, isAdjustment = true, adjustmentSlot = "SWAP")
+        recordBall(adjustment)
     }
 
     fun forceChangeBowler() {
@@ -320,17 +313,13 @@ class ScoringViewModel : ViewModel() {
         recordBall(updatedBall)
     }
 
-    fun handleRunOutWicket(runs: Int, brokenEnd: String, reason: String?) {
-        val context = _activeWicketContext.value ?: return
-        
-        // Physics-based victim identification: Victim is the one running TOWARD the broken end.
-        val victimId = if (brokenEnd == "BOWLER_CREASE") {
-            if (runs % 2 == 0) context.initialStrikerId else context.initialNonStrikerId
-        } else {
-            if (runs % 2 == 0) context.initialNonStrikerId else context.initialStrikerId
-        }
-        
-        _activeWicketContext.update { it?.copy(completedRuns = runs, brokenEnd = brokenEnd, dismissalReason = reason, calculatedVictimId = victimId) }
+    fun handleRunOutWicket(runs: Int, victimId: String, hadCrossed: Boolean, reason: String?) {
+        _activeWicketContext.update { it?.copy(
+            completedRuns = runs, 
+            dismissalReason = reason, 
+            calculatedVictimId = victimId,
+            hadCrossed = hadCrossed
+        ) }
         _matchState.update { it?.copy(pendingAction = PendingAction.SELECT_FIELDER) }
     }
 
@@ -347,6 +336,7 @@ class ScoringViewModel : ViewModel() {
                     fielderId = fielderId,
                     runs = context.completedRuns,
                     outPlayerId = context.calculatedVictimId ?: ball.outPlayerId,
+                    hadCrossed = context.hadCrossed,
                     dismissalReason = context.dismissalReason
                 )
             } else {
@@ -372,40 +362,29 @@ class ScoringViewModel : ViewModel() {
     }
 
     fun assignPlayerToAction(playerId: String) {
-        val updated = _matchState.updateAndGet { current ->
-            if (current == null) return@updateAndGet null
-            
-            val action = current.pendingAction ?: PendingAction.NONE
-            val withSelection = when (action) {
-                PendingAction.SELECT_STRIKER, PendingAction.REPLACE_STRIKER -> {
-                    val newOrder = current.battingOrder.toMutableList()
-                    if (!newOrder.contains(playerId)) newOrder.add(playerId)
-                    current.copy(strikerId = playerId, battingOrder = newOrder)
-                }
-                PendingAction.SELECT_NON_STRIKER, PendingAction.REPLACE_NON_STRIKER -> {
-                    val newOrder = current.battingOrder.toMutableList()
-                    if (!newOrder.contains(playerId)) newOrder.add(playerId)
-                    current.copy(nonStrikerId = playerId, battingOrder = newOrder)
-                }
-                PendingAction.SELECT_BOWLER, PendingAction.REPLACE_BOWLER -> {
-                    current.copy(currentBowlerId = playerId)
-                }
-                PendingAction.SELECT_WK_A -> current.copy(teamAWicketKeeperId = playerId)
-                PendingAction.SELECT_WK_B -> current.copy(teamBWicketKeeperId = playerId)
-                else -> current
-            }
-            
-            // Clear workflow context on successful substitution
+        val current = _matchState.value ?: return
+        val action = current.pendingAction ?: PendingAction.NONE
+        
+        val adjustment = when (action) {
+            PendingAction.SELECT_STRIKER, PendingAction.REPLACE_STRIKER -> 
+                Ball(runs = 0, isLegalBall = false, isAdjustment = true, adjustmentSlot = "STRIKER", adjustmentPlayerId = playerId)
+            PendingAction.SELECT_NON_STRIKER, PendingAction.REPLACE_NON_STRIKER -> 
+                Ball(runs = 0, isLegalBall = false, isAdjustment = true, adjustmentSlot = "NON_STRIKER", adjustmentPlayerId = playerId)
+            PendingAction.SELECT_BOWLER, PendingAction.REPLACE_BOWLER -> 
+                Ball(runs = 0, isLegalBall = false, isAdjustment = true, adjustmentSlot = "BOWLER", adjustmentPlayerId = playerId)
+            else -> null
+        }
+
+        if (adjustment != null) {
+            recordBall(adjustment)
             if (action == PendingAction.REPLACE_STRIKER || action == PendingAction.REPLACE_NON_STRIKER) {
                 _activeWicketContext.value = null
             }
-
-            // targeted recalculation ensures engine determines the NEXT gap
-            val result = recalculateMatchFromHistory(withSelection)
-            result
-        }
-        if (updated != null && (updated.pendingAction ?: PendingAction.NONE) == PendingAction.NONE) {
-            TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)
+        } else if (action == PendingAction.SELECT_WK_A || action == PendingAction.SELECT_WK_B) {
+            _matchState.update { m ->
+                if (action == PendingAction.SELECT_WK_A) m?.copy(teamAWicketKeeperId = playerId)
+                else m?.copy(teamBWicketKeeperId = playerId)
+            }
         }
     }
 
@@ -445,7 +424,7 @@ class ScoringViewModel : ViewModel() {
     fun cancelPendingAction() {
         _matchState.update { current ->
             if (current == null) return@update null
-            // v2.26.75: Clear action AND trigger recalculation to find next logical requirement 🏏🚀⚖️🏅
+            // v2.27.0: Reactive clear. Engine will immediately find the next required action. 🏏🚀⚖️🏅
             val cleared = current.copy(pendingAction = PendingAction.NONE)
             recalculateMatchFromHistory(cleared)
         }
@@ -561,7 +540,7 @@ class ScoringViewModel : ViewModel() {
             return match.copy(pendingAction = PendingAction.TOSS_REQUIRED)
         }
 
-        // 1. Initial State Baseline v2.26 Critical Physics Engine 🏏🚀⚖️🏅
+        // 1. Initial State Baseline v2.27.0 Critical Physics Engine 🏏🚀⚖️🏅
         val teamABatsFirst = if (match.tossWinnerId == match.teamA.id) match.tossDecision == "BAT" else match.tossDecision == "BOWL"
         val innings1BattingTeamId = if (teamABatsFirst) match.teamA.id else match.teamB.id
         val innings1BowlingTeamId = if (innings1BattingTeamId == match.teamA.id) match.teamB.id else match.teamA.id
@@ -580,7 +559,7 @@ class ScoringViewModel : ViewModel() {
         var ballsInOver = 0
         var itemsProcessed = 0
         
-            // 2. Event Processing Loop (Historical derive)
+        // 2. Event Processing Loop
         match.ballHistory.forEach { ball ->
             itemsProcessed++
             if (current.status == MatchStatus.COMPLETED) return@forEach
@@ -589,7 +568,7 @@ class ScoringViewModel : ViewModel() {
             val battingTeam = if (isBattingA) current.teamA else current.teamB
             val bowlingTeam = if (isBattingA) current.teamB else current.teamA
 
-            // ID Healing for safe matching across devices/versions
+            // ID Healing for safe matching across devices/versions v2.27.1 🏏🚀⚖️🏅
             val healedBall = ball.copy(
                 strikerId = healLegacyId(ball.strikerId, battingTeam),
                 nonStrikerId = healLegacyId(ball.nonStrikerId, battingTeam),
@@ -608,7 +587,7 @@ class ScoringViewModel : ViewModel() {
             current = current.copy(
                 totalRuns = current.totalRuns + healedBall.runs + healedBall.extraRuns,
                 totalWickets = current.totalWickets + (if (healedBall.wicketType != WicketType.NONE && healedBall.wicketType != WicketType.RETIRED_HURT) 1 else 0),
-                totalBalls = current.totalBalls + (if (healedBall.isLegalBall) 1 else 0),
+                totalBalls = current.totalBalls + (if (healedBall.isPhysicalBall) 1 else 0),
                 wideCount = current.wideCount + (if (healedBall.extrasType == ExtrasType.WIDE) healedBall.extraRuns else 0),
                 noBallCount = current.noBallCount + (if (healedBall.extrasType == ExtrasType.NO_BALL) healedBall.extraRuns else 0),
                 byeCount = current.byeCount + (if (healedBall.extrasType == ExtrasType.BYE) healedBall.extraRuns else 0),
@@ -626,13 +605,27 @@ class ScoringViewModel : ViewModel() {
                 current = current.copy(wicketHistory = current.wicketHistory + WicketRecord(current.totalWickets, "☝️ $outName", current.totalRuns, "${current.totalBalls/6}.${current.totalBalls%6}", healedBall.wicketType, bName, fName, healedBall.dismissalReason))
             }
 
-            if (healedBall.isLegalBall) ballsInOver++
+            if (healedBall.isPhysicalBall) ballsInOver++
 
-            // Spatial Tracking Engine v2.26 🏏🚀⚖️🏅
+            // Spatial Tracking Engine v2.27.0 🏏🚀⚖️🏅
             var sId = current.strikerId ?: healedBall.strikerId
             var nsId = current.nonStrikerId ?: healedBall.nonStrikerId
-            val bId = healedBall.bowlerId
+            var activeBId = current.currentBowlerId ?: healedBall.bowlerId
             var lbId = current.lastBowlerId
+
+            // A. Manual Adjustments Handling
+            if (healedBall.isAdjustment) {
+                when (healedBall.adjustmentSlot) {
+                    "STRIKER" -> sId = healedBall.adjustmentPlayerId
+                    "NON_STRIKER" -> nsId = healedBall.adjustmentPlayerId
+                    "BOWLER" -> activeBId = healedBall.adjustmentPlayerId
+                    "SWAP" -> {
+                        val temp = sId; sId = nsId; nsId = temp
+                    }
+                }
+                current = current.copy(strikerId = sId, nonStrikerId = nsId, currentBowlerId = activeBId)
+                return@forEach 
+            }
 
             val physicalRuns = if (healedBall.extrasType == ExtrasType.WIDE) (healedBall.extraRuns - 1).coerceAtLeast(0) 
                                else if (healedBall.extrasType == ExtrasType.BYE || healedBall.extrasType == ExtrasType.LEG_BYE) healedBall.extraRuns 
@@ -641,12 +634,16 @@ class ScoringViewModel : ViewModel() {
             val isCaught = healedBall.wicketType == WicketType.CAUGHT
             val is1G = healedBall.extrasType == ExtrasType.GRANTED
 
-            // A. Run-Based Strike Rotation (Skip for 1G as per requirements)
-            if (!is1G && healedBall.rotateStrike && physicalRuns % 2 != 0) {
+            // B. Run-Based Strike Rotation v2.27.1 🏏🚀⚖️🏅
+            // Total Rotation = (Runs scored rotation) XOR (Crossing on the attempted run)
+            val baseRotation = physicalRuns % 2 != 0
+            val shouldRotate = (baseRotation != healedBall.hadCrossed) && healedBall.rotateStrike && !is1G
+            
+            if (shouldRotate) {
                 val t = sId; sId = nsId; nsId = t
             }
 
-            // B. Dismissal Physics (Crease Clearing)
+            // C. Dismissal Physics (Crease Clearing)
             if (healedBall.wicketType != WicketType.NONE) {
                 val victimId = healedBall.outPlayerId ?: healedBall.strikerId
                 if (isCaught) {
@@ -657,21 +654,20 @@ class ScoringViewModel : ViewModel() {
                 }
             }
 
-            // C. Over-End Logic (Happens AFTER all ball physics)
+            // D. Over-End Logic (Happens AFTER all ball physics)
             if (ballsInOver == 6) {
                 val t = sId; sId = nsId; nsId = t // Mandatory swap
-                lbId = bId; ballsInOver = 0
+                lbId = activeBId; ballsInOver = 0
             }
             
-            // v2.26.68: Precise Current Bowler Tracking. 
-            // In recalculation, mid-over currentBowlerId is always the bowler of the LAST ball processed.
-            current = current.copy(strikerId = sId, nonStrikerId = nsId, currentBowlerId = if (ballsInOver == 0) null else healedBall.bowlerId, lastBowlerId = lbId)
+            // v2.27.1: Correct bowler tracking mid-over vs end-over 🏏🚀⚖️🏅
+            current = current.copy(strikerId = sId, nonStrikerId = nsId, currentBowlerId = if (ballsInOver == 0) null else activeBId, lastBowlerId = lbId)
 
             // Innings Completion Logic
             val inningsEnded = current.totalWickets >= (battingTeam.players.size - 1).coerceAtLeast(1) || current.totalBalls >= current.oversPerInnings * 6
             
             if (current.currentInnings == 1 && inningsEnded) {
-                // v2.26.67: Accurate duration calculation 🏏🚀⚖️🏅
+                // v2.26.67: Accurate duration calculation
                 val i1EndTime = match.innings1EndTimeMillis ?: System.currentTimeMillis()
                 val i1StartTime = match.startTimeMillis ?: i1EndTime
                 val i1Duration = ((i1EndTime - i1StartTime) / 60000).toInt().coerceAtLeast(0)
@@ -690,37 +686,7 @@ class ScoringViewModel : ViewModel() {
             }
         }
 
-        // 3. Manual Override & Restoration Guard v2.26.68 🏏🚀⚖️🏅
-        if (current.status == MatchStatus.LIVE) {
-            val batTeam = if (isTeamA(current.battingTeamId, current)) current.teamA else current.teamB
-            val bowlTeam = if (isTeamA(current.bowlingTeamId, current)) current.teamA else current.teamB
-
-            // A. Bowler Switch: If derivation says Sathish, but Intent says Ankoji (and we're mid-over)
-            if (match.currentBowlerId != null && match.currentBowlerId != current.currentBowlerId) {
-                if (bowlTeam.players.any { it.id == match.currentBowlerId }) {
-                    // Over-end swap check: only override if not the last guy who finished
-                    if (current.currentBowlerId != null || match.currentBowlerId != current.lastBowlerId) {
-                        current = current.copy(currentBowlerId = match.currentBowlerId)
-                    }
-                }
-            }
-
-            // B. Striker/Non-Striker Vacancy Restoration
-            if (current.strikerId == null && match.strikerId != null) {
-                val p = batTeam.players.find { it.id == match.strikerId }
-                if (p != null && !p.battingStats.isOut && match.strikerId != current.nonStrikerId) {
-                    current = current.copy(strikerId = match.strikerId)
-                }
-            }
-            if (current.nonStrikerId == null && match.nonStrikerId != null) {
-                val p = batTeam.players.find { it.id == match.nonStrikerId }
-                if (p != null && !p.battingStats.isOut && match.nonStrikerId != current.strikerId) {
-                    current = current.copy(nonStrikerId = match.nonStrikerId)
-                }
-            }
-        }
-
-        // 4. Final Targeted Pending Action Selection (Special Priority) v2.26.68 🏏🚀⚖️🏅
+        // 3. Final Targeted Pending Action Selection (Special Priority) v2.26.68 🏏🚀⚖️🏅
         if (current.status == MatchStatus.LIVE) {
             // Priority 1: User requested special dialogs (Match Settings, Toss, etc.)
             if (match.pendingAction == PendingAction.SELECT_MATCH_SETTINGS || match.pendingAction == PendingAction.TOSS_REQUIRED) {
@@ -865,7 +831,7 @@ class ScoringViewModel : ViewModel() {
         }
     }
 
-    fun addNewPlayerToMatch(context: android.content.Context, playerName: String, battingStyle: BattingStyle = BattingStyle.RHB, bowlingStyle: BowlingStyle = BowlingStyle.RFM) {
+    fun addNewPlayerToMatch(context: android.content.Context, playerName: String, battingStyle: BattingStyle = BattingStyle.RHB) {
         val current = _matchState.value ?: return
         val teamToAddId = when (current.pendingAction ?: PendingAction.NONE) {
             PendingAction.SELECT_STRIKER, PendingAction.SELECT_NON_STRIKER, PendingAction.REPLACE_STRIKER, PendingAction.REPLACE_NON_STRIKER -> current.battingTeamId
@@ -875,7 +841,10 @@ class ScoringViewModel : ViewModel() {
             else -> current.battingTeamId
         }
 
-        val success = TournamentRepository.addPlayerToTeam(current.tournamentId ?: "", teamToAddId, playerName, battingStyle, bowlingStyle)
+        // v2.27.0: Automatically save to global playlist 🏏🚀⚖️🏅
+        GlobalPlayerRepository.addPlayer(playerName, battingStyle)
+
+        val success = TournamentRepository.addPlayerToTeam(current.tournamentId ?: "", teamToAddId, playerName, battingStyle)
         if (!success) {
             android.widget.Toast.makeText(context, "Player $playerName already exists in this tournament! 👤❌", android.widget.Toast.LENGTH_SHORT).show()
             return
@@ -884,7 +853,7 @@ class ScoringViewModel : ViewModel() {
         _matchState.update { state ->
             if (state == null) return@update null
             
-            val newPlayer = Player(id = java.util.UUID.randomUUID().toString(), name = playerName.trim(), battingStyle = battingStyle, bowlingStyle = bowlingStyle)
+            val newPlayer = Player(id = java.util.UUID.randomUUID().toString(), name = playerName.trim(), battingStyle = battingStyle)
 
             val updatedTeamA = if (state.teamA.id == teamToAddId) {
                 state.teamA.copy(players = state.teamA.players + newPlayer)
@@ -899,6 +868,24 @@ class ScoringViewModel : ViewModel() {
         }
         _matchState.value?.let { 
             TournamentRepository.updateMatch(it.tournamentId ?: "", it)
+        }
+    }
+
+    fun addGlobalPlayerToMatch(player: Player) {
+        val current = _matchState.value ?: return
+        val teamToAddId = when (current.pendingAction ?: PendingAction.NONE) {
+            PendingAction.SELECT_STRIKER, PendingAction.SELECT_NON_STRIKER, PendingAction.REPLACE_STRIKER, PendingAction.REPLACE_NON_STRIKER -> current.battingTeamId
+            PendingAction.SELECT_BOWLER, PendingAction.REPLACE_BOWLER, PendingAction.SELECT_FIELDER, PendingAction.SELECT_FIELDER_DROPPED_CATCH -> current.bowlingTeamId
+            PendingAction.SELECT_WK_A -> current.teamA.id
+            PendingAction.SELECT_WK_B -> current.teamB.id
+            else -> current.battingTeamId
+        }
+
+        val success = TournamentRepository.addPlayerToTeam(current.tournamentId ?: "", teamToAddId, player.name, player.battingStyle ?: BattingStyle.RHB)
+        if (success) {
+            val updated = recalculateMatchFromHistory(_matchState.value!!)
+            _matchState.value = updated
+            TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)
         }
     }
 
@@ -945,6 +932,18 @@ class ScoringViewModel : ViewModel() {
         TournamentRepository.deleteMatch(tournamentId, matchId)
         clearIfDeleted(matchId)
     }
+
+    fun updatePlayerInMatch(playerId: String, newName: String, bStyle: BattingStyle, isCaptain: Boolean, isViceCaptain: Boolean) {
+        val current = _matchState.value ?: return
+        val teamId = if (current.teamA.players.any { it.id == playerId }) current.teamA.id else current.teamB.id
+        
+        TournamentRepository.updatePlayerDetails(current.tournamentId ?: "", teamId, playerId, newName, bStyle, isCaptain, isViceCaptain)
+        
+        // Refresh local state by running derivation on the new master lists
+        val updated = recalculateMatchFromHistory(_matchState.value!!)
+        _matchState.value = updated
+        TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)
+    }
 }
 
 data class ActiveWicketContext(
@@ -956,5 +955,6 @@ data class ActiveWicketContext(
     val brokenEnd: String = "STRIKER_CREASE",
     val dismissalReason: String? = null,
     val calculatedVictimId: String? = null,
+    val hadCrossed: Boolean = false,
     val expectedReplacementAction: PendingAction = PendingAction.NONE
 )

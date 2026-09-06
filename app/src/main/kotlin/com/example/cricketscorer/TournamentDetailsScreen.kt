@@ -255,9 +255,9 @@ fun TeamsTab(tournament: Tournament, tournamentId: String, viewModel: Tournament
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    tournament.teams.forEach { team ->
+                    tournament?.teams?.forEach { team ->
                         TeamCard(
-                            tournamentId = tournamentId,
+                            tournament = tournament!!,
                             team = team,
                             viewModel = viewModel,
                             onDeleteTeam = { viewModel.deleteTeam(tournamentId, team.id) }
@@ -492,8 +492,7 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
                         val team = item.second
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                             val roleSuffix = if (player.isCaptain) " (c)" else if (player.isViceCaptain) " (vc)" else ""
-                            val bowlStyle = (player.bowlingStyle ?: BowlingStyle.RFM).name
-                            Text(player.name + roleSuffix + " ($bowlStyle)", modifier = Modifier.weight(3f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text(player.name + roleSuffix, modifier = Modifier.weight(3f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
                             Text(getTeamAbbr(team.name), modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, color = Color.Gray, textAlign = TextAlign.Center)
                             Text("${player.bowlingStats.wickets}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Black, color = Color(0xFFD32F2F), textAlign = TextAlign.End)
                             Text(String.format(Locale.getDefault(), "%.2f", player.bowlingStats.economy), modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
@@ -845,11 +844,12 @@ fun ScheduleMatchDialog(
 
 @Composable
 fun TeamCard(
-    tournamentId: String,
+    tournament: Tournament,
     team: Team,
     viewModel: TournamentViewModel,
     onDeleteTeam: () -> Unit
 ) {
+    val tournamentId = tournament.id
     var showAddPlayerDialog by remember { mutableStateOf(false) }
     var playerNameToAdd by remember { mutableStateOf("") }
     
@@ -857,7 +857,6 @@ fun TeamCard(
     var playerToEdit by remember { mutableStateOf<Player?>(null) }
     var editedPlayerName by remember { mutableStateOf("") }
     var editedPlayerBattingStyle by remember { mutableStateOf(BattingStyle.RHB) }
-    var editedPlayerBowlingStyle by remember { mutableStateOf(BowlingStyle.RFM) }
     var editedIsCaptain by remember { mutableStateOf(false) }
     var editedIsViceCaptain by remember { mutableStateOf(false) }
 
@@ -927,7 +926,6 @@ fun TeamCard(
                                         playerToEdit = player
                                         editedPlayerName = player.name
                                         editedPlayerBattingStyle = player.battingStyle ?: BattingStyle.RHB
-                                        editedPlayerBowlingStyle = player.bowlingStyle ?: BowlingStyle.RFM
                                         editedIsCaptain = player.isCaptain
                                         editedIsViceCaptain = player.isViceCaptain
                                         showEditPlayerDialog = true
@@ -947,72 +945,98 @@ fun TeamCard(
 
         if (showAddPlayerDialog) {
             var selectedBattingStyle by remember { mutableStateOf(BattingStyle.RHB) }
-            var selectedBowlingStyle by remember { mutableStateOf(BowlingStyle.RFM) }
             var isCaptain by remember { mutableStateOf(false) }
             var isViceCaptain by remember { mutableStateOf(false) }
+            var showGlobalPlaylist by remember { mutableStateOf(false) }
+            val globalPlayers by GlobalPlayerRepository.players.collectAsState()
+
             AlertDialog(
                 onDismissRequest = { showAddPlayerDialog = false },
-                title = { Text("Register Player", fontWeight = FontWeight.Bold) },
+                title = { Text(if (showGlobalPlaylist) "Pick from Playlist" else "Register Player", fontWeight = FontWeight.Bold) },
                 text = {
-                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                        OutlinedTextField(
-                            value = playerNameToAdd,
-                            onValueChange = { playerNameToAdd = it },
-                            label = { Text("Full Name") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Batting Style", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            BattingStyle.entries.forEach { style ->
-                                FilterChip(
-                                    selected = selectedBattingStyle == style,
-                                    onClick = { selectedBattingStyle = style },
-                                    label = { Text(style.name) },
-                                    modifier = Modifier.weight(1f)
-                                )
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        if (!showGlobalPlaylist) {
+                            OutlinedTextField(
+                                value = playerNameToAdd,
+                                onValueChange = { playerNameToAdd = it },
+                                label = { Text("Full Name") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            Text("Batting Style", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                BattingStyle.entries.forEach { style ->
+                                    FilterChip(
+                                        selected = selectedBattingStyle == style,
+                                        onClick = { selectedBattingStyle = style },
+                                        label = { Text(style.name) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
                             }
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Bowling Style", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            BowlingStyle.entries.forEach { style ->
-                                FilterChip(
-                                    selected = selectedBowlingStyle == style,
-                                    onClick = { selectedBowlingStyle = style },
-                                    label = { Text(style.name) }
-                                )
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Switch(checked = isCaptain, onCheckedChange = { isCaptain = it; if (it) isViceCaptain = false })
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Capt (C)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Switch(checked = isViceCaptain, onCheckedChange = { isViceCaptain = it; if (it) isCaptain = false })
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("VC", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                }
                             }
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                Switch(checked = isCaptain, onCheckedChange = { isCaptain = it; if (it) isViceCaptain = false })
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Capt (C)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            
+                            if (globalPlayers.isNotEmpty()) {
+                                TextButton(onClick = { showGlobalPlaylist = true }, modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.Default.PersonSearch, null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("PICK FROM GLOBAL PLAYLIST")
+                                }
                             }
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                Switch(checked = isViceCaptain, onCheckedChange = { isViceCaptain = it; if (it) isCaptain = false })
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("VC", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        } else {
+                            Text("Select a player to add to ${team.name}:", style = MaterialTheme.typography.labelMedium)
+                            // Filter out players already in the tournament squad to prevent duplicates
+                            val tournamentPlayers = tournament.teams.flatMap { it.players }.map { it.name.lowercase() }
+                            val filteredGlobal = globalPlayers.filter { gp -> gp.name.lowercase() !in tournamentPlayers }
+                            
+                            if (filteredGlobal.isEmpty()) {
+                                Text("All saved players are already in this tournament.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                            } else {
+                                Column {
+                                    filteredGlobal.forEach { gp ->
+                                        TextButton(
+                                            onClick = {
+                                                viewModel.addGlobalPlayer(tournamentId, team.id, gp)
+                                                showAddPlayerDialog = false
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(gp.name + " (${gp.battingStyle})", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+                                        }
+                                        HorizontalDivider(thickness = 0.5.dp)
+                                    }
+                                }
                             }
+                            TextButton(onClick = { showGlobalPlaylist = false }) { Text("BACK TO MANUAL ADD") }
                         }
                     }
                 },
                 confirmButton = {
                     val context = LocalContext.current
-                    Button(
-                        onClick = {
-                            if (playerNameToAdd.isNotBlank()) {
-                                viewModel.addPlayer(context, tournamentId, team.id, playerNameToAdd, selectedBattingStyle, selectedBowlingStyle, isCaptain, isViceCaptain)
-                                playerNameToAdd = ""
-                                showAddPlayerDialog = false
-                            }
-                        },
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Add")
+                    if (!showGlobalPlaylist) {
+                        Button(
+                            onClick = {
+                                if (playerNameToAdd.isNotBlank()) {
+                                    viewModel.addPlayer(context, tournamentId, team.id, playerNameToAdd, selectedBattingStyle, isCaptain, isViceCaptain)
+                                    playerNameToAdd = ""
+                                    showAddPlayerDialog = false
+                                }
+                            },
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Add")
+                        }
                     }
                 },
                 dismissButton = {
@@ -1047,17 +1071,6 @@ fun TeamCard(
                                     onClick = { editedPlayerBattingStyle = style },
                                     label = { Text(style.name) },
                                     modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Bowling Style", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            BowlingStyle.entries.forEach { style ->
-                                FilterChip(
-                                    selected = editedPlayerBowlingStyle == style,
-                                    onClick = { editedPlayerBowlingStyle = style },
-                                    label = { Text(style.name) }
                                 )
                             }
                         }
@@ -1100,7 +1113,6 @@ fun TeamCard(
                                     currentPlayerState.id,
                                     editedPlayerName,
                                     editedPlayerBattingStyle,
-                                    editedPlayerBowlingStyle,
                                     editedIsCaptain,
                                     editedIsViceCaptain
                                 )
@@ -1125,7 +1137,6 @@ fun TeamCard(
 @Composable
 fun PlayerChip(player: Player, onEdit: () -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
     val bStyle = (player.battingStyle ?: BattingStyle.RHB).name
-    val bowlStyle = (player.bowlingStyle ?: BowlingStyle.RFM).name
     val roleSuffix = if (player.isCaptain) " (c)" else if (player.isViceCaptain) " (vc)" else ""
 
     Surface(
@@ -1145,7 +1156,7 @@ fun PlayerChip(player: Player, onEdit: () -> Unit, onDelete: () -> Unit, modifie
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = (if (player.isJoker) "${player.name} 🃏" else player.name) + "$roleSuffix ($bStyle, $bowlStyle)",
+                text = (if (player.isJoker) "${player.name} 🃏" else player.name) + "$roleSuffix ($bStyle)",
                 modifier = Modifier
                     .weight(1f)
                     .clickable { onEdit() },

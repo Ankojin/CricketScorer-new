@@ -22,19 +22,26 @@ class TournamentViewModel : ViewModel() {
         TournamentRepository.deleteTeam(tournamentId, teamId)
     }
 
-    fun addPlayer(context: android.content.Context, tournamentId: String, teamId: String, name: String, bStyle: BattingStyle, bowlStyle: BowlingStyle, isCaptain: Boolean = false, isViceCaptain: Boolean = false) {
-        val success = TournamentRepository.addPlayerToTeam(tournamentId, teamId, name, bStyle, bowlStyle, isCaptain, isViceCaptain)
+    fun addPlayer(context: android.content.Context, tournamentId: String, teamId: String, name: String, bStyle: BattingStyle, isCaptain: Boolean = false, isViceCaptain: Boolean = false) {
+        // v2.27.0: Automatically save to global playlist 🏏🚀⚖️🏅
+        GlobalPlayerRepository.addPlayer(name, bStyle)
+        
+        val success = TournamentRepository.addPlayerToTeam(tournamentId, teamId, name, bStyle, isCaptain, isViceCaptain)
         if (!success) {
             android.widget.Toast.makeText(context, "Player $name already exists in this tournament! 👤❌", android.widget.Toast.LENGTH_SHORT).show()
         }
+    }
+
+    fun addGlobalPlayer(tournamentId: String, teamId: String, player: Player) {
+        TournamentRepository.addPlayerToTeam(tournamentId, teamId, player.name, player.battingStyle ?: BattingStyle.RHB)
     }
 
     fun deletePlayer(tournamentId: String, teamId: String, playerId: String) {
         TournamentRepository.deletePlayer(tournamentId, teamId, playerId)
     }
 
-    fun updatePlayerDetails(tournamentId: String, teamId: String, playerId: String, newName: String, bStyle: BattingStyle, bowlStyle: BowlingStyle, isCaptain: Boolean, isViceCaptain: Boolean) {
-        TournamentRepository.updatePlayerDetails(tournamentId, teamId, playerId, newName, bStyle, bowlStyle, isCaptain, isViceCaptain)
+    fun updatePlayerDetails(tournamentId: String, teamId: String, playerId: String, newName: String, bStyle: BattingStyle, isCaptain: Boolean, isViceCaptain: Boolean) {
+        TournamentRepository.updatePlayerDetails(tournamentId, teamId, playerId, newName, bStyle, isCaptain, isViceCaptain)
     }
 
     fun togglePlayerJokerStatus(tournamentId: String, teamId: String, playerId: String) {
