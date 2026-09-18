@@ -40,6 +40,8 @@ import kotlin.time.Duration.Companion.milliseconds
 import com.example.cricketscorer.ui.CaptureArea
 import com.example.cricketscorer.ui.CardBranding
 import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -217,16 +219,14 @@ fun LiveScoringScreen(
                     3 -> StatsTab(m, statsGraphicsLayer)
                 }
 
-                if (m.pendingAction == PendingAction.TOSS_REQUIRED) {
-                    TossOverlay(m, viewModel)
+                if (m.pendingAction == PendingAction.TOSS_REQUIRED || m.pendingAction == PendingAction.SELECT_MATCH_SETTINGS) {
+                    MatchSettingsDialog(m, viewModel)
                 } else if (m.pendingAction == PendingAction.START_SECOND_INNINGS) {
                     InningsOverOverlay(m, viewModel)
                 } else if (m.pendingAction == PendingAction.SELECT_RUNS_DROPPED_CATCH) {
                     DroppedCatchRunsOverlay(viewModel)
                 } else if (m.pendingAction == PendingAction.SELECT_RUNS_WICKET) {
                     RunOutRunsOverlay(viewModel)
-                } else if (m.pendingAction == PendingAction.SELECT_MATCH_SETTINGS) {
-                    MatchSettingsDialog(m, viewModel)
                 } else if (m.pendingAction != PendingAction.NONE && m.status != MatchStatus.COMPLETED) {
                     PlayerSelectionOverlay(m, viewModel)
                 }
@@ -1077,6 +1077,11 @@ fun MatchSettingsDialog(match: Match, viewModel: ScoringViewModel, onDismiss: ((
     var maxOversText by remember { mutableStateOf(currentMaxOvers?.toString() ?: "") }
     var quotaCountText by remember { mutableStateOf(currentQuotaCount?.toString() ?: "") }
     var quotaLimitText by remember { mutableStateOf(currentQuotaLimit?.toString() ?: "") }
+    
+    // v2.30.1: Unified Toss integration
+    var tempTossWinnerId by remember(match.id) { mutableStateOf<String?>(null) }
+    var tempTossDecision by remember(match.id) { mutableStateOf<String?>(null) }
+    var showFlipDialog by remember { mutableStateOf(false) }
 
     val onActionDismiss = {
         if (onDismiss != null) onDismiss()
@@ -1129,6 +1134,44 @@ fun MatchSettingsDialog(match: Match, viewModel: ScoringViewModel, onDismiss: ((
                         placeholder = { Text("e.g. 3") }
                     )
                 }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                HorizontalDivider(thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Toss", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+                    Button(onClick = { showFlipDialog = true }, shape = RoundedCornerShape(8.dp)) {
+                        Text("FLIP COIN 🪙")
+                    }
+                }
+                
+                if (showFlipDialog) {
+                    CoinFlipDialog(
+                        match = match,
+                        onResult = { winnerId, decision ->
+                            tempTossWinnerId = winnerId
+                            tempTossDecision = decision
+                            showFlipDialog = false
+                        },
+                        onDismiss = { showFlipDialog = false }
+                    )
+                }
+
+                Spacer(Modifier.height(12.dp))
+                Text("Winner", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = tempTossWinnerId == match.teamA.id, onClick = { tempTossWinnerId = match.teamA.id }, label = { Text(match.teamA.name.uppercase(), fontWeight = FontWeight.Black) })
+                    FilterChip(selected = tempTossWinnerId == match.teamB.id, onClick = { tempTossWinnerId = match.teamB.id }, label = { Text(match.teamB.name.uppercase(), fontWeight = FontWeight.Black) })
+                }
+
+                Spacer(Modifier.height(8.dp))
+                Text("Decision", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = tempTossDecision == "BAT", onClick = { tempTossDecision = "BAT" }, label = { Text("Bat First") })
+                    FilterChip(selected = tempTossDecision == "BOWL", onClick = { tempTossDecision = "BOWL" }, label = { Text("Bowl First") })
+                }
+                
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1145,23 +1188,197 @@ fun MatchSettingsDialog(match: Match, viewModel: ScoringViewModel, onDismiss: ((
             }
         },
         confirmButton = {
-            Button(onClick = {
-                val newOvers = oversText.toIntOrNull() ?: currentOvers
-                val newMaxOvers = maxOversText.toIntOrNull()
-                val newQuotaCount = quotaCountText.toIntOrNull()
-                val newQuotaLimit = quotaLimitText.toIntOrNull()
-                if (newOvers > 0) {
-                    viewModel.updateMatchSettings(newOvers, newMaxOvers, newQuotaCount, newQuotaLimit)
-                }
-                onActionDismiss()
-            }) {
-                Text("UPDATE")
+            Button(
+                onClick = {
+                    val o = oversText.toIntOrNull() ?: currentOvers
+                    val mO = maxOversText.toIntOrNull()
+                    val qC = quotaCountText.toIntOrNull()
+                    val qL = quotaLimitText.toIntOrNull()
+                    
+                    if (tempTossWinnerId != null && tempTossDecision != null) {
+                        viewModel.handleToss(tempTossWinnerId!!, tempTossDecision!!)
+                    }
+                    
+                    viewModel.updateMatchSettings(o, mO, qC, qL)
+                    onActionDismiss()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("SAVE & START SCORING", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onActionDismiss) {
                 Text("CANCEL")
             }
+        }
+    )
+}
+
+@Composable
+fun CoinFlipDialog(match: Match, onResult: (String, String) -> Unit, onDismiss: () -> Unit) {
+    var winnerId by remember { mutableStateOf<String?>(null) }
+    var decision by remember { mutableStateOf<String?>(null) }
+    
+    // v2.30.0: Interactive Coin Toss State 🏏🚀⚖️🏅
+    var isFlipping by remember { mutableStateOf(false) }
+    var coinResult by remember { mutableStateOf<String?>(null) } // "HEADS" or "TAILS"
+    var callerChoice by remember { mutableStateOf<String?>(null) }
+    val rotation = remember { androidx.compose.animation.core.Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current.density
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Match Toss", fontWeight = FontWeight.Black) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // 1. Coin Flip Section
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Toss Call by", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Text(match.teamA.name.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.height(8.dp))
+                        
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            listOf("HEADS", "TAILS").forEach { choice ->
+                                FilterChip(
+                                    selected = callerChoice == choice,
+                                    onClick = { if (!isFlipping) callerChoice = choice },
+                                    label = { Text(choice) },
+                                    enabled = !isFlipping && coinResult == null
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(20.dp))
+
+                        // The Coin
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .graphicsLayer {
+                                    rotationY = rotation.value
+                                    cameraDistance = 12f * density
+                                }
+                                .background(Color(0xFFFFD700), CircleShape)
+                                .border(4.dp, Color(0xFFDAA520), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val side = if ((rotation.value / 180).toInt() % 2 == 0) "C" else "S"
+                            Text(
+                                text = if (coinResult != null) coinResult!!.take(1) else side,
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFF8B4513)
+                            )
+                        }
+
+                        Spacer(Modifier.height(20.dp))
+
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    isFlipping = true
+                                    coinResult = null
+                                    winnerId = null
+                                    
+                                    // Animate multiple rotations
+                                    val targetRotation = 180f * 10 + (if (java.util.Random().nextBoolean()) 0f else 180f)
+                                    rotation.animateTo(
+                                        targetValue = targetRotation,
+                                        animationSpec = androidx.compose.animation.core.tween(durationMillis = 1500, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                                    )
+                                    
+                                    val isHeads = (targetRotation / 180).toInt() % 2 == 0
+                                    val result = if (isHeads) "HEADS" else "TAILS"
+                                    coinResult = result
+                                    isFlipping = false
+                                    
+                                    // Auto-assign winner based on call
+                                    if (callerChoice != null) {
+                                        winnerId = if (callerChoice == result) match.teamA.id else match.teamB.id
+                                    }
+                                }
+                            },
+                            enabled = !isFlipping && callerChoice != null && coinResult == null,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(if (isFlipping) "FLIPPING..." else "FLIP COIN")
+                        }
+                        
+                        if (coinResult != null) {
+                            val winnerName = if (winnerId == match.teamA.id) match.teamA.name else match.teamB.name
+                            Text(
+                                "Result: $coinResult", 
+                                fontWeight = FontWeight.Black, 
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                            Text(
+                                "$winnerName won the toss!", 
+                                fontWeight = FontWeight.Bold, 
+                                color = Color(0xFF2E7D32),
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                            TextButton(onClick = { 
+                                coinResult = null; callerChoice = null; winnerId = null;
+                                scope.launch { rotation.snapTo(0f) }
+                            }) {
+                                Text("RE-FLIP")
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(thickness = 0.5.dp)
+
+                Text("Manual Winner Selection (Override)", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = winnerId == match.teamA.id, onClick = { winnerId = match.teamA.id }, enabled = !isFlipping)
+                        Text(match.teamA.name.uppercase(), fontWeight = FontWeight.Bold, modifier = Modifier.clickable(enabled = !isFlipping) { winnerId = match.teamA.id })
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = winnerId == match.teamB.id, onClick = { winnerId = match.teamB.id }, enabled = !isFlipping)
+                        Text(match.teamB.name.uppercase(), fontWeight = FontWeight.Bold, modifier = Modifier.clickable(enabled = !isFlipping) { winnerId = match.teamB.id })
+                    }
+                }
+                
+                Text("Decision?", fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = decision == "BAT", onClick = { decision = "BAT" }, enabled = winnerId != null)
+                        Text("BAT", modifier = Modifier.clickable(enabled = winnerId != null) { decision = "BAT" })
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = decision == "BOWL", onClick = { decision = "BOWL" }, enabled = winnerId != null)
+                        Text("BOWL", modifier = Modifier.clickable(enabled = winnerId != null) { decision = "BOWL" })
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { 
+                    winnerId?.let { w -> 
+                        decision?.let { d -> 
+                            onResult(w, d)
+                        } 
+                    } 
+                },
+                enabled = winnerId != null && decision != null && !isFlipping,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("CONFIRM TOSS")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("CANCEL") }
         }
     )
 }
@@ -1548,59 +1765,6 @@ fun LiveTab(
             item { MatchForecasterSection(match) }
         }
     }
-}
-
-@Composable
-fun TossOverlay(match: Match, viewModel: ScoringViewModel) {
-    var winnerId by remember { mutableStateOf<String?>(null) }
-    var decision by remember { mutableStateOf<String?>(null) }
-
-    AlertDialog(
-        onDismissRequest = { },
-        title = { Text("Match Toss", fontWeight = FontWeight.Black) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Who won the toss?", fontWeight = FontWeight.Bold)
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = winnerId == match.teamA.id, onClick = { winnerId = match.teamA.id })
-                        Text(match.teamA.name, modifier = Modifier.clickable { winnerId = match.teamA.id })
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = winnerId == match.teamB.id, onClick = { winnerId = match.teamB.id })
-                        Text(match.teamB.name, modifier = Modifier.clickable { winnerId = match.teamB.id })
-                    }
-                }
-                
-                Text("Decision?", fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = decision == "BAT", onClick = { decision = "BAT" })
-                        Text("BAT", modifier = Modifier.clickable { decision = "BAT" })
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = decision == "BOWL", onClick = { decision = "BOWL" })
-                        Text("BOWL", modifier = Modifier.clickable { decision = "BOWL" })
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { 
-                    winnerId?.let { w -> 
-                        decision?.let { d -> 
-                            viewModel.handleToss(w, d) 
-                        } 
-                    } 
-                },
-                enabled = winnerId != null && decision != null,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("SET MATCH SETTINGS")
-            }
-        }
-    )
 }
 
 @Composable
