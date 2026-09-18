@@ -50,8 +50,14 @@ object TournamentRepository {
 
     fun exportTournament(id: String): String? {
         val tournament = _tournaments.value.find { it.id == id } ?: return null
+        val exportPackage = mapOf(
+            "version" to "v2.28.0",
+            "type" to "UNIFIED_BACKUP",
+            "tournament" to tournament,
+            "globalPlaylist" to GlobalPlayerRepository.players.value
+        )
         return try {
-            gson.toJson(tournament)
+            gson.toJson(exportPackage)
         } catch (e: Exception) {
             null
         }
@@ -59,17 +65,31 @@ object TournamentRepository {
 
     fun importTournament(json: String): Boolean {
         return try {
-            val type = object : TypeToken<Tournament>() {}.type
-            val imported: Tournament = gson.fromJson(json, type)
+            val jsonObject = gson.fromJson(json, com.google.gson.JsonObject::class.java)
             
-            // Validate that required fields are present and not empty
-            if (imported == null || imported.id.isNullOrBlank() || imported.name.isNullOrBlank()) {
+            val tournament: Tournament = if (jsonObject.has("type") && jsonObject.get("type").asString == "UNIFIED_BACKUP") {
+                // v2.28.0: Extract Unified Package
+                val tJson = jsonObject.get("tournament")
+                val pJson = jsonObject.get("globalPlaylist")
+                
+                // Merge Global Players into local playlist
+                val playersType = object : TypeToken<List<Player>>() {}.type
+                val importedPlayers: List<Player> = gson.fromJson(pJson, playersType)
+                importedPlayers.forEach { GlobalPlayerRepository.addPlayer(it.name, it.battingStyle ?: BattingStyle.RHB) }
+                
+                gson.fromJson(tJson, Tournament::class.java)
+            } else {
+                // Legacy Format
+                gson.fromJson(json, Tournament::class.java)
+            }
+            
+            if (tournament == null || tournament.id.isNullOrBlank() || tournament.name.isNullOrBlank()) {
                 Log.e("TournamentRepository", "Import failed: Missing required fields in JSON")
                 return false
             }
 
             // Recalculate standings and stats from match history to ensure consistency
-            val recalculated = recalculateTournamentStandings(imported)
+            val recalculated = recalculateTournamentStandings(tournament)
 
             _tournaments.update { list ->
                 val newList = list.filter { it.id != recalculated.id } + recalculated
@@ -190,6 +210,49 @@ object TournamentRepository {
             newList
         }
         return added
+    }
+
+    fun addPlayersToTeam(tournamentId: String, teamId: String, players: List<Player>): Boolean {
+        var anyAdded = false
+        _tournaments.update { list ->
+            val tournament = list.find { it.id == tournamentId } ?: return@update list
+            val existingNames = tournament.teams.flatMap { it.players }.map { it.name.trim().lowercase() }
+            
+            val validNewPlayers = players.filter { it.name.trim().lowercase() !in existingNames }
+            if (validNewPlayers.isEmpty()) return@update list
+
+            anyAdded = true
+            val newList = list.map { t ->
+                if (t.id == tournamentId) {
+                    val updatedTeams = t.teams.map { team ->
+                        if (team.id == teamId) {
+                            team.copy(players = team.players + validNewPlayers)
+                        } else team
+                    }
+
+                    val updatedMatches = t.matches.map { match ->
+                        if (match.status == MatchStatus.LIVE || match.status == MatchStatus.UPCOMING) {
+                            var newTeamA = match.teamA
+                            var newTeamB = match.teamB
+
+                            if (match.teamA.id == teamId) {
+                                newTeamA = match.teamA.copy(players = match.teamA.players + validNewPlayers)
+                            }
+                            if (match.teamB.id == teamId) {
+                                newTeamB = match.teamB.copy(players = match.teamB.players + validNewPlayers)
+                            }
+
+                            match.copy(teamA = newTeamA, teamB = newTeamB)
+                        } else match
+                    }
+
+                    t.copy(teams = updatedTeams, matches = updatedMatches)
+                } else t
+            }
+            saveToDisk(newList)
+            newList
+        }
+        return anyAdded
     }
 
     fun deletePlayer(tournamentId: String, teamId: String, playerId: String) {
@@ -368,7 +431,9 @@ object TournamentRepository {
         _tournaments.update { list ->
             list.map { t ->
                 if (t.id == tournamentId) {
-                    t.copy(matches = t.matches.map { if (it.id == updatedMatch.id) updatedMatch else it })
+                    val updatedMatches = t.matches.map { if (it.id == updatedMatch.id) updatedMatch else it }
+                    // v2.28.6: Auto-recalculate standings and player stats on match update 🏏🚀⚖️🏅
+                    recalculateTournamentStandings(t.copy(matches = updatedMatches))
                 } else t
             }.also { saveToDisk(it) }
         }
@@ -394,20 +459,24 @@ object TournamentRepository {
     private fun recalculateTournamentStandings(tournament: Tournament): Tournament {
         val resetTeams = tournament.teams.map { resetTeamStats(it) }
         var currentTeams = resetTeams
-        tournament.matches.filter { it.status == MatchStatus.COMPLETED }.forEach { match ->
-            currentTeams = updateTournamentPointsAndStats(currentTeams, match)
+        
+        // 1. Update Player Stats from ALL matches (Live & Completed) 🏏🚀⚖️🏅
+        tournament.matches.forEach { match ->
+            currentTeams = aggregatePlayerStats(currentTeams, match)
         }
+        
+        // 2. Update Team Standings only from COMPLETED matches 🏆🚀⚖️🏅
+        tournament.matches.filter { it.status == MatchStatus.COMPLETED }.forEach { match ->
+            currentTeams = updateTeamStandings(currentTeams, match)
+        }
+        
         return tournament.copy(teams = currentTeams)
     }
 
-    private fun updateTournamentPointsAndStats(teams: List<Team>, match: Match): List<Team> {
+    private fun aggregatePlayerStats(teams: List<Team>, match: Match): List<Team> {
         return teams.map { team ->
             if (team.id == match.teamA.id || team.id == match.teamB.id) {
                 val matchTeam = if (team.id == match.teamA.id) match.teamA else match.teamB
-                
-                val won = match.winnerId == team.id
-                val lost = match.winnerId != null && match.winnerId != team.id
-                val draw = match.status == MatchStatus.COMPLETED && match.winnerId == null
                 
                 val updatedPlayers = team.players.map { tp ->
                     val mp = matchTeam.players.find { it.id == tp.id }
@@ -433,9 +502,19 @@ object TournamentRepository {
                         )
                     } else tp
                 }
+                team.copy(players = updatedPlayers)
+            } else team
+        }
+    }
 
+    private fun updateTeamStandings(teams: List<Team>, match: Match): List<Team> {
+        return teams.map { team ->
+            if (team.id == match.teamA.id || team.id == match.teamB.id) {
+                val won = match.winnerId == team.id
+                val lost = match.winnerId != null && match.winnerId != team.id
+                val draw = match.status == MatchStatus.COMPLETED && match.winnerId == null
+                
                 team.copy(
-                    players = updatedPlayers,
                     matchesPlayed = team.matchesPlayed + 1,
                     wins = team.wins + if (won) 1 else 0,
                     losses = team.losses + if (lost) 1 else 0,

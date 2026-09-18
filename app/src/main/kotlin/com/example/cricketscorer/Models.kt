@@ -95,10 +95,11 @@ data class Ball(
     val dismissalReason: String? = null,
     val isAdjustment: Boolean = false,
     val adjustmentSlot: String? = null, // "STRIKER", "NON_STRIKER", "BOWLER"
-    val adjustmentPlayerId: String? = null
+    val adjustmentPlayerId: String? = null,
+    val isReplacement: Boolean = false // v2.27.3: True if manual sub, False if filling a hole 🏏🚀⚖️🏅
 ) {
     val isPhysicalBall: Boolean
-        get() = !isAdjustment && extrasType != ExtrasType.WIDE && extrasType != ExtrasType.NO_BALL
+        get() = !isAdjustment && extrasType != ExtrasType.WIDE && extrasType != ExtrasType.NO_BALL && wicketType != WicketType.RETIRED_HURT
 }
 
 data class WicketRecord(

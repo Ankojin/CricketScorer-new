@@ -302,6 +302,27 @@ class ScoringViewModel : ViewModel() {
         }
     }
 
+    fun handleDoubleRetire() {
+        val current = _matchState.value ?: return
+        if (current.pendingAction != PendingAction.NONE) return
+        val sId = current.strikerId ?: return
+        val nsId = current.nonStrikerId ?: return
+        val bId = current.currentBowlerId ?: return
+
+        // v2.28.1: Atomic double retirement 🏏🚀⚖️🏅
+        // We record two separate balls in one history update to prevent race conditions with PendingAction
+        val ball1 = Ball(runs = 0, wicketType = WicketType.RETIRED_HURT, strikerId = sId, nonStrikerId = nsId, bowlerId = bId, outPlayerId = sId, isLegalBall = false)
+        val ball2 = Ball(runs = 0, wicketType = WicketType.RETIRED_HURT, strikerId = sId, nonStrikerId = nsId, bowlerId = bId, outPlayerId = nsId, isLegalBall = false)
+
+        _matchState.update { state ->
+            if (state == null) return@update null
+            val updatedHistory = state.ballHistory + ball1 + ball2
+            val result = recalculateMatchFromHistory(state.copy(ballHistory = updatedHistory))
+            result
+        }
+        _matchState.value?.let { TournamentRepository.updateMatch(it.tournamentId ?: "", it) }
+    }
+
     fun handleDroppedCatch() {
         _matchState.update { it?.copy(pendingAction = PendingAction.SELECT_FIELDER_DROPPED_CATCH) }
     }
@@ -365,13 +386,17 @@ class ScoringViewModel : ViewModel() {
         val current = _matchState.value ?: return
         val action = current.pendingAction ?: PendingAction.NONE
         
+        val isManualSub = action == PendingAction.REPLACE_STRIKER || 
+                          action == PendingAction.REPLACE_NON_STRIKER || 
+                          action == PendingAction.REPLACE_BOWLER
+
         val adjustment = when (action) {
             PendingAction.SELECT_STRIKER, PendingAction.REPLACE_STRIKER -> 
-                Ball(runs = 0, isLegalBall = false, isAdjustment = true, adjustmentSlot = "STRIKER", adjustmentPlayerId = playerId)
+                Ball(runs = 0, isLegalBall = false, isAdjustment = true, adjustmentSlot = "STRIKER", adjustmentPlayerId = playerId, isReplacement = isManualSub)
             PendingAction.SELECT_NON_STRIKER, PendingAction.REPLACE_NON_STRIKER -> 
-                Ball(runs = 0, isLegalBall = false, isAdjustment = true, adjustmentSlot = "NON_STRIKER", adjustmentPlayerId = playerId)
+                Ball(runs = 0, isLegalBall = false, isAdjustment = true, adjustmentSlot = "NON_STRIKER", adjustmentPlayerId = playerId, isReplacement = isManualSub)
             PendingAction.SELECT_BOWLER, PendingAction.REPLACE_BOWLER -> 
-                Ball(runs = 0, isLegalBall = false, isAdjustment = true, adjustmentSlot = "BOWLER", adjustmentPlayerId = playerId)
+                Ball(runs = 0, isLegalBall = false, isAdjustment = true, adjustmentSlot = "BOWLER", adjustmentPlayerId = playerId, isReplacement = isManualSub)
             else -> null
         }
 
@@ -442,6 +467,12 @@ class ScoringViewModel : ViewModel() {
     }
 
     private fun recordBall(ball: Ball) {
+        val currentMatch = _matchState.value
+        if (currentMatch != null && currentMatch.status == MatchStatus.COMPLETED && !ball.isAdjustment) {
+            // v2.27.2: Lock scoring after match completion 🏏🚀⚖️🏅
+            return
+        }
+        
         var notificationText: String? = null
         var bowlerToNotifyId: String? = null
 
@@ -607,18 +638,45 @@ class ScoringViewModel : ViewModel() {
 
             if (healedBall.isPhysicalBall) ballsInOver++
 
-            // Spatial Tracking Engine v2.27.0 🏏🚀⚖️🏅
-            var sId = current.strikerId ?: healedBall.strikerId
-            var nsId = current.nonStrikerId ?: healedBall.nonStrikerId
-            var activeBId = current.currentBowlerId ?: healedBall.bowlerId
+            // Spatial Tracking Engine v2.28.4 🏏🚀⚖️🏅
+            // Trusted initialization: local vars start with current state.
+            var sId = current.strikerId
+            var nsId = current.nonStrikerId
+            var activeBId = current.currentBowlerId
             var lbId = current.lastBowlerId
+
+            // Restoration Guard: Only restore from ball record if the slot is vacant
+            // AND the player being restored is not the one getting out on THIS ball.
+            if (!healedBall.isAdjustment) {
+                val victimId = healedBall.outPlayerId ?: (if (healedBall.wicketType != WicketType.NONE) healedBall.strikerId else null)
+                
+                if (sId == null && healedBall.strikerId != null && healedBall.strikerId != victimId) {
+                    // v2.28.4: Also check if the player we're restoring is already out/retired
+                    if (!isPlayerUnavailable(healedBall.strikerId, current)) {
+                        sId = healedBall.strikerId
+                    }
+                }
+                if (nsId == null && healedBall.nonStrikerId != null && healedBall.nonStrikerId != victimId) {
+                    if (!isPlayerUnavailable(healedBall.nonStrikerId, current)) {
+                        nsId = healedBall.nonStrikerId
+                    }
+                }
+                if (activeBId == null) activeBId = healedBall.bowlerId
+            }
 
             // A. Manual Adjustments Handling
             if (healedBall.isAdjustment) {
                 when (healedBall.adjustmentSlot) {
-                    "STRIKER" -> sId = healedBall.adjustmentPlayerId
-                    "NON_STRIKER" -> nsId = healedBall.adjustmentPlayerId
-                    "BOWLER" -> activeBId = healedBall.adjustmentPlayerId
+                    "STRIKER" -> {
+                        // v2.27.3: Conditional assignment. Skip if slot is occupied and this wasn't a manual sub. 🏏🚀⚖️🏅
+                        if (sId == null || healedBall.isReplacement) sId = healedBall.adjustmentPlayerId
+                    }
+                    "NON_STRIKER" -> {
+                        if (nsId == null || healedBall.isReplacement) nsId = healedBall.adjustmentPlayerId
+                    }
+                    "BOWLER" -> {
+                        if (activeBId == null || healedBall.isReplacement) activeBId = healedBall.adjustmentPlayerId
+                    }
                     "SWAP" -> {
                         val temp = sId; sId = nsId; nsId = temp
                     }
@@ -655,13 +713,15 @@ class ScoringViewModel : ViewModel() {
             }
 
             // D. Over-End Logic (Happens AFTER all ball physics)
+            var overJustFinished = false
             if (ballsInOver == 6) {
                 val t = sId; sId = nsId; nsId = t // Mandatory swap
                 lbId = activeBId; ballsInOver = 0
+                overJustFinished = true
             }
             
-            // v2.27.1: Correct bowler tracking mid-over vs end-over 🏏🚀⚖️🏅
-            current = current.copy(strikerId = sId, nonStrikerId = nsId, currentBowlerId = if (ballsInOver == 0) null else activeBId, lastBowlerId = lbId)
+            // v2.28.3: Precise current bowler tracking. Only clear if over JUST finished. 🏏🚀⚖️🏅
+            current = current.copy(strikerId = sId, nonStrikerId = nsId, currentBowlerId = if (overJustFinished) null else activeBId, lastBowlerId = lbId)
 
             // Innings Completion Logic
             val inningsEnded = current.totalWickets >= (battingTeam.players.size - 1).coerceAtLeast(1) || current.totalBalls >= current.oversPerInnings * 6
@@ -717,6 +777,11 @@ class ScoringViewModel : ViewModel() {
         return p?.battingStats?.isOut == true
     }
 
+    private fun isPlayerUnavailable(pId: String?, m: Match): Boolean {
+        val p = m.teamA.players.find { it.id == pId } ?: m.teamB.players.find { it.id == pId }
+        return p?.battingStats?.isOut == true || p?.battingStats?.isRetiredHurt == true
+    }
+
     private fun resetTeamStats(team: Team) = team.copy(players = team.players.map { it.copy(battingStats = BattingStats(), bowlingStats = BowlingStats(), fieldingStats = FieldingStats()) })
 
     private fun updateTeamStats(team: Team, ball: Ball, isBat: Boolean, isBowl: Boolean): Team {
@@ -747,6 +812,8 @@ class ScoringViewModel : ViewModel() {
                             dismissalFielderId = ball.fielderId
                         ))
                     } else {
+                        // v2.29.6: If player is currently the non-striker, they MUST be not out/active. 🏏🚀⚖️🏅
+                        // This clears the 'Retired Hurt' flag if they just returned to the crease.
                         np = np.copy(battingStats = p.battingStats.copy(isRetiredHurt = false))
                     }
                 }
@@ -809,14 +876,27 @@ class ScoringViewModel : ViewModel() {
         }
     }
 
-    fun undo() {
+    fun undo(context: android.content.Context) {
         _matchState.update { current ->
             if (current == null || current.ballHistory.isEmpty()) return@update current
+            
+            // v2.27.2: Limit Undo to current over only 🏏🚀⚖️🏅
+            val currentTotal = current.totalBalls
+            val boundary = if (currentTotal > 0) ((currentTotal - 1) / 6) * 6 else 0
+            
+            val lastBall = current.ballHistory.last()
+            
+            if (lastBall.isPhysicalBall && currentTotal - 1 < boundary) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    android.widget.Toast.makeText(context, "Undo limited to current over! 🛑", android.widget.Toast.LENGTH_SHORT).show()
+                }
+                return@update current
+            }
+
             pendingWicketBall = null
             pendingDroppedCatchBall = null
             notifiedBowlerIds.clear()
 
-            // v2.25: Innings Revert Logic
             val updatedMatch = if (current.currentInnings == 2 && current.totalBalls == 0 && current.totalWickets == 0) {
                 current.copy(isSecondInningsStarted = false)
             } else {
@@ -868,6 +948,25 @@ class ScoringViewModel : ViewModel() {
         }
         _matchState.value?.let { 
             TournamentRepository.updateMatch(it.tournamentId ?: "", it)
+        }
+    }
+
+    fun addGlobalPlayersToMatch(context: android.content.Context, players: List<Player>) {
+        val current = _matchState.value ?: return
+        val teamToAddId = when (current.pendingAction ?: PendingAction.NONE) {
+            PendingAction.SELECT_STRIKER, PendingAction.SELECT_NON_STRIKER, PendingAction.REPLACE_STRIKER, PendingAction.REPLACE_NON_STRIKER -> current.battingTeamId
+            PendingAction.SELECT_BOWLER, PendingAction.REPLACE_BOWLER, PendingAction.SELECT_FIELDER, PendingAction.SELECT_FIELDER_DROPPED_CATCH -> current.bowlingTeamId
+            PendingAction.SELECT_WK_A -> current.teamA.id
+            PendingAction.SELECT_WK_B -> current.teamB.id
+            else -> current.battingTeamId
+        }
+
+        val success = TournamentRepository.addPlayersToTeam(current.tournamentId ?: "", teamToAddId, players)
+        if (success) {
+            val updated = recalculateMatchFromHistory(_matchState.value!!)
+            _matchState.value = updated
+            TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)
+            android.widget.Toast.makeText(context, "${players.size} players added! ✅", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 

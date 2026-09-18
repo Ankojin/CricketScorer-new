@@ -373,7 +373,7 @@ fun PointsTableTab(tournament: Tournament) {
                                 Text(team.wins.toString(), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                                 Text(team.losses.toString(), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                                 Text(team.points.toString(), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
-                                Text(String.format(Locale.getDefault(), "%.3f", team.nrr), modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
+                                Text(String.format(java.util.Locale.US, "%.3f", team.nrr), modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
                             }
                             if (index < sortedTeams.size - 1) HorizontalDivider(thickness = 0.5.dp, color = Color(0xFFEEEEEE))
                         }
@@ -477,7 +477,7 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
                             Text(player.name + " (${(player.battingStyle ?: BattingStyle.RHB).name})", modifier = Modifier.weight(3f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
                             Text(getTeamAbbr(team.name), modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, color = Color.Gray, textAlign = TextAlign.Center)
                             Text("${player.battingStats.runs}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Black, textAlign = TextAlign.End)
-                            Text(String.format(Locale.getDefault(), "%.0f", player.battingStats.strikeRate), modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
+                            Text(String.format(java.util.Locale.US, "%.0f", player.battingStats.strikeRate), modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
                             Text("${player.battingStats.fours}", modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
                             Text("${player.battingStats.sixes}", modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
                         }
@@ -495,7 +495,7 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
                             Text(player.name + roleSuffix, modifier = Modifier.weight(3f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
                             Text(getTeamAbbr(team.name), modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, color = Color.Gray, textAlign = TextAlign.Center)
                             Text("${player.bowlingStats.wickets}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Black, color = Color(0xFFD32F2F), textAlign = TextAlign.End)
-                            Text(String.format(Locale.getDefault(), "%.2f", player.bowlingStats.economy), modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
+                            Text(String.format(java.util.Locale.US, "%.2f", player.bowlingStats.economy), modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
                             Text("${player.bowlingStats.runsConceded}", modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
                         }
                     }
@@ -513,18 +513,23 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
 
                     tournament.teams.forEach { team ->
                         val teamMatches = tournament.matches.filter { 
-                            it.status == MatchStatus.COMPLETED && (it.teamA.id == team.id || it.teamB.id == team.id) 
+                            (it.status == MatchStatus.COMPLETED || it.status == MatchStatus.LIVE) && (it.teamA.id == team.id || it.teamB.id == team.id) 
                         }
-                        val matchesPlayed = teamMatches.size
+                        val matchesPlayed = tournament.matches.count { it.status == MatchStatus.COMPLETED && (it.teamA.id == team.id || it.teamB.id == team.id) }
                         var totalTeamRuns = 0
                         var highScore = 0
 
                         teamMatches.forEach { match ->
-                            val runsInMatch = if (match.initialBattingTeamId == team.id) {
-                                match.innings1Data?.runs ?: 0
-                            } else {
-                                match.totalRuns
+                            val isTeamBattingNow = match.battingTeamId == team.id
+                            val wasTeamBattingFirst = match.initialBattingTeamId == team.id
+                            
+                            val runsInMatch = when {
+                                wasTeamBattingFirst && match.currentInnings == 1 -> match.totalRuns
+                                wasTeamBattingFirst && match.currentInnings == 2 -> match.innings1Data?.runs ?: 0
+                                !wasTeamBattingFirst && match.currentInnings == 2 -> match.totalRuns
+                                else -> 0
                             }
+                            
                             totalTeamRuns += runsInMatch
                             if (runsInMatch > highScore) highScore = runsInMatch
                         }
@@ -995,30 +1000,48 @@ fun TeamCard(
                                 }
                             }
                         } else {
-                            Text("Select a player to add to ${team.name}:", style = MaterialTheme.typography.labelMedium)
-                            // Filter out players already in the tournament squad to prevent duplicates
+                            Text("Select players to add:", style = MaterialTheme.typography.labelMedium)
                             val tournamentPlayers = tournament.teams.flatMap { it.players }.map { it.name.lowercase() }
                             val filteredGlobal = globalPlayers.filter { gp -> gp.name.lowercase() !in tournamentPlayers }
-                            
+                            val selectedPlayers = remember { mutableStateListOf<Player>() }
+
                             if (filteredGlobal.isEmpty()) {
                                 Text("All saved players are already in this tournament.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
                             } else {
-                                Column {
+                                Column(modifier = Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
                                     filteredGlobal.forEach { gp ->
-                                        TextButton(
-                                            onClick = {
-                                                viewModel.addGlobalPlayer(tournamentId, team.id, gp)
-                                                showAddPlayerDialog = false
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
+                                        val isSelected = selectedPlayers.contains(gp)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().clickable {
+                                                if (isSelected) selectedPlayers.remove(gp) else selectedPlayers.add(gp)
+                                            }.padding(vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text(gp.name + " (${gp.battingStyle})", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+                                            Checkbox(checked = isSelected, onCheckedChange = {
+                                                if (it) selectedPlayers.add(gp) else selectedPlayers.remove(gp)
+                                            })
+                                            Text(gp.name + " (${gp.battingStyle})")
                                         }
                                         HorizontalDivider(thickness = 0.5.dp)
                                     }
                                 }
                             }
-                            TextButton(onClick = { showGlobalPlaylist = false }) { Text("BACK TO MANUAL ADD") }
+                            
+                            Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = {
+                                        if (selectedPlayers.isNotEmpty()) {
+                                            viewModel.addGlobalPlayers(tournamentId, team.id, selectedPlayers.toList())
+                                            showAddPlayerDialog = false
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    enabled = selectedPlayers.isNotEmpty()
+                                ) {
+                                    Text("Add (${selectedPlayers.size})")
+                                }
+                                TextButton(onClick = { showGlobalPlaylist = false }) { Text("BACK") }
+                            }
                         }
                     }
                 },

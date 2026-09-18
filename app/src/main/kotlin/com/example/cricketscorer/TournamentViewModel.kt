@@ -36,6 +36,10 @@ class TournamentViewModel : ViewModel() {
         TournamentRepository.addPlayerToTeam(tournamentId, teamId, player.name, player.battingStyle ?: BattingStyle.RHB)
     }
 
+    fun addGlobalPlayers(tournamentId: String, teamId: String, players: List<Player>) {
+        TournamentRepository.addPlayersToTeam(tournamentId, teamId, players)
+    }
+
     fun deletePlayer(tournamentId: String, teamId: String, playerId: String) {
         TournamentRepository.deletePlayer(tournamentId, teamId, playerId)
     }

@@ -17,7 +17,7 @@ import com.example.cricketscorer.BuildConfig
 fun CardBranding() {
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
         Text(
-            text = "Prepared by Ankoji | v${BuildConfig.VERSION_NAME} (Innings Revert & Undo Fixed) 🏏🚀⚖️🏅",
+            text = "Prepared by Ankoji | v${BuildConfig.VERSION_NAME} 🏏🚀⚖️🏅",
             style = MaterialTheme.typography.labelSmall,
             color = Color.Gray,
             fontWeight = FontWeight.Bold

@@ -53,4 +53,11 @@ object GlobalPlayerRepository {
         _players.update { list -> list.filter { it.id != id } }
         saveToDisk(_players.value)
     }
+
+    fun updatePlayer(id: String, newName: String, style: BattingStyle) {
+        _players.update { list ->
+            list.map { if (it.id == id) it.copy(name = newName.trim(), battingStyle = style) else it }
+        }
+        saveToDisk(_players.value)
+    }
 }

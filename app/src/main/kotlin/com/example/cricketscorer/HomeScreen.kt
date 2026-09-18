@@ -198,9 +198,9 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         item { QuickActionChip("SERIES", onNavigateToDashboard) }
-                        item { QuickActionChip("MATCHES", onNavigateToMatches) }
+                        item { QuickActionChip("PLAYLIST", onNavigateToPlayers) }
                         item { QuickActionChip("TEAMS", onNavigateToTeams) }
-                        item { QuickActionChip("PLAYERS", onNavigateToPlayers) }
+                        item { QuickActionChip("MATCHES", onNavigateToMatches) }
                     }
                 }
 

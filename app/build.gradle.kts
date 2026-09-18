@@ -18,7 +18,7 @@ android {
     }
     
     val vCode = versionProps.getProperty("VERSION_CODE", "40").toInt()
-    val vName = "2.26.$vCode"
+    val vName = versionProps.getProperty("VERSION_NAME", "2.28.0")
 
     defaultConfig {
         applicationId = "com.example.cricketscorer"
