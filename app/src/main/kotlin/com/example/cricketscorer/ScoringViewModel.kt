@@ -735,7 +735,9 @@ class ScoringViewModel : ViewModel() {
                 current = current.copy(
                     innings1Data = InningsSummary(current.totalRuns, current.totalWickets, current.totalBalls, current.battingTeamId, current.wicketHistory, current.wideCount, current.noBallCount, current.byeCount, current.legByeCount, itemsProcessed, i1Duration, current.battingOrder),
                     currentInnings = 2, target = current.totalRuns + 1, battingTeamId = current.bowlingTeamId, bowlingTeamId = current.battingTeamId,
-                    totalRuns = 0, totalWickets = 0, totalBalls = 0, wicketHistory = emptyList(), battingOrder = emptyList(),
+                    totalRuns = 0, totalWickets = 0, totalBalls = 0, 
+                    wideCount = 0, noBallCount = 0, byeCount = 0, legByeCount = 0, // v2.31.3: Reset extra counters for 2nd innings 🏏🚀⚖️🏅
+                    wicketHistory = emptyList(), battingOrder = emptyList(),
                     strikerId = null, nonStrikerId = null, currentBowlerId = null, lastBowlerId = null,
                     pendingAction = if (match.isSecondInningsStarted) PendingAction.NONE else PendingAction.START_SECOND_INNINGS
                 )

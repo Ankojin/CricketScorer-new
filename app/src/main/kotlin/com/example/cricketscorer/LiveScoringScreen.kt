@@ -220,7 +220,7 @@ fun LiveScoringScreen(
                 }
 
                 if (m.pendingAction == PendingAction.TOSS_REQUIRED || m.pendingAction == PendingAction.SELECT_MATCH_SETTINGS) {
-                    MatchSettingsDialog(m, viewModel)
+                    MatchSettingsDialog(m, viewModel, onDismiss = onNavigateToDashboard)
                 } else if (m.pendingAction == PendingAction.START_SECOND_INNINGS) {
                     InningsOverOverlay(m, viewModel)
                 } else if (m.pendingAction == PendingAction.SELECT_RUNS_DROPPED_CATCH) {
@@ -1200,7 +1200,8 @@ fun MatchSettingsDialog(match: Match, viewModel: ScoringViewModel, onDismiss: ((
                     }
                     
                     viewModel.updateMatchSettings(o, mO, qC, qL)
-                    onActionDismiss()
+                    // v2.31.5: Removed onActionDismiss() from confirm button. 
+                    // Let the engine automatically dismiss the dialog via state change. 🏏🚀⚖️🏅
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp)
@@ -1209,7 +1210,10 @@ fun MatchSettingsDialog(match: Match, viewModel: ScoringViewModel, onDismiss: ((
             }
         },
         dismissButton = {
-            TextButton(onClick = onActionDismiss) {
+            TextButton(onClick = {
+                if (onDismiss != null) onDismiss()
+                else viewModel.cancelPendingAction()
+            }) {
                 Text("CANCEL")
             }
         }
@@ -1225,6 +1229,7 @@ fun CoinFlipDialog(match: Match, onResult: (String, String) -> Unit, onDismiss: 
     var isFlipping by remember { mutableStateOf(false) }
     var coinResult by remember { mutableStateOf<String?>(null) } // "HEADS" or "TAILS"
     var callerChoice by remember { mutableStateOf<String?>(null) }
+    var tossCallerId by remember { mutableStateOf(match.teamA.id) } // v2.31.0: Added Toss Caller selection 🏏🚀⚖️🏅
     val rotation = remember { androidx.compose.animation.core.Animatable(0f) }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current.density
@@ -1233,52 +1238,67 @@ fun CoinFlipDialog(match: Match, onResult: (String, String) -> Unit, onDismiss: 
         onDismissRequest = onDismiss,
         title = { Text("Match Toss", fontWeight = FontWeight.Black) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 // 1. Coin Flip Section
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 ) {
-                    Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Toss Call by", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                        Text(match.teamA.name.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.height(8.dp))
-                        
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            listOf("HEADS", "TAILS").forEach { choice ->
+                    Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("Toss Call by", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 FilterChip(
-                                    selected = callerChoice == choice,
-                                    onClick = { if (!isFlipping) callerChoice = choice },
-                                    label = { Text(choice) },
-                                    enabled = !isFlipping && coinResult == null
+                                    selected = tossCallerId == match.teamA.id,
+                                    onClick = { if (!isFlipping && coinResult == null) tossCallerId = match.teamA.id },
+                                    label = { Text(match.teamA.name.uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = if(tossCallerId == match.teamA.id) FontWeight.Black else FontWeight.Normal) }
+                                )
+                                FilterChip(
+                                    selected = tossCallerId == match.teamB.id,
+                                    onClick = { if (!isFlipping && coinResult == null) tossCallerId = match.teamB.id },
+                                    label = { Text(match.teamB.name.uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = if(tossCallerId == match.teamB.id) FontWeight.Black else FontWeight.Normal) }
+                                )
+                            }
+                        }
+                        
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("HEADS", "TAILS").forEach { choice ->
+                                    FilterChip(
+                                        selected = callerChoice == choice,
+                                        onClick = { if (!isFlipping) callerChoice = choice },
+                                        label = { Text(choice, style = MaterialTheme.typography.labelSmall) },
+                                        enabled = !isFlipping && coinResult == null
+                                    )
+                                }
+                            }
+
+                            // Smaller Coin
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .graphicsLayer {
+                                        rotationY = rotation.value
+                                        cameraDistance = 12f * density
+                                    }
+                                    .background(Color(0xFFFFD700), CircleShape)
+                                    .border(3.dp, Color(0xFFDAA520), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val side = if ((rotation.value / 180).toInt() % 2 == 0) "C" else "S"
+                                Text(
+                                    text = if (coinResult != null) coinResult!!.take(1) else side,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF8B4513)
                                 )
                             }
                         }
 
-                        Spacer(Modifier.height(20.dp))
-
-                        // The Coin
-                        Box(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .graphicsLayer {
-                                    rotationY = rotation.value
-                                    cameraDistance = 12f * density
-                                }
-                                .background(Color(0xFFFFD700), CircleShape)
-                                .border(4.dp, Color(0xFFDAA520), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val side = if ((rotation.value / 180).toInt() % 2 == 0) "C" else "S"
-                            Text(
-                                text = if (coinResult != null) coinResult!!.take(1) else side,
-                                fontSize = 32.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF8B4513)
-                            )
-                        }
-
-                        Spacer(Modifier.height(20.dp))
+                        Spacer(Modifier.height(8.dp))
 
                         Button(
                             onClick = {
@@ -1301,63 +1321,81 @@ fun CoinFlipDialog(match: Match, onResult: (String, String) -> Unit, onDismiss: 
                                     
                                     // Auto-assign winner based on call
                                     if (callerChoice != null) {
-                                        winnerId = if (callerChoice == result) match.teamA.id else match.teamB.id
+                                        val otherTeamId = if (tossCallerId == match.teamA.id) match.teamB.id else match.teamA.id
+                                        winnerId = if (callerChoice == result) tossCallerId else otherTeamId
                                     }
                                 }
                             },
                             enabled = !isFlipping && callerChoice != null && coinResult == null,
+                            modifier = Modifier.fillMaxWidth().height(40.dp),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text(if (isFlipping) "FLIPPING..." else "FLIP COIN")
+                            Text(if (isFlipping) "FLIPPING..." else "FLIP COIN", style = MaterialTheme.typography.labelLarge)
                         }
                         
                         if (coinResult != null) {
                             val winnerName = if (winnerId == match.teamA.id) match.teamA.name else match.teamB.name
-                            Text(
-                                "Result: $coinResult", 
-                                fontWeight = FontWeight.Black, 
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-                            Text(
-                                "$winnerName won the toss!", 
-                                fontWeight = FontWeight.Bold, 
-                                color = Color(0xFF2E7D32),
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                            TextButton(onClick = { 
-                                coinResult = null; callerChoice = null; winnerId = null;
-                                scope.launch { rotation.snapTo(0f) }
-                            }) {
-                                Text("RE-FLIP")
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Column {
+                                    Text("Result: $coinResult", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                                    Text("$winnerName won!", fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32), style = MaterialTheme.typography.labelSmall)
+                                }
+                                TextButton(onClick = { 
+                                    coinResult = null; callerChoice = null; winnerId = null;
+                                    scope.launch { rotation.snapTo(0f) }
+                                }) {
+                                    Text("RE-FLIP", style = MaterialTheme.typography.labelSmall)
+                                }
                             }
                         }
                     }
                 }
 
-                HorizontalDivider(thickness = 0.5.dp)
+                HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
 
-                Text("Manual Winner Selection (Override)", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = winnerId == match.teamA.id, onClick = { winnerId = match.teamA.id }, enabled = !isFlipping)
-                        Text(match.teamA.name.uppercase(), fontWeight = FontWeight.Bold, modifier = Modifier.clickable(enabled = !isFlipping) { winnerId = match.teamA.id })
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = winnerId == match.teamB.id, onClick = { winnerId = match.teamB.id }, enabled = !isFlipping)
-                        Text(match.teamB.name.uppercase(), fontWeight = FontWeight.Bold, modifier = Modifier.clickable(enabled = !isFlipping) { winnerId = match.teamB.id })
-                    }
+                Text("Toss Winner", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = winnerId == match.teamA.id,
+                        onClick = { if (!isFlipping) winnerId = match.teamA.id },
+                        label = { Text(match.teamA.name.uppercase(), fontWeight = FontWeight.Black) },
+                        enabled = !isFlipping
+                    )
+                    FilterChip(
+                        selected = winnerId == match.teamB.id,
+                        onClick = { if (!isFlipping) winnerId = match.teamB.id },
+                        label = { Text(match.teamB.name.uppercase(), fontWeight = FontWeight.Black) },
+                        enabled = !isFlipping
+                    )
                 }
                 
-                Text("Decision?", fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = decision == "BAT", onClick = { decision = "BAT" }, enabled = winnerId != null)
-                        Text("BAT", modifier = Modifier.clickable(enabled = winnerId != null) { decision = "BAT" })
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = decision == "BOWL", onClick = { decision = "BOWL" }, enabled = winnerId != null)
-                        Text("BOWL", modifier = Modifier.clickable(enabled = winnerId != null) { decision = "BOWL" })
+                // 3. Decision
+                if (winnerId != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Decision", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = { decision = "BAT" },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (decision == "BAT") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (decision == "BAT") Color.White else Color.Black
+                            ),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("BAT FIRST")
+                        }
+                        Button(
+                            onClick = { decision = "BOWL" },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (decision == "BOWL") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (decision == "BOWL") Color.White else Color.Black
+                            ),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("BOWL FIRST")
+                        }
                     }
                 }
             }
@@ -1372,9 +1410,10 @@ fun CoinFlipDialog(match: Match, onResult: (String, String) -> Unit, onDismiss: 
                     } 
                 },
                 enabled = winnerId != null && decision != null && !isFlipping,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp)
             ) {
-                Text("CONFIRM TOSS")
+                Text("CONFIRM TOSS", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -2021,7 +2060,10 @@ fun PlayerSelectionOverlay(match: Match, viewModel: ScoringViewModel) {
         PendingAction.SELECT_FIELDER, PendingAction.SELECT_FIELDER_DROPPED_CATCH -> 
             if (match.battingTeamId == match.teamA.id) match.teamB else match.teamA
         else -> 
-            if (match.battingTeamId == match.teamA.id) match.teamA else match.teamB
+            // v2.31.5: Safer team selection logic 🏏🚀⚖️🏅
+            if (match.battingTeamId == match.teamA.id) match.teamA 
+            else if (match.battingTeamId == match.teamB.id) match.teamB
+            else match.teamA // Fallback to Team A if batting team ID is not found or empty
     }
 
     AlertDialog(
@@ -2115,29 +2157,31 @@ fun PlayerSelectionOverlay(match: Match, viewModel: ScoringViewModel) {
                         HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
                     }
                 }
-
                 if (match.pendingAction == PendingAction.SELECT_BOWLER || match.pendingAction == PendingAction.REPLACE_BOWLER) {
                     item {
                         Spacer(modifier = Modifier.height(12.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = { viewModel.forceChangeBowler() },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                            ) {
-                                Text("SAME BOWLER", fontWeight = FontWeight.Bold)
-                            }
-                            
-                            OutlinedButton(
-                                onClick = { viewModel.cancelPendingAction() },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text("CANCEL", fontWeight = FontWeight.Bold)
-                            }
+                        Button(
+                            onClick = { viewModel.forceChangeBowler() },
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Text("SAME BOWLER", fontWeight = FontWeight.Bold)
                         }
                     }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = { viewModel.cancelPendingAction() },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.5f))
+                    ) {
+                        Text("CANCEL", fontWeight = FontWeight.Black, color = Color.Red)
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         },
@@ -2627,35 +2671,89 @@ fun ExtraButton(label: String, type: ExtrasType, viewModel: ScoringViewModel, on
 }
 
 data class InningsStats(
-    val singles: Int = 0,
-    val doubles: Int = 0,
-    val triples: Int = 0,
-    val fours: Int = 0,
-    val sixes: Int = 0,
+    val singlesRuns: Int = 0,
+    val doublesRuns: Int = 0,
+    val triplesRuns: Int = 0,
+    val foursRuns: Int = 0,
+    val sixesRuns: Int = 0,
+    val otherBatRuns: Int = 0,
     val dots: Int = 0,
-    val extras: Int = 0,
+    val extrasRuns: Int = 0,
     val wickets: Int = 0,
-    val droppedCatches: Int = 0
+    val droppedCatches: Int = 0,
+    val wideCount: Int = 0,
+    val noBallCount: Int = 0,
+    // v2.31.7: Cricinfo Standard Stats 🏏🚀⚖️🏅
+    val ppRuns: Int = 0,
+    val ppWickets: Int = 0,
+    val midRuns: Int = 0,
+    val midWickets: Int = 0,
+    val finRuns: Int = 0,
+    val finWickets: Int = 0,
+    val boundaryRuns: Int = 0,
+    val dotPercent: Int = 0,
+    val totalLegalBalls: Int = 0,
+    val hasMid: Boolean = false,
+    val hasFin: Boolean = false
 )
 
 fun calculateInningsStats(balls: List<Ball>): InningsStats {
-    var singles = 0; var doubles = 0; var triples = 0; var fours = 0; var sixes = 0; var dots = 0; var extras = 0; var wickets = 0; var droppedCatches = 0
+    var sR = 0; var dR = 0; var tR = 0; var fR = 0; var siR = 0; var oR = 0; var dots = 0; var exR = 0; var w = 0; var dC = 0
+    var wC = 0; var nbC = 0
+    
+    var ppR = 0; var ppW = 0
+    var midR = 0; var midW = 0
+    var finR = 0; var finW = 0
+    var pB = 0; var lB = 0
+    
     balls.forEach { ball ->
-        if (ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT) wickets++
-        if (ball.extrasType != ExtrasType.NONE) extras += ball.extraRuns
-        if (ball.isDroppedCatch) droppedCatches++
+        if (ball.isAdjustment) return@forEach
+
+        val ballTotal = ball.runs + ball.extraRuns
+        val isW = ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT
+        
+        if (pB < 36) { // Powerplay: 1-6 Overs
+            ppR += ballTotal
+            if (isW) ppW++
+        } else if (pB < 90) { // Middle: 7-15 Overs
+            midR += ballTotal
+            if (isW) midW++
+        } else { // Death: 16-20 Overs
+            finR += ballTotal
+            if (isW) finW++
+        }
+
+        if (ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT) w++
+        if (ball.extrasType != ExtrasType.NONE) exR += ball.extraRuns
+        
+        if (ball.extrasType == ExtrasType.WIDE) wC++
+        if (ball.extrasType == ExtrasType.NO_BALL) nbC++
+        
+        if (ball.isDroppedCatch) dC++
         
         val runs = ball.runs
+        if (ball.isPhysicalBall) pB++
+        if (ball.isLegalBall) lB++
+
         when (runs) {
-            0 -> if (ball.extrasType == ExtrasType.NONE) dots++
-            1 -> singles++
-            2 -> doubles++
-            3 -> triples++
-            4 -> fours++
-            6 -> sixes++
+            0 -> if (ball.isLegalBall && ball.extraRuns == 0) dots++
+            1 -> sR += 1
+            2 -> dR += 2
+            3 -> tR += 3
+            4 -> fR += 4
+            6 -> siR += 6
+            else -> if (runs > 0) oR += runs
         }
     }
-    return InningsStats(singles, doubles, triples, fours, sixes, dots, extras, wickets, droppedCatches)
+    
+    val dP = if (lB > 0) (dots * 100) / lB else 0
+    
+    return InningsStats(
+        sR, dR, tR, fR, siR, oR, dots, exR, w, dC, wC, nbC,
+        ppR, ppW, midR, midW, finR, finW,
+        fR + siR, dP, lB,
+        pB > 36, pB > 90
+    )
 }
 
 fun recoverName(id: String?, match: Match, defaultName: String = "Player"): String {
@@ -2826,23 +2924,105 @@ fun ScoringBreakdownCard(match: Match, i1Stats: InningsStats, i2Stats: InningsSt
     val i1Name = if (match.initialBattingTeamId == teamA.id) teamA.name else teamB.name
     val i2Name = if (match.initialBattingTeamId == teamA.id) teamB.name else teamA.name
 
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), shape = RoundedCornerShape(12.dp)) {
+    Card(
+        modifier = Modifier.fillMaxWidth(), 
+        colors = CardDefaults.cardColors(containerColor = Color.White), 
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), 
+        shape = RoundedCornerShape(12.dp)
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("SCORING BREAKDOWN", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                Spacer(modifier = Modifier.weight(1f))
-                Text(i1Name.take(8), modifier = Modifier.width(60.dp), textAlign = TextAlign.End, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.Gray)
-                Text(i2Name.take(8), modifier = Modifier.width(60.dp), textAlign = TextAlign.End, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.Gray)
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Header Names
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(i1Name.uppercase(), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold, color = Color.DarkGray)
+                Text(i2Name.uppercase(), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold, color = Color.DarkGray)
             }
-            HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
-            Spacer(modifier = Modifier.height(8.dp))
-            BreakdownRow("Dots", "${i1Stats.dots}", "${i2Stats.dots}")
-            BreakdownRow("1s", "${i1Stats.singles}", "${i2Stats.singles}")
-            BreakdownRow("4s", "${i1Stats.fours}", "${i2Stats.fours}")
-            BreakdownRow("6s", "${i1Stats.sixes}", "${i2Stats.sixes}")
-            BreakdownRow("Extras", "${i1Stats.extras}", "${i2Stats.extras}")
-            BreakdownRow("Drops 🤲", "${i1Stats.droppedCatches}", "${i2Stats.droppedCatches}")
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            fun compareScore(r1: Int, w1: Int, r2: Int, w2: Int): Int {
+                if (r1 == 0 && w1 == 0 && r2 == 0 && w2 == 0) return 0
+                if (r1 > r2) return 1
+                if (r2 > r1) return 2
+                if (w1 < w2) return 1
+                if (w2 < w1) return 2
+                return 0
+            }
+
+            CricinfoBreakdownRow("Power Play", "${i1Stats.ppRuns}/${i1Stats.ppWickets}", "${i2Stats.ppRuns}/${i2Stats.ppWickets}", compareScore(i1Stats.ppRuns, i1Stats.ppWickets, i2Stats.ppRuns, i2Stats.ppWickets))
+            
+            if (i1Stats.hasMid || i2Stats.hasMid) {
+                CricinfoBreakdownRow("Middle Overs", if(i1Stats.hasMid) "${i1Stats.midRuns}/${i1Stats.midWickets}" else "-", if(i2Stats.hasMid) "${i2Stats.midRuns}/${i2Stats.midWickets}" else "-", compareScore(i1Stats.midRuns, i1Stats.midWickets, i2Stats.midRuns, i2Stats.midWickets))
+            }
+            
+            if (i1Stats.hasFin || i2Stats.hasFin) {
+                CricinfoBreakdownRow("Final Overs", if(i1Stats.hasFin) "${i1Stats.finRuns}/${i1Stats.finWickets}" else "-", if(i2Stats.hasFin) "${i2Stats.finRuns}/${i2Stats.finWickets}" else "-", compareScore(i1Stats.finRuns, i1Stats.finWickets, i2Stats.finRuns, i2Stats.finWickets))
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.3f))
+
+            CricinfoBreakdownRow("Sixes", "${i1Stats.sixesRuns/6}", "${i2Stats.sixesRuns/6}", if(i1Stats.sixesRuns > i2Stats.sixesRuns) 1 else if(i2Stats.sixesRuns > i1Stats.sixesRuns) 2 else 0)
+            CricinfoBreakdownRow("Fours", "${i1Stats.foursRuns/4}", "${i2Stats.foursRuns/4}", if(i1Stats.foursRuns > i2Stats.foursRuns) 1 else if(i2Stats.foursRuns > i1Stats.foursRuns) 2 else 0)
+            CricinfoBreakdownRow("Runs In Boundaries", "${i1Stats.boundaryRuns}", "${i2Stats.boundaryRuns}", if(i1Stats.boundaryRuns > i2Stats.boundaryRuns) 1 else if(i2Stats.boundaryRuns > i1Stats.boundaryRuns) 2 else 0)
+            
+            CricinfoBreakdownRow("Dot balls", "${i1Stats.dotPercent}%", "${i2Stats.dotPercent}%", if(i1Stats.dotPercent < i2Stats.dotPercent && i1Stats.dotPercent > 0) 1 else if(i2Stats.dotPercent < i1Stats.dotPercent && i2Stats.dotPercent > 0) 2 else 0)
+            CricinfoBreakdownRow("Runs In Extras", "${i1Stats.extrasRuns}", "${i2Stats.extrasRuns}", if(i1Stats.extrasRuns > i2Stats.extrasRuns) 1 else if(i2Stats.extrasRuns > i1Stats.extrasRuns) 2 else 0)
+        }
+    }
+}
+
+@Composable
+fun CricinfoBreakdownRow(label: String, v1: String, v2: String, highlight: Int = 0) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (v1 != "-") {
+                Surface(
+                    color = if (highlight == 1) MaterialTheme.colorScheme.primary else Color(0xFFF8F9FA),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = v1,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (highlight == 1) FontWeight.Black else FontWeight.Normal,
+                        color = if (highlight == 1) Color.White else Color.Black
+                    )
+                }
+            } else {
+                Text("-", modifier = Modifier.padding(start = 8.dp), color = Color.LightGray)
+            }
+        }
+        
+        Text(
+            text = label,
+            modifier = Modifier.weight(1.5f),
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.Gray
+        )
+        
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            if (v2 != "-") {
+                Surface(
+                    color = if (highlight == 2) MaterialTheme.colorScheme.primary else Color(0xFFF8F9FA),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = v2,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (highlight == 2) FontWeight.Black else FontWeight.Normal,
+                        color = if (highlight == 2) Color.White else Color.Black
+                    )
+                }
+            } else {
+                Text("-", modifier = Modifier.padding(end = 8.dp), color = Color.LightGray)
+            }
         }
     }
 }

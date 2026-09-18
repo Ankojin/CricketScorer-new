@@ -259,12 +259,20 @@ object TournamentRepository {
         _tournaments.update { list ->
             val newList = list.map { t ->
                 if (t.id == tournamentId) {
-                    val updatedTeams = t.teams.map { team ->
-                        if (team.id == teamId) {
-                            team.copy(players = team.players.filter { it.id != playerId })
-                        } else team
+                    // v2.31.2: Check if player has match history before deleting from tournament record 🏏🚀⚖️🏅
+                    val hasHistory = t.matches.any { m ->
+                        m.ballHistory.any { b -> 
+                            b.strikerId == playerId || b.nonStrikerId == playerId || b.bowlerId == playerId || b.fielderId == playerId || b.outPlayerId == playerId
+                        }
                     }
 
+                    val updatedTeams = t.teams.map { team ->
+                        if (team.id == teamId) {
+                            team.copy(players = team.players.filter { it.id != playerId || hasHistory })
+                        } else team
+                    }
+                    
+                    // Always delete from UPCOMING/LIVE matches to keep squads clean
                     val updatedMatches = t.matches.map { match ->
                         if (match.status == MatchStatus.LIVE || match.status == MatchStatus.UPCOMING) {
                             val updatedTeamA = match.teamA.copy(players = match.teamA.players.filter { it.id != playerId })
@@ -474,36 +482,39 @@ object TournamentRepository {
     }
 
     private fun aggregatePlayerStats(teams: List<Team>, match: Match): List<Team> {
+        val allMatchPlayers = match.teamA.players + match.teamB.players
+        
         return teams.map { team ->
-            if (team.id == match.teamA.id || team.id == match.teamB.id) {
-                val matchTeam = if (team.id == match.teamA.id) match.teamA else match.teamB
-                
-                val updatedPlayers = team.players.map { tp ->
-                    val mp = matchTeam.players.find { it.id == tp.id }
-                    if (mp != null) {
-                        tp.copy(
-                            battingStats = tp.battingStats.copy(
-                                runs = tp.battingStats.runs + mp.battingStats.runs,
-                                balls = tp.battingStats.balls + mp.battingStats.balls,
-                                fours = tp.battingStats.fours + mp.battingStats.fours,
-                                sixes = tp.battingStats.sixes + mp.battingStats.sixes
-                            ),
-                            bowlingStats = tp.bowlingStats.copy(
-                                wickets = tp.bowlingStats.wickets + mp.bowlingStats.wickets,
-                                runsConceded = tp.bowlingStats.runsConceded + mp.bowlingStats.runsConceded,
-                                balls = tp.bowlingStats.balls + mp.bowlingStats.balls,
-                                overs = tp.bowlingStats.overs + mp.bowlingStats.overs
-                            ),
-                            fieldingStats = tp.fieldingStats.copy(
-                                catches = tp.fieldingStats.catches + mp.fieldingStats.catches,
-                                runOuts = tp.fieldingStats.runOuts + mp.fieldingStats.runOuts,
-                                stumpings = tp.fieldingStats.stumpings + mp.fieldingStats.stumpings
-                            )
+            // v2.31.3: Aggregate stats for players belonging to this squad, even if they played for other team in this match 🏏🚀⚖️🏅
+            val updatedPlayers = team.players.map { tp ->
+                val mp = allMatchPlayers.find { it.id == tp.id }
+                if (mp != null) {
+                    tp.copy(
+                        battingStats = tp.battingStats.copy(
+                            runs = tp.battingStats.runs + mp.battingStats.runs,
+                            balls = tp.battingStats.balls + mp.battingStats.balls,
+                            fours = tp.battingStats.fours + mp.battingStats.fours,
+                            sixes = tp.battingStats.sixes + mp.battingStats.sixes,
+                            isOut = tp.battingStats.isOut || mp.battingStats.isOut
+                        ),
+                        bowlingStats = tp.bowlingStats.copy(
+                            wickets = tp.bowlingStats.wickets + mp.bowlingStats.wickets,
+                            runsConceded = tp.bowlingStats.runsConceded + mp.bowlingStats.runsConceded,
+                            balls = tp.bowlingStats.balls + mp.bowlingStats.balls,
+                            overs = tp.bowlingStats.overs + mp.bowlingStats.overs,
+                            dotBalls = tp.bowlingStats.dotBalls + mp.bowlingStats.dotBalls,
+                            wides = tp.bowlingStats.wides + mp.bowlingStats.wides,
+                            noBalls = tp.bowlingStats.noBalls + mp.bowlingStats.noBalls
+                        ),
+                        fieldingStats = tp.fieldingStats.copy(
+                            catches = tp.fieldingStats.catches + mp.fieldingStats.catches,
+                            runOuts = tp.fieldingStats.runOuts + mp.fieldingStats.runOuts,
+                            stumpings = tp.fieldingStats.stumpings + mp.fieldingStats.stumpings
                         )
-                    } else tp
-                }
-                team.copy(players = updatedPlayers)
-            } else team
+                    )
+                } else tp
+            }
+            team.copy(players = updatedPlayers)
         }
     }
 
