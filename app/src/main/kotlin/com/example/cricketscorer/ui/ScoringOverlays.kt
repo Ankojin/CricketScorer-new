@@ -26,6 +26,74 @@ import androidx.compose.ui.unit.sp
 import com.example.cricketscorer.*
 
 @Composable
+fun ScoringOverlaysContainer(
+    uiState: MatchUiState,
+    viewModel: ScoringViewModel,
+    showManageSquads: Boolean,
+    showWicketDialog: Boolean,
+    showRetireHurtDialog: Boolean,
+    showExtraRunsDialog: ExtrasType?,
+    showOtherRunsDialog: Boolean,
+    showOversDialog: Boolean,
+    showMatchFinishedDialog: Boolean,
+    onDismissManageSquads: () -> Unit,
+    onDismissWicket: () -> Unit,
+    onDismissRetireHurt: () -> Unit,
+    onDismissExtraRuns: () -> Unit,
+    onDismissOtherRuns: () -> Unit,
+    onDismissOvers: () -> Unit,
+    onDismissMatchFinished: () -> Unit,
+    onNavigateToDashboard: () -> Unit
+) {
+    val match = uiState.match ?: return
+
+    if (match.pendingAction == PendingAction.TOSS_REQUIRED || match.pendingAction == PendingAction.SELECT_MATCH_SETTINGS) {
+        MatchSettingsDialog(uiState, viewModel, onDismiss = onNavigateToDashboard)
+    } else if (match.pendingAction == PendingAction.START_SECOND_INNINGS) {
+        InningsOverOverlay(uiState, viewModel)
+    } else if (match.pendingAction == PendingAction.SELECT_RUNS_DROPPED_CATCH) {
+        DroppedCatchRunsOverlay(viewModel)
+    } else if (match.pendingAction == PendingAction.SELECT_RUNS_WICKET) {
+        RunOutRunsOverlay(viewModel)
+    } else if (match.pendingAction != PendingAction.NONE && match.status != MatchStatus.COMPLETED) {
+        PlayerSelectionOverlay(uiState, viewModel)
+    }
+
+    if (match.status == MatchStatus.COMPLETED && showMatchFinishedDialog) {
+        MatchCelebrationDialog(
+            uiState = uiState,
+            onNavigateToDashboard = onNavigateToDashboard,
+            onDismiss = onDismissMatchFinished
+        )
+    }
+
+    if (showManageSquads) {
+        ManageSquadsOverlay(uiState, viewModel, onDismiss = onDismissManageSquads)
+    }
+
+    if (showWicketDialog) {
+        WicketDialog(uiState, viewModel, onDismiss = onDismissWicket)
+    }
+
+    if (showRetireHurtDialog) {
+        RetireHurtDialog(uiState, viewModel, onDismiss = onDismissRetireHurt)
+    }
+
+    showExtraRunsDialog?.let { type: ExtrasType ->
+        ExtraRunsDialog(type, viewModel, onDismiss = onDismissExtraRuns)
+    }
+
+    if (showOtherRunsDialog) {
+        OtherRunsDialog(viewModel, onDismiss = onDismissOtherRuns)
+    }
+
+    if (showOversDialog) {
+        MatchSettingsDialog(uiState, viewModel, onDismiss = onDismissOvers)
+    }
+}
+
+
+@Composable
 fun InningsOverOverlay(uiState: MatchUiState, viewModel: ScoringViewModel) {
     val match = uiState.match ?: return
     AlertDialog(

@@ -185,9 +185,13 @@ object ScoringEngine {
                     pendingAction = if (match.isSecondInningsStarted) PendingAction.NONE else PendingAction.START_SECOND_INNINGS
                 )
                 ballsInOver = 0
-            } else if (current.currentInnings == 2 && current.status == MatchStatus.LIVE && (current.totalBalls > 0 || current.totalWickets > 0)) {
-                if (current.totalRuns >= current.target!!) current = current.copy(status = MatchStatus.COMPLETED, winnerId = current.battingTeamId)
-                else if (inningsEnded) current = current.copy(status = MatchStatus.COMPLETED, winnerId = if (current.totalRuns < current.target!! - 1) current.bowlingTeamId else null)
+            } else if (current.currentInnings == 2 && current.status == MatchStatus.LIVE && current.target != null && (current.totalBalls > 0 || current.totalWickets > 0)) {
+                val targetValue = current.target
+                if (current.totalRuns >= targetValue) {
+                    current = current.copy(status = MatchStatus.COMPLETED, winnerId = current.battingTeamId)
+                } else if (inningsEnded) {
+                    current = current.copy(status = MatchStatus.COMPLETED, winnerId = if (current.totalRuns < targetValue - 1) current.bowlingTeamId else null)
+                }
             }
         }
 
