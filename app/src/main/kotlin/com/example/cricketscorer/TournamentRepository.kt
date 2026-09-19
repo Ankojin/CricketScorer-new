@@ -11,6 +11,7 @@ import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -556,6 +557,38 @@ object TournamentRepository {
                 quotaBowlersCount = quotaCount,
                 quotaMaxOvers = quotaLimit
             ))
+        }
+    }
+
+    fun setupE2ETestData() {
+        repositoryScope.launch {
+            val tournamentId = "e2e-test-tournament"
+            val teamAId = "e2e-team-india"
+            val teamBId = "e2e-team-australia"
+
+            val playersA = listOf("Virat", "Rohit", "Rahul", "Hardik", "Bumrah").map { name ->
+                Player(id = "player-in-$name".lowercase(), name = name)
+            }
+            val playersB = listOf("Warner", "Smith", "Maxwell", "Cummins", "Starc").map { name ->
+                Player(id = "player-au-$name".lowercase(), name = name)
+            }
+
+            val teamA = Team(id = teamAId, name = "India", players = playersA)
+            val teamB = Team(id = teamBId, name = "Australia", players = playersB)
+
+            val tournament = Tournament(
+                id = tournamentId,
+                name = "E2E Test Series",
+                teams = listOf(teamA, teamB),
+                settings = TournamentSettings(overs = 5, maxOversPerBowler = 2),
+                participants = playersA + playersB
+            )
+
+            saveTournamentToDb(tournament)
+            
+            // Give time for Room to emit and _tournaments to update before scheduling
+            delay(800)
+            scheduleMatch(tournamentId, teamAId, teamBId)
         }
     }
 }

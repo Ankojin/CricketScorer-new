@@ -81,4 +81,8 @@ class TournamentViewModel : ViewModel() {
             NearbyManager.broadcastTournament(context, tournament)
         }
     }
+
+    fun setupTestData() {
+        TournamentRepository.setupE2ETestData()
+    }
 }
