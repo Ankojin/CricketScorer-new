@@ -348,11 +348,20 @@ data class ActiveWicketContext(
 )
 
 @Immutable
+data class OverSummary(
+    val overNumber: Int,
+    val runs: Int,
+    val wickets: Int,
+    val ballLabels: List<String> = emptyList() // Added for Gully Crix visual style 🏏🚀⚖️🏅
+)
+
+@Immutable
 data class MatchUiState(
     val match: Match? = null,
     val isDarkMode: Boolean? = null,
     val bowlerNotification: String? = null,
     val activeWicketContext: ActiveWicketContext? = null,
     val isSyncEnabled: Boolean = false,
-    val connectedDevicesCount: Int = 0
+    val connectedDevicesCount: Int = 0,
+    val finishedOverSummary: OverSummary? = null
 )

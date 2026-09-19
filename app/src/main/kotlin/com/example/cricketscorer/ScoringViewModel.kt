@@ -31,13 +31,17 @@ class ScoringViewModel : ViewModel() {
     private val _activeWicketContext = MutableStateFlow<ActiveWicketContext?>(null)
     val activeWicketContext: StateFlow<ActiveWicketContext?> = _activeWicketContext.asStateFlow()
 
+    private val _finishedOverSummary = MutableStateFlow<OverSummary?>(null)
+    val finishedOverSummary: StateFlow<OverSummary?> = _finishedOverSummary.asStateFlow()
+
     val uiState: StateFlow<MatchUiState> = combine(
         _matchState,
         _isDarkMode,
         _bowlerNotification,
         _activeWicketContext,
         _isSyncEnabled,
-        NearbyManager.connectedEndpoints
+        NearbyManager.connectedEndpoints,
+        _finishedOverSummary
     ) { args ->
         MatchUiState(
             match = args[0] as Match?,
@@ -45,7 +49,8 @@ class ScoringViewModel : ViewModel() {
             bowlerNotification = args[2] as String?,
             activeWicketContext = args[3] as ActiveWicketContext?,
             isSyncEnabled = args[4] as Boolean,
-            connectedDevicesCount = (args[5] as Set<*>).size
+            connectedDevicesCount = (args[5] as Set<*>).size,
+            finishedOverSummary = args[6] as OverSummary?
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MatchUiState())
 
@@ -230,18 +235,55 @@ class ScoringViewModel : ViewModel() {
         val strikerId = currentMatch.strikerId ?: return
         val nonStrikerId = currentMatch.nonStrikerId ?: return
         
-        val isLegal = type != ExtrasType.WIDE && type != ExtrasType.NO_BALL
-        val totalExtraRuns = if (type == ExtrasType.WIDE || type == ExtrasType.NO_BALL) extraRuns + 1 else extraRuns
         
-        val ball = Ball(
-            runs = 0,
-            extrasType = type,
-            extraRuns = totalExtraRuns,
-            strikerId = strikerId,
-            nonStrikerId = nonStrikerId,
-            bowlerId = currentMatch.currentBowlerId,
-            isLegalBall = isLegal
-        )
+        val ball = when (type) {
+            ExtrasType.NO_BALL -> {
+                // ICC: Bat runs on No-ball are credited to striker, +1 penalty is extra
+                Ball(
+                    runs = extraRuns,
+                    extrasType = type,
+                    extraRuns = 1,
+                    strikerId = strikerId,
+                    nonStrikerId = nonStrikerId,
+                    bowlerId = currentMatch.currentBowlerId,
+                    isLegalBall = false
+                )
+            }
+            ExtrasType.WIDE -> {
+                // ICC: All runs on Wide (penalty + runs) are extras
+                Ball(
+                    runs = 0,
+                    extrasType = type,
+                    extraRuns = extraRuns + 1,
+                    strikerId = strikerId,
+                    nonStrikerId = nonStrikerId,
+                    bowlerId = currentMatch.currentBowlerId,
+                    isLegalBall = false
+                )
+            }
+            ExtrasType.GRANTED -> {
+                Ball(
+                    runs = extraRuns,
+                    extrasType = type,
+                    extraRuns = 0,
+                    strikerId = strikerId,
+                    nonStrikerId = nonStrikerId,
+                    bowlerId = currentMatch.currentBowlerId,
+                    isLegalBall = true
+                )
+            }
+            else -> { // BYE, LEG_BYE
+                Ball(
+                    runs = 0,
+                    extrasType = type,
+                    extraRuns = extraRuns,
+                    strikerId = strikerId,
+                    nonStrikerId = nonStrikerId,
+                    bowlerId = currentMatch.currentBowlerId,
+                    isLegalBall = true
+                )
+            }
+        }
         recordBall(ball)
     }
 
@@ -429,6 +471,10 @@ class ScoringViewModel : ViewModel() {
         }
     }
 
+    fun dismissOverSummary() {
+        _finishedOverSummary.value = null
+    }
+
     fun changeWicketKeeper() {
         _matchState.update { current ->
             if (current == null) return@update null
@@ -474,6 +520,41 @@ class ScoringViewModel : ViewModel() {
             val finalResult = ScoringEngine.recalculateMatchFromHistory(transitionMatch)
             
             if (finalResult.status == MatchStatus.LIVE && ball.isLegalBall && finalResult.totalBalls % 6 == 0 && _bowlerNotification.value == null) {
+                // v2.33.2: Gully Crix Style Over Completion Summary 🏏🚀⚖️🏅
+                val lastOverBalls = mutableListOf<Ball>()
+                var physicalCount = 0
+                for (b in finalResult.ballHistory.reversed()) {
+                    if (b.isAdjustment) continue
+                    lastOverBalls.add(b)
+                    if (b.isPhysicalBall) physicalCount++
+                    if (physicalCount == 6) break
+                }
+                val runs = lastOverBalls.sumOf { it.runs + it.extraRuns }
+                val wickets = lastOverBalls.count { it.wicketType != WicketType.NONE && it.wicketType != WicketType.RETIRED_HURT }
+                
+                val labels = lastOverBalls.map { b ->
+                    when {
+                        b.wicketType == WicketType.RETIRED_HURT -> "RH"
+                        b.wicketType != WicketType.NONE -> "W"
+                        b.extrasType == ExtrasType.WIDE -> "${b.extraRuns}wd"
+                        b.extrasType == ExtrasType.NO_BALL -> {
+                            val total = b.runs + b.extraRuns
+                            if (total > 0) "${total}nb" else "nb"
+                        }
+                        b.extrasType == ExtrasType.BYE -> "${b.extraRuns}b"
+                        b.extrasType == ExtrasType.LEG_BYE -> "${b.extraRuns}lb"
+                        b.extrasType == ExtrasType.GRANTED -> "${b.runs}G"
+                        else -> "${b.runs}"
+                    }
+                }
+
+                _finishedOverSummary.value = OverSummary(
+                    overNumber = finalResult.totalBalls / 6,
+                    runs = runs,
+                    wickets = wickets,
+                    ballLabels = labels
+                )
+
                 val bowlingTeam = if (ScoringEngine.isTeamA(finalResult.bowlingTeamId, finalResult)) finalResult.teamA else finalResult.teamB
                 val ballBowlerId = ball.bowlerId ?: ""
                 val bPlayer = bowlingTeam.players.find { it.id == ballBowlerId }

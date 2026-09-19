@@ -19,7 +19,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.cricketscorer.ui.MatchSettingsDialog
 import com.example.cricketscorer.ui.CoinFlipDialog
-import com.example.cricketscorer.ui.MatchCelebrationDialog
 import com.example.cricketscorer.ui.WicketDialog
 import com.example.cricketscorer.ui.ExtraRunsDialog
 import com.example.cricketscorer.ui.OtherRunsDialog
@@ -51,6 +50,7 @@ fun LiveScoringScreen(
             showMatchFinishedDialog = true
         }
     }
+    
     val statsGraphicsLayer = rememberGraphicsLayer()
     val scorecardGraphicsLayer = rememberGraphicsLayer()
     val oversGraphicsLayer = rememberGraphicsLayer()
@@ -179,6 +179,7 @@ fun LiveScoringScreen(
                     onDismissOtherRuns = { showOtherRunsDialog = false },
                     onDismissOvers = { showOversDialog = false },
                     onDismissMatchFinished = { showMatchFinishedDialog = false },
+                    onDismissOverSummary = { viewModel.dismissOverSummary() },
                     onNavigateToDashboard = onNavigateToDashboard
                 )
             }

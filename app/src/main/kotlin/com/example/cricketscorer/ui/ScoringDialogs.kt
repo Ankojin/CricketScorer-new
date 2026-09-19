@@ -3,10 +3,7 @@ package com.example.cricketscorer.ui
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -21,11 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -33,10 +26,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.example.cricketscorer.*
 import com.example.cricketscorer.R
 import kotlinx.coroutines.launch
-import com.example.cricketscorer.*
 import java.util.Random
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,8 +45,8 @@ fun MatchSettingsDialog(uiState: MatchUiState, viewModel: ScoringViewModel, onDi
     var quotaCountText by remember { mutableStateOf(currentQuotaCount?.toString() ?: "") }
     var quotaLimitText by remember { mutableStateOf(currentQuotaLimit?.toString() ?: "") }
     
-    var tempTossWinnerId by remember(match.id) { mutableStateOf<String?>(match.tossWinnerId) }
-    var tempTossDecision by remember(match.id) { mutableStateOf<String?>(match.tossDecision) }
+    var tempTossWinnerId by remember(match.id) { mutableStateOf(match.tossWinnerId) }
+    var tempTossDecision by remember(match.id) { mutableStateOf(match.tossDecision) }
     var showFlipDialog by remember { mutableStateOf(false) }
 
     val onActionDismiss = {
@@ -204,7 +196,7 @@ fun CoinFlipDialog(uiState: MatchUiState, onResult: (String, String) -> Unit, on
     var callerChoice by remember { mutableStateOf<String?>(null) }
     var tossCallerId by remember { mutableStateOf(match.teamA.id) }
     val rotation = remember { Animatable(0f) }
-    val scale = remember { Animatable(1f) } // v2.32.4: Added scale for "Pop up" effect 🏏🚀⚖️🏅
+    val scale = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current.density
 
@@ -216,7 +208,6 @@ fun CoinFlipDialog(uiState: MatchUiState, onResult: (String, String) -> Unit, on
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // 1. Coin Flip Section
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
@@ -250,7 +241,6 @@ fun CoinFlipDialog(uiState: MatchUiState, onResult: (String, String) -> Unit, on
                                 }
                             }
 
-                            // v2.32.4: High-Quality Custom 3D Coin with Pop-up Animation 🏏🚀⚖️🏅
                             Box(
                                 modifier = Modifier
                                     .size(64.dp)
@@ -282,7 +272,6 @@ fun CoinFlipDialog(uiState: MatchUiState, onResult: (String, String) -> Unit, on
                                     coinResult = null
                                     winnerId = null
                                     
-                                    // Pop-up effect: Scale up at start
                                     launch { scale.animateTo(1.4f, tween(400, easing = FastOutSlowInEasing)) }
                                     
                                     val targetRotation = 180f * 12 + (if (Random().nextBoolean()) 0f else 180f)
@@ -291,7 +280,6 @@ fun CoinFlipDialog(uiState: MatchUiState, onResult: (String, String) -> Unit, on
                                         animationSpec = tween(durationMillis = 1500, easing = FastOutSlowInEasing)
                                     )
                                     
-                                    // Pop-down effect: Return to normal size
                                     scale.animateTo(1f, tween(300))
                                     
                                     val isHeads = (targetRotation / 180).toInt() % 2 == 0
@@ -320,7 +308,9 @@ fun CoinFlipDialog(uiState: MatchUiState, onResult: (String, String) -> Unit, on
                                     Text("$winnerName won!", fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32), style = MaterialTheme.typography.labelSmall)
                                 }
                                 TextButton(onClick = { 
-                                    coinResult = null; callerChoice = null; winnerId = null;
+                                    coinResult = null
+                                    callerChoice = null
+                                    winnerId = null
                                     scope.launch { rotation.snapTo(0f) }
                                 }) {
                                     Text("RE-FLIP", style = MaterialTheme.typography.labelSmall)

@@ -55,7 +55,7 @@ fun calculateInningsStats(balls: List<Ball>): InningsStats {
         }
 
         if (ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT) w++
-        if (ball.extrasType != ExtrasType.NONE) exR += ball.extraRuns
+        if (ball.extrasType != ExtrasType.NONE && ball.extrasType != ExtrasType.GRANTED) exR += ball.extraRuns
         
         if (ball.extrasType == ExtrasType.WIDE) wC++
         if (ball.extrasType == ExtrasType.NO_BALL) nbC++

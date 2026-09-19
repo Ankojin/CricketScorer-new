@@ -1,6 +1,7 @@
 package com.example.cricketscorer.ui
 
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import com.example.cricketscorer.*
 
 @Composable
@@ -43,6 +45,7 @@ fun ScoringOverlaysContainer(
     onDismissOtherRuns: () -> Unit,
     onDismissOvers: () -> Unit,
     onDismissMatchFinished: () -> Unit,
+    onDismissOverSummary: () -> Unit,
     onNavigateToDashboard: () -> Unit
 ) {
     val match = uiState.match ?: return
@@ -57,6 +60,10 @@ fun ScoringOverlaysContainer(
         RunOutRunsOverlay(viewModel)
     } else if (match.pendingAction != PendingAction.NONE && match.status != MatchStatus.COMPLETED) {
         PlayerSelectionOverlay(uiState, viewModel)
+    }
+
+    uiState.finishedOverSummary?.let { summary ->
+        OverCompletedOverlay(summary, onDismiss = onDismissOverSummary)
     }
 
     if (match.status == MatchStatus.COMPLETED && showMatchFinishedDialog) {
@@ -140,6 +147,85 @@ fun InningsOverOverlay(uiState: MatchUiState, viewModel: ScoringViewModel) {
                 Text("START 2ND INNINGS")
             }
         }
+    )
+}
+
+@Composable
+fun OverCompletedOverlay(summary: OverSummary, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { },
+        text = {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF2E7D32)), // Strong Green
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp).fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "END OF OVER ${summary.overNumber}",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                    
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                "${summary.runs}",
+                                style = MaterialTheme.typography.displayMedium,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White
+                            )
+                            Text(
+                                "RUNS",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                        }
+                        
+                        Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color.White.copy(alpha = 0.3f)))
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            val wicketColor = if (summary.wickets > 0) Color(0xFFFFEB3B) else Color.White
+                            Text(
+                                "${summary.wickets}",
+                                style = MaterialTheme.typography.displayMedium,
+                                fontWeight = FontWeight.Black,
+                                color = wicketColor
+                            )
+                            Text(
+                                "WICKETS",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF2E7D32)),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("OK", fontWeight = FontWeight.Black)
+                    }
+                }
+            }
+        },
+        confirmButton = { },
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     )
 }
 

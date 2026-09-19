@@ -359,8 +359,7 @@ fun ControlsSection(
                 runs = 1, 
                 modifier = Modifier.weight(1f), 
                 label = "1G",
-                enabled = !isCompleted,
-                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                enabled = !isCompleted
             ) { viewModel.handleExtra(ExtrasType.GRANTED, 1) }
             RunButton(runs = 2, modifier = Modifier.weight(1f), enabled = !isCompleted) { viewModel.handleRuns(2, true) }
             RunButton(runs = 3, modifier = Modifier.weight(1f), enabled = !isCompleted) { viewModel.handleRuns(3, true) }

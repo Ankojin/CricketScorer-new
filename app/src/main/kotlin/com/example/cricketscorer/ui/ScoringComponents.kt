@@ -2,7 +2,6 @@ package com.example.cricketscorer.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -84,37 +83,43 @@ fun ExtraButton(label: String, type: ExtrasType, viewModel: ScoringViewModel, on
 @Composable
 fun BallBox(ball: Ball, onClick: () -> Unit) {
     val bgColor = when {
-        ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT -> Color(0xFFFFEBEE)
-        ball.isDroppedCatch -> Color(0xFFFFF3E0)
-        ball.extrasType != ExtrasType.NONE -> Color(0xFFFFF3E0)
-        else -> Color.White
+        ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT -> Color(0xFFD32F2F) // Wicket -> Red
+        ball.extrasType == ExtrasType.WIDE || ball.extrasType == ExtrasType.NO_BALL -> Color(0xFFF57C00) // Wide/NB -> Orange
+        ball.runs == 6 -> Color(0xFF7B1FA2) // 6 -> Purple
+        ball.runs == 4 -> Color(0xFF1976D2) // 4 -> Blue
+        else -> Color(0xFFE0E0E0) // Others -> Light Grey
     }
-    val textColor = when {
-        ball.wicketType != WicketType.NONE && ball.wicketType != WicketType.RETIRED_HURT -> Color.Red
-        ball.isDroppedCatch -> Color(0xFFFF9800)
-        ball.extrasType != ExtrasType.NONE -> Color(0xFFE65100)
-        else -> Color.Black
-    }
+    
+    val textColor = if (bgColor == Color(0xFFE0E0E0)) Color.Black else Color.White
+    
     val text = when {
         ball.wicketType == WicketType.RETIRED_HURT -> "RH"
         ball.wicketType != WicketType.NONE -> "W"
         ball.isDroppedCatch -> "🤲${ball.runs}"
         ball.extrasType == ExtrasType.WIDE -> "${ball.extraRuns}wd"
-        ball.extrasType == ExtrasType.NO_BALL -> "${ball.runs + ball.extraRuns}nb"
+        ball.extrasType == ExtrasType.NO_BALL -> {
+            val total = ball.runs + ball.extraRuns
+            if (total > 0) "${total}nb" else "nb"
+        }
         ball.extrasType == ExtrasType.BYE -> "${ball.extraRuns}b"
         ball.extrasType == ExtrasType.LEG_BYE -> "${ball.extraRuns}lb"
         ball.extrasType == ExtrasType.GRANTED -> "${ball.runs}G"
-        else -> "${ball.runs}"
+        else -> if (ball.runs == 0) "•" else "${ball.runs}"
     }
 
     Box(
         modifier = Modifier
-            .size(36.dp)
+            .size(32.dp)
             .background(bgColor, CircleShape)
-            .border(1.dp, Color.LightGray, CircleShape)
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Text(text, color = textColor, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(
+            text = text, 
+            color = textColor, 
+            fontWeight = FontWeight.Black, 
+            fontSize = if (text.length > 2) 9.sp else 11.sp,
+            textAlign = TextAlign.Center
+        )
     }
 }

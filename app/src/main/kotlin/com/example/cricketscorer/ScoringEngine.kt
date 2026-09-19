@@ -157,7 +157,7 @@ object ScoringEngine {
 
             val physicalRuns = if (healedBall.extrasType == ExtrasType.WIDE) (healedBall.extraRuns - 1).coerceAtLeast(0) 
                                else if (healedBall.extrasType == ExtrasType.BYE || healedBall.extrasType == ExtrasType.LEG_BYE) healedBall.extraRuns 
-                               else healedBall.runs
+                               else healedBall.runs + (if (healedBall.extrasType == ExtrasType.GRANTED) healedBall.extraRuns else 0)
             
             val shouldRotate = (physicalRuns % 2 != 0 != healedBall.hadCrossed) && healedBall.rotateStrike && healedBall.extrasType != ExtrasType.GRANTED
             if (shouldRotate) { val t = sId; sId = nsId; nsId = t }
@@ -252,11 +252,12 @@ object ScoringEngine {
                 val isOut = p.id == outId
                 
                 if (p.id == ball.strikerId) {
+                    val actualRuns = ball.runs + (if (ball.extrasType == ExtrasType.GRANTED) ball.extraRuns else 0)
                     np = np.copy(battingStats = p.battingStats.copy(
-                        runs = p.battingStats.runs + ball.runs, 
+                        runs = p.battingStats.runs + actualRuns, 
                         balls = p.battingStats.balls + (if (ball.isLegalBall || ball.extrasType == ExtrasType.NO_BALL) 1 else 0), 
-                        fours = p.battingStats.fours + (if (ball.runs == 4) 1 else 0), 
-                        sixes = p.battingStats.sixes + (if (ball.runs == 6) 1 else 0), 
+                        fours = p.battingStats.fours + (if (actualRuns == 4) 1 else 0), 
+                        sixes = p.battingStats.sixes + (if (actualRuns == 6) 1 else 0), 
                         isOut = p.battingStats.isOut || (isOut && ball.wicketType != WicketType.RETIRED_HURT),
                         isRetiredHurt = ball.wicketType == WicketType.RETIRED_HURT,
                         wicketType = if (isOut) ball.wicketType else p.battingStats.wicketType,
