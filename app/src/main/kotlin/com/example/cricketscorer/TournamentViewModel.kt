@@ -1,5 +1,6 @@
 package com.example.cricketscorer
 
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.StateFlow
 
@@ -28,7 +29,7 @@ class TournamentViewModel : ViewModel() {
         
         val success = TournamentRepository.addPlayerToTeam(tournamentId, teamId, name, bStyle, isCaptain, isViceCaptain)
         if (!success) {
-            android.widget.Toast.makeText(context, "Player $name already exists in this tournament! 👤❌", android.widget.Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Player $name already exists in this team! 👤❌", Toast.LENGTH_SHORT).show()
         }
     }
 

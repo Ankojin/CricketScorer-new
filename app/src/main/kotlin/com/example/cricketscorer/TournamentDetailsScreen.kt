@@ -392,8 +392,9 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
     val scope = rememberCoroutineScope()
     var shareTrigger by remember { mutableIntStateOf(0) }
 
-    val allPlayersWithTeam = tournament.teams.flatMap { team ->
-        team.players.map { player -> player to team }
+    val allPlayersWithTeam = tournament.participants.orEmpty().map { player -> 
+        val team = tournament.teams.orEmpty().find { it.players.orEmpty().any { p -> p.id == player.id } } ?: Team("temp", "Unknown")
+        player to team
     }
     
     val topBatters = allPlayersWithTeam
@@ -1001,8 +1002,9 @@ fun TeamCard(
                             }
                         } else {
                             Text("Select players to add:", style = MaterialTheme.typography.labelMedium)
-                            val tournamentPlayers = tournament.teams.flatMap { it.players }.map { it.name.lowercase() }
-                            val filteredGlobal = globalPlayers.filter { gp -> gp.name.lowercase() !in tournamentPlayers }
+                            // v2.31.8: Relaxed filter to allow players from other teams (shuffling) 🏏🚀⚖️🏅
+                            val teamPlayerNames = team.players.map { it.name.lowercase() }
+                            val filteredGlobal = globalPlayers.filter { gp -> gp.name.lowercase() !in teamPlayerNames }
                             val selectedPlayers = remember { mutableStateListOf<Player>() }
 
                             if (filteredGlobal.isEmpty()) {

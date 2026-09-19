@@ -1,5 +1,6 @@
 package com.example.cricketscorer
 
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -928,7 +929,7 @@ class ScoringViewModel : ViewModel() {
 
         val success = TournamentRepository.addPlayerToTeam(current.tournamentId ?: "", teamToAddId, playerName, battingStyle)
         if (!success) {
-            android.widget.Toast.makeText(context, "Player $playerName already exists in this tournament! 👤❌", android.widget.Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Player $playerName already exists in this team! 👤❌", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -991,25 +992,30 @@ class ScoringViewModel : ViewModel() {
     }
 
     fun deletePlayerFromMatch(playerId: String) {
+        val currentMatch = _matchState.value ?: return
+        
+        // 1. Check participation outside update block
+        val hasParticipated = currentMatch.ballHistory.orEmpty().any {
+            it.strikerId == playerId || it.nonStrikerId == playerId ||
+                    it.bowlerId == playerId || it.fielderId == playerId || it.outPlayerId == playerId
+        } || currentMatch.strikerId == playerId || currentMatch.nonStrikerId == playerId || currentMatch.currentBowlerId == playerId
+
+        if (hasParticipated) return
+
+        // 2. Determine team outside update block
+        val teamId = if (currentMatch.teamA.players.orEmpty().any { it.id == playerId }) currentMatch.teamA.id 
+                     else currentMatch.teamB.id
+
+        // 3. Update Repository (triggers reactive sync)
+        TournamentRepository.deletePlayer(currentMatch.tournamentId.orEmpty(), teamId, playerId)
+
+        // 4. Update local match state (Snapshots are protected by the recalculate pass in repository)
         _matchState.update { current ->
             if (current == null) return@update null
-
-            // Check if player participated
-            val hasParticipated = current.ballHistory.any {
-                it.strikerId == playerId || it.nonStrikerId == playerId ||
-                        it.bowlerId == playerId || it.fielderId == playerId || it.outPlayerId == playerId
-            } || current.strikerId == playerId || current.nonStrikerId == playerId || current.currentBowlerId == playerId
-
-            if (hasParticipated) return@update current
-
-            val teamId = if (current.teamA.players.any { it.id == playerId }) current.teamA.id else current.teamB.id
-
-            // Update repository
-            TournamentRepository.deletePlayer(current.tournamentId ?: "", teamId, playerId)
-
-            val updatedMatch = current.copy(
-                teamA = current.teamA.copy(players = current.teamA.players.filter { it.id != playerId }),
-                teamB = current.teamB.copy(players = current.teamB.players.filter { it.id != playerId }),
+            
+            val updatedMatch = current.safeCopy().copy(
+                teamA = current.teamA.safeCopy().copy(players = current.teamA.players.orEmpty().filterNotNull().filter { it.id != playerId }),
+                teamB = current.teamB.safeCopy().copy(players = current.teamB.players.orEmpty().filterNotNull().filter { it.id != playerId }),
                 teamACaptainId = if (current.teamACaptainId == playerId) null else current.teamACaptainId,
                 teamBCaptainId = if (current.teamBCaptainId == playerId) null else current.teamBCaptainId,
                 teamAWicketKeeperId = if (current.teamAWicketKeeperId == playerId) null else current.teamAWicketKeeperId,
@@ -1017,9 +1023,6 @@ class ScoringViewModel : ViewModel() {
             )
 
             recalculateMatchFromHistory(updatedMatch)
-        }
-        _matchState.value?.let { 
-            TournamentRepository.updateMatch(it.tournamentId ?: "", it)
         }
     }
 

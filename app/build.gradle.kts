@@ -3,6 +3,7 @@ import java.util.Properties
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -79,6 +80,12 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("com.google.code.gson:gson:2.14.0")
     implementation("com.google.android.gms:play-services-nearby:19.0.0")
+    
+    val room_version = "2.8.5"
+    implementation("androidx.room:room-runtime:$room_version")
+    implementation("androidx.room:room-ktx:$room_version")
+    ksp("androidx.room:room-compiler:$room_version")
+
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
