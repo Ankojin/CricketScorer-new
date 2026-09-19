@@ -64,13 +64,4 @@ class Converters {
         val type = object : TypeToken<List<WicketRecord>>() {}.type
         return gson.fromJson(value, type)
     }
-
-    @TypeConverter
-    fun fromTeam(value: Team?): String? = gson.toJson(value)
-
-    @TypeConverter
-    fun toTeam(value: String?): Team? {
-        val type = object : TypeToken<Team>() {}.type
-        return gson.fromJson(value, type)
-    }
 }

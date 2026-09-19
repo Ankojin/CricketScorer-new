@@ -105,8 +105,10 @@ data class MatchEntity(
     @PrimaryKey val id: String,
     val tournamentId: String,
     val tournamentName: String?,
-    val teamA: Team, 
-    val teamB: Team, 
+    val teamAId: String,
+    val teamBId: String,
+    val teamAPlayerIds: List<String>,
+    val teamBPlayerIds: List<String>,
     val tossWinnerId: String?,
     val tossDecision: String?,
     val initialBattingTeamId: String?,
@@ -317,13 +319,19 @@ fun Ball.toEntity(matchId: String): BallEntity = BallEntity(
     isReplacement = isReplacement
 )
 
-fun MatchWithBalls.toDomain(): Match = match.let { m ->
+fun MatchWithBalls.toDomain(availableTeams: List<Team> = emptyList()): Match = match.let { m ->
+    val baseTeamA = availableTeams.find { it.id == m.teamAId } ?: Team(id = m.teamAId, name = m.tournamentName ?: "Team A")
+    val baseTeamB = availableTeams.find { it.id == m.teamBId } ?: Team(id = m.teamBId, name = m.tournamentName ?: "Team B")
+    
+    val rebuiltTeamA = baseTeamA.copy(players = baseTeamA.players.filter { m.teamAPlayerIds.contains(it.id) })
+    val rebuiltTeamB = baseTeamB.copy(players = baseTeamB.players.filter { m.teamBPlayerIds.contains(it.id) })
+
     Match(
         id = m.id,
         tournamentId = m.tournamentId,
         tournamentName = m.tournamentName,
-        teamA = m.teamA,
-        teamB = m.teamB,
+        teamA = rebuiltTeamA,
+        teamB = rebuiltTeamB,
         tossWinnerId = m.tossWinnerId,
         tossDecision = m.tossDecision,
         initialBattingTeamId = m.initialBattingTeamId,
@@ -373,8 +381,10 @@ fun Match.toEntity(): MatchEntity = MatchEntity(
     id = id,
     tournamentId = tournamentId ?: "",
     tournamentName = tournamentName,
-    teamA = teamA,
-    teamB = teamB,
+    teamAId = teamA.id,
+    teamBId = teamB.id,
+    teamAPlayerIds = teamA.players.map { it.id },
+    teamBPlayerIds = teamB.players.map { it.id },
     tossWinnerId = tossWinnerId,
     tossDecision = tossDecision,
     initialBattingTeamId = initialBattingTeamId,
@@ -446,13 +456,16 @@ fun Tournament.toEntity(): TournamentEntity = TournamentEntity(
     settings = settings
 )
 
-fun TournamentWithDetails.toDomain(): Tournament = Tournament(
-    id = tournament.id,
-    name = tournament.name,
-    settings = tournament.settings,
-    teams = teams.map { te ->
+fun TournamentWithDetails.toDomain(): Tournament = tournament.let { t ->
+    val finalizedTeams = teams.map { te ->
         te.toDomain(players.filter { it.teamId == te.id }.map { it.toDomain() })
-    },
-    matches = matches.map { it.toDomain() },
-    participants = players.map { it.toDomain() }
-)
+    }
+    Tournament(
+        id = t.id,
+        name = t.name,
+        settings = t.settings,
+        teams = finalizedTeams,
+        matches = matches.map { it.toDomain(finalizedTeams) },
+        participants = players.map { it.toDomain() }
+    )
+}
