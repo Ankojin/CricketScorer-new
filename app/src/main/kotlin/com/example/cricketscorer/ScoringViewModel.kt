@@ -180,6 +180,7 @@ class ScoringViewModel : ViewModel() {
     }
 
     fun loadMatch(match: Match) {
+        ScoringEngine.clearCache(match.id)
         val recalculated = ScoringEngine.recalculateMatchFromHistory(match)
         _matchState.value = recalculated
         notifiedBowlerIds.clear()
@@ -588,6 +589,7 @@ class ScoringViewModel : ViewModel() {
                 teamA = masterTeamA ?: state.teamA,
                 teamB = masterTeamB ?: state.teamB
             )
+            ScoringEngine.clearCache(state.id)
             ScoringEngine.recalculateMatchFromHistory(updatedMatch)
         }
     }
@@ -598,6 +600,7 @@ class ScoringViewModel : ViewModel() {
         
         TournamentRepository.addPlayersToTeam(current.tournamentId ?: "", teamId, players)
         
+        ScoringEngine.clearCache(current.id)
         val updated = ScoringEngine.recalculateMatchFromHistory(_matchState.value!!)
         _matchState.value = updated
         TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)
@@ -609,6 +612,7 @@ class ScoringViewModel : ViewModel() {
         
         TournamentRepository.addPlayerToTeam(current.tournamentId ?: "", teamId, player.name, player.battingStyle ?: BattingStyle.RHB)
         
+        ScoringEngine.clearCache(current.id)
         val updated = ScoringEngine.recalculateMatchFromHistory(_matchState.value!!)
         _matchState.value = updated
         TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)
@@ -632,6 +636,7 @@ class ScoringViewModel : ViewModel() {
                 teamBWicketKeeperId = if (current.teamBWicketKeeperId == playerId) null else current.teamBWicketKeeperId
             )
 
+            ScoringEngine.clearCache(current.id)
             ScoringEngine.recalculateMatchFromHistory(updatedMatch)
         }
     }
@@ -653,6 +658,7 @@ class ScoringViewModel : ViewModel() {
         
         TournamentRepository.updatePlayerDetails(current.tournamentId ?: "", teamId, playerId, newName, bStyle, isCaptain, isViceCaptain)
         
+        ScoringEngine.clearCache(current.id)
         val updated = ScoringEngine.recalculateMatchFromHistory(_matchState.value!!)
         _matchState.value = updated
         TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)

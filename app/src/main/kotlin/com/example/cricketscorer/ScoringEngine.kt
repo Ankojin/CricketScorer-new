@@ -2,6 +2,15 @@ package com.example.cricketscorer
 
 object ScoringEngine {
 
+    // v2.33.0: High-Performance Incremental Engine 🏏🚀⚖️🏅
+    // Caches match state at the end of each over to avoid O(N) recalculations on every ball.
+    private val overSnapshots = mutableMapOf<String, MutableList<Match>>()
+
+    fun clearCache(matchId: String? = null) {
+        if (matchId != null) overSnapshots.remove(matchId)
+        else overSnapshots.clear()
+    }
+
     fun healLegacyId(id: String?, team: Team): String? {
         if (id.isNullOrEmpty()) return id
         val isLikelyUuid = id.length >= 32 && !id.contains(" ")
@@ -19,35 +28,69 @@ object ScoringEngine {
             return match.copy(pendingAction = PendingAction.TOSS_REQUIRED)
         }
 
-        // 1. Initial State Baseline v2.27.0 Critical Physics Engine 🏏🚀⚖️🏅
-        val teamABatsFirst = if (match.tossWinnerId == match.teamA.id) match.tossDecision == "BAT" else match.tossDecision == "BOWL"
-        val innings1BattingTeamId = if (teamABatsFirst) match.teamA.id else match.teamB.id
-        val innings1BowlingTeamId = if (innings1BattingTeamId == match.teamA.id) match.teamB.id else match.teamA.id
-
-        var current = match.copy(
-            totalRuns = 0, totalWickets = 0, totalBalls = 0,
-            wideCount = 0, noBallCount = 0, byeCount = 0, legByeCount = 0,
-            wicketHistory = emptyList(), battingOrder = emptyList(),
-            teamA = resetTeamStats(match.teamA), teamB = resetTeamStats(match.teamB),
-            status = MatchStatus.LIVE, currentInnings = 1,
-            battingTeamId = innings1BattingTeamId, bowlingTeamId = innings1BowlingTeamId,
-            strikerId = null, nonStrikerId = null, currentBowlerId = null, lastBowlerId = null,
-            pendingAction = PendingAction.NONE
-        )
-
-        var ballsInOver = 0
-        var itemsProcessed = 0
+        // 1. Snapshot Search v2.33.0 🏏🚀⚖️🏅
+        // Find the most recent valid snapshot that matches the current history prefix.
+        val snapshots = overSnapshots.getOrPut(match.id) { mutableListOf() }
         
-        // 2. Event Processing Loop
-        match.ballHistory.forEach { ball ->
+        // Strategy: Iterate backwards to find the latest valid snapshot
+        var startState: Match? = null
+        var startIndex = 0
+        
+        for (i in snapshots.indices.reversed()) {
+            val snapshot = snapshots[i]
+            val snapBalls = snapshot.ballHistory.size
+            if (snapBalls <= match.ballHistory.size) {
+                // Potential match. Verify prefix.
+                val isMatch = (0 until snapBalls).all { match.ballHistory[it] == snapshot.ballHistory[it] }
+                if (isMatch) {
+                    startState = snapshot
+                    startIndex = snapBalls
+                    // v2.33.1: Prune invalid future snapshots to allow fresh over-end commits 🏏🚀⚖️🏅
+                    val toRemove = snapshots.size - 1 - i
+                    repeat(toRemove) { snapshots.removeAt(snapshots.size - 1) }
+                    break
+                }
+            }
+        }
+
+        // 2. Initialize Starting Point
+        var current: Match
+        if (startState != null) {
+            // Incremental hit! 🚀
+            current = startState
+        } else {
+            // Full Recalculation Fallback
+            val teamABatsFirst = if (match.tossWinnerId == match.teamA.id) match.tossDecision == "BAT" else match.tossDecision == "BOWL"
+            val innings1BattingTeamId = if (teamABatsFirst) match.teamA.id else match.teamB.id
+            val innings1BowlingTeamId = if (innings1BattingTeamId == match.teamA.id) match.teamB.id else match.teamA.id
+
+            current = match.copy(
+                totalRuns = 0, totalWickets = 0, totalBalls = 0,
+                wideCount = 0, noBallCount = 0, byeCount = 0, legByeCount = 0,
+                wicketHistory = emptyList(), battingOrder = emptyList(),
+                teamA = resetTeamStats(match.teamA), teamB = resetTeamStats(match.teamB),
+                status = MatchStatus.LIVE, currentInnings = 1,
+                battingTeamId = innings1BattingTeamId, bowlingTeamId = innings1BowlingTeamId,
+                strikerId = null, nonStrikerId = null, currentBowlerId = null, lastBowlerId = null,
+                pendingAction = PendingAction.NONE
+            )
+            // Clear invalid snapshots if we had to go back to zero
+            snapshots.clear()
+        }
+
+        var ballsInOver = current.totalBalls % 6
+        var itemsProcessed = startIndex
+        
+        // 3. Selective Event Processing Loop
+        for (i in startIndex until match.ballHistory.size) {
+            val ball = match.ballHistory[i]
             itemsProcessed++
-            if (current.status == MatchStatus.COMPLETED) return@forEach
+            if (current.status == MatchStatus.COMPLETED) break
             
             val isBattingA = isTeamA(current.battingTeamId, current)
             val battingTeam = if (isBattingA) current.teamA else current.teamB
             val bowlingTeam = if (isBattingA) current.teamB else current.teamA
 
-            // ID Healing for safe matching across devices/versions v2.27.1 🏏🚀⚖️🏅
             val healedBall = ball.copy(
                 strikerId = healLegacyId(ball.strikerId, battingTeam),
                 nonStrikerId = healLegacyId(ball.nonStrikerId, battingTeam),
@@ -55,14 +98,12 @@ object ScoringEngine {
                 outPlayerId = healLegacyId(ball.outPlayerId, battingTeam)
             )
 
-            // Update Batting Order
             val newBattingOrder = current.battingOrder.toMutableList()
             healedBall.strikerId?.let { if (it.isNotEmpty() && !newBattingOrder.contains(it)) newBattingOrder.add(it) }
             healedBall.nonStrikerId?.let { if (it.isNotEmpty() && !newBattingOrder.contains(it)) newBattingOrder.add(it) }
             val outId = healedBall.outPlayerId ?: (if (healedBall.wicketType != WicketType.NONE && healedBall.wicketType != WicketType.RETIRED_HURT) healedBall.strikerId else null)
             if (!outId.isNullOrEmpty() && !newBattingOrder.contains(outId)) newBattingOrder.add(outId)
 
-            // Update Team Totals & Individual Stats
             current = current.copy(
                 totalRuns = current.totalRuns + healedBall.runs + healedBall.extraRuns,
                 totalWickets = current.totalWickets + (if (healedBall.wicketType != WicketType.NONE && healedBall.wicketType != WicketType.RETIRED_HURT) 1 else 0),
@@ -73,10 +114,10 @@ object ScoringEngine {
                 legByeCount = current.legByeCount + (if (healedBall.extrasType == ExtrasType.LEG_BYE) healedBall.extraRuns else 0),
                 battingOrder = newBattingOrder,
                 teamA = updateTeamStats(current.teamA, healedBall, isBattingA, !isBattingA),
-                teamB = updateTeamStats(current.teamB, healedBall, !isBattingA, isBattingA)
+                teamB = updateTeamStats(current.teamB, healedBall, !isBattingA, isBattingA),
+                ballHistory = match.ballHistory.take(itemsProcessed)
             )
 
-            // Record Wicket History
             if (healedBall.wicketType != WicketType.NONE && healedBall.wicketType != WicketType.RETIRED_HURT) {
                 val outName = battingTeam.players.find { it.id == outId }?.name ?: "Unknown"
                 val bName = bowlingTeam.players.find { it.id == healedBall.bowlerId }?.name
@@ -86,78 +127,46 @@ object ScoringEngine {
 
             if (healedBall.isPhysicalBall) ballsInOver++
 
-            // Spatial Tracking Engine v2.28.4 🏏🚀⚖️🏅
-            // Trusted initialization: local vars start with current state.
             var sId = current.strikerId
             var nsId = current.nonStrikerId
             var activeBId = current.currentBowlerId
             var lbId = current.lastBowlerId
 
-            // Restoration Guard: Only restore from ball record if the slot is vacant
-            // AND the player being restored is not the one getting out on THIS ball.
             if (!healedBall.isAdjustment) {
                 val victimId = healedBall.outPlayerId ?: (if (healedBall.wicketType != WicketType.NONE) healedBall.strikerId else null)
-                
-                if (sId == null && healedBall.strikerId != null && healedBall.strikerId != victimId) {
-                    if (!isPlayerUnavailable(healedBall.strikerId, current)) {
-                        sId = healedBall.strikerId
-                    }
-                }
-                if (nsId == null && healedBall.nonStrikerId != null && healedBall.nonStrikerId != victimId) {
-                    if (!isPlayerUnavailable(healedBall.nonStrikerId, current)) {
-                        nsId = healedBall.nonStrikerId
-                    }
-                }
+                if (sId == null && healedBall.strikerId != null && healedBall.strikerId != victimId && !isPlayerUnavailable(healedBall.strikerId, current)) sId = healedBall.strikerId
+                if (nsId == null && healedBall.nonStrikerId != null && healedBall.nonStrikerId != victimId && !isPlayerUnavailable(healedBall.nonStrikerId, current)) nsId = healedBall.nonStrikerId
                 if (activeBId == null) activeBId = healedBall.bowlerId
             }
 
-            // A. Manual Adjustments Handling
             if (healedBall.isAdjustment) {
                 when (healedBall.adjustmentSlot) {
-                    "STRIKER" -> {
-                        if (sId == null || healedBall.isReplacement) sId = healedBall.adjustmentPlayerId
-                    }
-                    "NON_STRIKER" -> {
-                        if (nsId == null || healedBall.isReplacement) nsId = healedBall.adjustmentPlayerId
-                    }
-                    "BOWLER" -> {
-                        if (activeBId == null || healedBall.isReplacement) activeBId = healedBall.adjustmentPlayerId
-                    }
-                    "SWAP" -> {
-                        val temp = sId; sId = nsId; nsId = temp
-                    }
+                    "STRIKER" -> if (sId == null || healedBall.isReplacement) sId = healedBall.adjustmentPlayerId
+                    "NON_STRIKER" -> if (nsId == null || healedBall.isReplacement) nsId = healedBall.adjustmentPlayerId
+                    "BOWLER" -> if (activeBId == null || healedBall.isReplacement) activeBId = healedBall.adjustmentPlayerId
+                    "SWAP" -> { val temp = sId; sId = nsId; nsId = temp }
                 }
                 current = current.copy(strikerId = sId, nonStrikerId = nsId, currentBowlerId = activeBId)
-                return@forEach 
+                
+                // Cache logic for adjustments if they happen at over boundaries (rare but possible)
+                if (ballsInOver == 0 && current.totalBalls > 0 && current.totalBalls % 6 == 0) {
+                    if (snapshots.none { it.ballHistory.size == current.ballHistory.size }) snapshots.add(current)
+                }
+                continue
             }
 
             val physicalRuns = if (healedBall.extrasType == ExtrasType.WIDE) (healedBall.extraRuns - 1).coerceAtLeast(0) 
                                else if (healedBall.extrasType == ExtrasType.BYE || healedBall.extrasType == ExtrasType.LEG_BYE) healedBall.extraRuns 
                                else healedBall.runs
             
-            val isCaught = healedBall.wicketType == WicketType.CAUGHT
-            val is1G = healedBall.extrasType == ExtrasType.GRANTED
+            val shouldRotate = (physicalRuns % 2 != 0 != healedBall.hadCrossed) && healedBall.rotateStrike && healedBall.extrasType != ExtrasType.GRANTED
+            if (shouldRotate) { val t = sId; sId = nsId; nsId = t }
 
-            // B. Run-Based Strike Rotation v2.27.1 🏏🚀⚖️🏅
-            val baseRotation = physicalRuns % 2 != 0
-            val shouldRotate = (baseRotation != healedBall.hadCrossed) && healedBall.rotateStrike && !is1G
-            
-            if (shouldRotate) {
-                val t = sId; sId = nsId; nsId = t
-            }
-
-            // C. Dismissal Physics (Crease Clearing)
             if (healedBall.wicketType != WicketType.NONE) {
                 val victimId = healedBall.outPlayerId ?: healedBall.strikerId
-                if (isCaught) {
-                    sId = null
-                } else {
-                    if (sId == victimId) sId = null
-                    else if (nsId == victimId) nsId = null
-                }
+                if (healedBall.wicketType == WicketType.CAUGHT) sId = null else { if (sId == victimId) sId = null else if (nsId == victimId) nsId = null }
             }
 
-            // D. Over-End Logic (Happens AFTER all ball physics)
             var overJustFinished = false
             if (ballsInOver == 6) {
                 val t = sId; sId = nsId; nsId = t
@@ -167,7 +176,11 @@ object ScoringEngine {
             
             current = current.copy(strikerId = sId, nonStrikerId = nsId, currentBowlerId = if (overJustFinished) null else activeBId, lastBowlerId = lbId)
 
-            // Innings Completion Logic
+            // v2.33.0: Commit Snapshot at the end of the over 🏏🚀⚖️🏅
+            if (overJustFinished) {
+                if (snapshots.none { it.ballHistory.size == current.ballHistory.size }) snapshots.add(current)
+            }
+
             val inningsEnded = current.totalWickets >= (battingTeam.players.size - 1).coerceAtLeast(1) || current.totalBalls >= current.oversPerInnings * 6
             
             if (current.currentInnings == 1 && inningsEnded) {
@@ -185,6 +198,8 @@ object ScoringEngine {
                     pendingAction = if (match.isSecondInningsStarted) PendingAction.NONE else PendingAction.START_SECOND_INNINGS
                 )
                 ballsInOver = 0
+                // Cache at innings transition
+                if (snapshots.none { it.ballHistory.size == current.ballHistory.size }) snapshots.add(current)
             } else if (current.currentInnings == 2 && current.status == MatchStatus.LIVE && current.target != null && (current.totalBalls > 0 || current.totalWickets > 0)) {
                 val targetValue = current.target
                 if (current.totalRuns >= targetValue) {
@@ -195,7 +210,7 @@ object ScoringEngine {
             }
         }
 
-        // 3. Final Targeted Pending Action Selection (Special Priority) v2.26.68 🏏🚀⚖️🏅
+        // 4. Final Targeted Pending Action Selection (UI logic)
         if (current.status == MatchStatus.LIVE) {
             if (match.pendingAction == PendingAction.SELECT_MATCH_SETTINGS || match.pendingAction == PendingAction.TOSS_REQUIRED) {
                 current = current.copy(pendingAction = match.pendingAction)
