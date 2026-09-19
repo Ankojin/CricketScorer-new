@@ -41,7 +41,8 @@ import java.util.Random
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MatchSettingsDialog(match: Match, viewModel: ScoringViewModel, onDismiss: (() -> Unit)? = null) {
+fun MatchSettingsDialog(uiState: MatchUiState, viewModel: ScoringViewModel, onDismiss: (() -> Unit)? = null) {
+    val match = uiState.match ?: return
     val currentOvers = match.oversPerInnings
     val currentMaxOvers = match.maxOversPerBowler
     val currentQuotaCount = match.quotaBowlersCount
@@ -121,7 +122,7 @@ fun MatchSettingsDialog(match: Match, viewModel: ScoringViewModel, onDismiss: ((
                 
                 if (showFlipDialog) {
                     CoinFlipDialog(
-                        match = match,
+                        uiState = uiState,
                         onResult = { winnerId, decision ->
                             tempTossWinnerId = winnerId
                             tempTossDecision = decision
@@ -193,7 +194,8 @@ fun MatchSettingsDialog(match: Match, viewModel: ScoringViewModel, onDismiss: ((
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CoinFlipDialog(match: Match, onResult: (String, String) -> Unit, onDismiss: () -> Unit) {
+fun CoinFlipDialog(uiState: MatchUiState, onResult: (String, String) -> Unit, onDismiss: () -> Unit) {
+    val match = uiState.match ?: return
     var winnerId by remember { mutableStateOf<String?>(null) }
     var decision by remember { mutableStateOf<String?>(null) }
     
@@ -399,7 +401,8 @@ fun CoinFlipDialog(match: Match, onResult: (String, String) -> Unit, onDismiss: 
 }
 
 @Composable
-fun MatchCelebrationDialog(match: Match, onNavigateToDashboard: () -> Unit, onDismiss: () -> Unit) {
+fun MatchCelebrationDialog(uiState: MatchUiState, onNavigateToDashboard: () -> Unit, onDismiss: () -> Unit) {
+    val match = uiState.match ?: return
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { 
@@ -444,7 +447,8 @@ fun MatchCelebrationDialog(match: Match, onNavigateToDashboard: () -> Unit, onDi
 }
 
 @Composable
-fun WicketDialog(match: Match, viewModel: ScoringViewModel, onDismiss: () -> Unit) {
+fun WicketDialog(uiState: MatchUiState, viewModel: ScoringViewModel, onDismiss: () -> Unit) {
+    val match = uiState.match ?: return
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Record Wicket", fontWeight = FontWeight.Black) },
@@ -607,7 +611,8 @@ fun OtherRunsDialog(viewModel: ScoringViewModel, onDismiss: () -> Unit) {
 }
 
 @Composable
-fun RetireHurtDialog(match: Match, viewModel: ScoringViewModel, onDismiss: () -> Unit) {
+fun RetireHurtDialog(uiState: MatchUiState, viewModel: ScoringViewModel, onDismiss: () -> Unit) {
+    val match = uiState.match ?: return
     val battingTeam = if (match.battingTeamId == match.teamA.id) match.teamA else match.teamB
     val striker = battingTeam.players.find { it.id == match.strikerId }
     val nonStriker = battingTeam.players.find { it.id == match.nonStrikerId }

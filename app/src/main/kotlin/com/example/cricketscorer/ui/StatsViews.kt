@@ -28,7 +28,8 @@ import com.example.cricketscorer.ui.CardBranding
 import kotlinx.coroutines.delay
 
 @Composable
-fun StatsTab(match: Match, graphicsLayer: GraphicsLayer) {
+fun StatsTab(uiState: MatchUiState, graphicsLayer: GraphicsLayer) {
+    val match = uiState.match ?: return
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var shareTrigger by remember { mutableIntStateOf(0) }
@@ -82,8 +83,8 @@ fun StatsTab(match: Match, graphicsLayer: GraphicsLayer) {
             ) {
                 CaptureArea {
                     Column(modifier = Modifier.fillMaxWidth().background(Color.White).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        MatchSummaryCard(match)
-                        MotmSection(match)
+                        MatchSummaryCard(uiState)
+                        MotmSection(uiState)
                         ScoringBreakdownCard(match, i1Stats, i2Stats)
                         BestPerformancesBatters(teamA, teamB)
                         BestPerformancesBowlers(teamA, teamB)

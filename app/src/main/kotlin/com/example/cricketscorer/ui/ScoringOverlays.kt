@@ -26,7 +26,8 @@ import androidx.compose.ui.unit.sp
 import com.example.cricketscorer.*
 
 @Composable
-fun InningsOverOverlay(match: Match, viewModel: ScoringViewModel) {
+fun InningsOverOverlay(uiState: MatchUiState, viewModel: ScoringViewModel) {
+    val match = uiState.match ?: return
     AlertDialog(
         onDismissRequest = { },
         title = { Text("Innings Completed", fontWeight = FontWeight.Black) },
@@ -255,7 +256,8 @@ fun RunOutRunsOverlay(viewModel: ScoringViewModel) {
 }
 
 @Composable
-fun PlayerSelectionOverlay(match: Match, viewModel: ScoringViewModel) {
+fun PlayerSelectionOverlay(uiState: MatchUiState, viewModel: ScoringViewModel) {
+    val match = uiState.match ?: return
     val context = LocalContext.current
     val title = when (match.pendingAction ?: PendingAction.NONE) {
         PendingAction.SELECT_STRIKER -> "SELECT STRIKER"
@@ -403,14 +405,15 @@ fun PlayerSelectionOverlay(match: Match, viewModel: ScoringViewModel) {
 }
 
 @Composable
-fun ManageSquadsOverlay(match: Match, viewModel: ScoringViewModel, onDismiss: () -> Unit) {
+fun ManageSquadsOverlay(uiState: MatchUiState, viewModel: ScoringViewModel, onDismiss: () -> Unit) {
+    val match = uiState.match ?: return
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Manage Squads", fontWeight = FontWeight.Black) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                SquadList(match, match.teamA, "Team A: ${match.teamA.name}", viewModel)
-                SquadList(match, match.teamB, "Team B: ${match.teamB.name}", viewModel)
+                SquadList(uiState, match.teamA, "Team A: ${match.teamA.name}", viewModel)
+                SquadList(uiState, match.teamB, "Team B: ${match.teamB.name}", viewModel)
             }
         },
         confirmButton = {
@@ -421,7 +424,8 @@ fun ManageSquadsOverlay(match: Match, viewModel: ScoringViewModel, onDismiss: ()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SquadList(match: Match, team: Team, title: String, viewModel: ScoringViewModel) {
+fun SquadList(uiState: MatchUiState, team: Team, title: String, viewModel: ScoringViewModel) {
+    val match = uiState.match ?: return
     var showAddDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf<Player?>(null) }
     var newPlayerName by remember { mutableStateOf("") }

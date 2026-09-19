@@ -106,10 +106,24 @@ tasks.register("incrementVersionCode") {
         if (versionPropsFile.exists()) {
             val versionProps = Properties()
             versionPropsFile.inputStream().use { versionProps.load(it) }
+            
+            // Increment Version Code
             val currentVCode = versionProps.getProperty("VERSION_CODE", "40").toInt()
             versionProps.setProperty("VERSION_CODE", (currentVCode + 1).toString())
+            
+            // Increment Version Name (patch version)
+            val currentVName = versionProps.getProperty("VERSION_NAME", "2.32.5")
+            val parts = currentVName.split(".").toMutableList()
+            if (parts.size >= 3) {
+                val patch = parts.last().toInt()
+                parts[parts.size - 1] = (patch + 1).toString()
+                val newVName = parts.joinToString(".")
+                versionProps.setProperty("VERSION_NAME", newVName)
+                println("Version Name incremented to: $newVName")
+            }
+            
             versionPropsFile.outputStream().use { versionProps.store(it, null) }
-            println("Version code incremented to: ${currentVCode + 1}")
+            println("Version Code incremented to: ${currentVCode + 1}")
         }
     }
 }
@@ -125,8 +139,11 @@ tasks.configureEach {
 
 tasks.register("copyApkToRoot") {
     doLast {
-        // v2.26.49: Fetch EXACT version from the build configuration to prevent 1-off mismatch 🏏🚀⚖️🏅
-        val vName = android.defaultConfig.versionName
+        // v2.26.49: Fetch EXACT version from the properties file at execution time to reflect increments 🏏🚀⚖️🏅
+        val versionPropsFile = rootProject.file("version.properties")
+        val versionProps = Properties()
+        versionPropsFile.inputStream().use { versionProps.load(it) }
+        val vName = versionProps.getProperty("VERSION_NAME", "2.32.6")
         
         val apkFile = file("${layout.buildDirectory.get().asFile}/outputs/apk/debug/app-debug.apk")
         

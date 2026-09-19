@@ -51,7 +51,9 @@ fun LiveScoringScreen(
     onNavigateToDashboard: () -> Unit,
     onNavigateToMatches: () -> Unit
 ) {
-    val match by viewModel.matchState.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
+    val match = uiState.match
+    
     var selectedTabIndex by remember(match?.id) { mutableIntStateOf(if (match?.status == MatchStatus.COMPLETED) 1 else 0) }
     var viewedInnings by remember(match?.currentInnings) { mutableIntStateOf(match?.currentInnings ?: 1) }
     var showMatchFinishedDialog by remember { mutableStateOf(false) }
@@ -73,15 +75,15 @@ fun LiveScoringScreen(
     var showOtherRunsDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
-    val isSyncEnabled by viewModel.isSyncEnabled.collectAsState()
-    val connectedDevices by NearbyManager.connectedEndpoints.collectAsState()
-    val bowlerNotification by viewModel.bowlerNotification.collectAsState()
+    val isSyncEnabled = uiState.isSyncEnabled
+    val connectedDevicesCount = uiState.connectedDevicesCount
+    val bowlerNotification = uiState.bowlerNotification
 
     if (bowlerNotification != null) {
         AlertDialog(
             onDismissRequest = { viewModel.clearBowlerNotification() },
             title = { Text("Spell Completed", fontWeight = FontWeight.Black) },
-            text = { Text(bowlerNotification!!, style = MaterialTheme.typography.bodyLarge) },
+            text = { Text(bowlerNotification, style = MaterialTheme.typography.bodyLarge) },
             confirmButton = {
                 Button(onClick = { viewModel.clearBowlerNotification() }) {
                     Text("OK")
@@ -90,9 +92,9 @@ fun LiveScoringScreen(
         )
     }
 
-    LaunchedEffect(match, connectedDevices.size) {
-        if (isSyncEnabled && match != null && connectedDevices.isNotEmpty()) {
-            NearbyManager.broadcastMatch(context, match!!)
+    LaunchedEffect(match, connectedDevicesCount) {
+        if (isSyncEnabled && match != null && connectedDevicesCount > 0) {
+            NearbyManager.broadcastMatch(context, match)
         }
     }
 
@@ -206,7 +208,7 @@ fun LiveScoringScreen(
             Box(modifier = Modifier.padding(padding)) {
                 when (selectedTabIndex) {
                     0 -> LiveTab(
-                        match = m,
+                        uiState = uiState,
                         viewModel = viewModel,
                         onShowWicket = { showWicketDialog = true },
                         onShowExtraRuns = { type ->
@@ -215,41 +217,41 @@ fun LiveScoringScreen(
                         onShowOtherRuns = { showOtherRunsDialog = true },
                         onShowRetireHurt = { showRetireHurtDialog = true }
                     )
-                    1 -> ScorecardTab(m, viewedInnings, scorecardGraphicsLayer) { viewedInnings = it }
-                    2 -> OversTab(m, viewModel, oversGraphicsLayer)
-                    3 -> StatsTab(m, statsGraphicsLayer)
+                    1 -> ScorecardTab(uiState, viewedInnings, scorecardGraphicsLayer) { viewedInnings = it }
+                    2 -> OversTab(uiState, viewModel, oversGraphicsLayer)
+                    3 -> StatsTab(uiState, statsGraphicsLayer)
                 }
 
-                if (m.pendingAction == PendingAction.TOSS_REQUIRED || m.pendingAction == PendingAction.SELECT_MATCH_SETTINGS) {
-                    MatchSettingsDialog(m, viewModel, onDismiss = onNavigateToDashboard)
-                } else if (m.pendingAction == PendingAction.START_SECOND_INNINGS) {
-                    InningsOverOverlay(m, viewModel)
-                } else if (m.pendingAction == PendingAction.SELECT_RUNS_DROPPED_CATCH) {
+                if (match.pendingAction == PendingAction.TOSS_REQUIRED || match.pendingAction == PendingAction.SELECT_MATCH_SETTINGS) {
+                    MatchSettingsDialog(uiState, viewModel, onDismiss = onNavigateToDashboard)
+                } else if (match.pendingAction == PendingAction.START_SECOND_INNINGS) {
+                    InningsOverOverlay(uiState, viewModel)
+                } else if (match.pendingAction == PendingAction.SELECT_RUNS_DROPPED_CATCH) {
                     DroppedCatchRunsOverlay(viewModel)
-                } else if (m.pendingAction == PendingAction.SELECT_RUNS_WICKET) {
+                } else if (match.pendingAction == PendingAction.SELECT_RUNS_WICKET) {
                     RunOutRunsOverlay(viewModel)
-                } else if (m.pendingAction != PendingAction.NONE && m.status != MatchStatus.COMPLETED) {
-                    PlayerSelectionOverlay(m, viewModel)
+                } else if (match.pendingAction != PendingAction.NONE && match.status != MatchStatus.COMPLETED) {
+                    PlayerSelectionOverlay(uiState, viewModel)
                 }
                 
-                if (m.status == MatchStatus.COMPLETED && showMatchFinishedDialog) {
+                if (match.status == MatchStatus.COMPLETED && showMatchFinishedDialog) {
                     MatchCelebrationDialog(
-                        match = m, 
+                        uiState = uiState, 
                         onNavigateToDashboard = onNavigateToDashboard,
                         onDismiss = { showMatchFinishedDialog = false }
                     )
                 }
 
                 if (showManageSquads) {
-                    ManageSquadsOverlay(m, viewModel) { showManageSquads = false }
+                    ManageSquadsOverlay(uiState, viewModel) { showManageSquads = false }
                 }
 
                 if (showWicketDialog) {
-                    WicketDialog(m, viewModel) { showWicketDialog = false }
+                    WicketDialog(uiState, viewModel) { showWicketDialog = false }
                 }
 
                 if (showRetireHurtDialog) {
-                    RetireHurtDialog(m, viewModel) { showRetireHurtDialog = false }
+                    RetireHurtDialog(uiState, viewModel) { showRetireHurtDialog = false }
                 }
 
                 showExtraRunsDialog?.let { type: ExtrasType ->
@@ -261,7 +263,7 @@ fun LiveScoringScreen(
                 }
 
                 if (showOversDialog) {
-                    MatchSettingsDialog(m, viewModel) { showOversDialog = false }
+                    MatchSettingsDialog(uiState, viewModel) { showOversDialog = false }
                 }
             }
         } ?: Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -299,7 +301,8 @@ fun LiveScoringScreen(
 }
 
 @Composable
-fun OversTab(match: Match, viewModel: ScoringViewModel, graphicsLayer: GraphicsLayer) {
+fun OversTab(uiState: MatchUiState, viewModel: ScoringViewModel, graphicsLayer: GraphicsLayer) {
+    val match = uiState.match ?: return
     var selectedInnings by remember { mutableIntStateOf(match.currentInnings) }
     var editingBallIndex by remember { mutableStateOf<Int?>(null) }
     val teamA = match.teamA
@@ -587,7 +590,8 @@ fun OversTab(match: Match, viewModel: ScoringViewModel, graphicsLayer: GraphicsL
 }
 
 @Composable
-fun MatchSummaryCard(match: Match) {
+fun MatchSummaryCard(uiState: MatchUiState) {
+    val match = uiState.match ?: return
     val teamA = match.teamA
     val teamB = match.teamB
     val i1Data = match.innings1Data
@@ -644,7 +648,8 @@ fun MatchSummaryCard(match: Match) {
 }
 
 @Composable
-fun MotmSection(match: Match) {
+fun MotmSection(uiState: MatchUiState) {
+    val match = uiState.match ?: return
     val allPlayers = match.teamA.players + match.teamB.players
     
     // v2.29.0: ICC Standard Impact Engine 🏏🚀⚖️🏅
@@ -735,7 +740,8 @@ fun MotmSection(match: Match) {
 }
 
 @Composable
-fun MatchForecasterSection(match: Match) {
+fun MatchForecasterSection(uiState: MatchUiState) {
+    val match = uiState.match ?: return
     // pillar 3: ESPNcricinfo Forecaster Suite 🏏🚀⚖️🏅
     val teamA = match.teamA
     val teamB = match.teamB
@@ -831,13 +837,14 @@ fun ForecastItem(label: String, value: String, modifier: Modifier = Modifier, is
 
 @Composable
 fun LiveTab(
-    match: Match,
+    uiState: MatchUiState,
     viewModel: ScoringViewModel,
     onShowWicket: () -> Unit,
     onShowExtraRuns: (ExtrasType) -> Unit,
     onShowOtherRuns: () -> Unit,
     onShowRetireHurt: () -> Unit
 ) {
+    val match = uiState.match ?: return
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -872,8 +879,8 @@ fun LiveTab(
                 )
             }
         }
-        item { ScoreCard(match) }
-        item { PlayerStatsSection(match, viewModel) }
+        item { ScoreCard(uiState) }
+        item { PlayerStatsSection(uiState, viewModel) }
         
         item {
             if (match.status == MatchStatus.COMPLETED) {
@@ -896,7 +903,7 @@ fun LiveTab(
                 }
             } else {
                 ControlsSection(
-                    match = match,
+                    uiState = uiState,
                     viewModel = viewModel,
                     onShowWicket = onShowWicket,
                     onShowExtraRuns = onShowExtraRuns,
@@ -907,13 +914,14 @@ fun LiveTab(
         }
 
         if (match.status == MatchStatus.LIVE) {
-            item { MatchForecasterSection(match) }
+            item { MatchForecasterSection(uiState) }
         }
     }
 }
 
 @Composable
-fun ScoreCard(match: Match) {
+fun ScoreCard(uiState: MatchUiState) {
+    val match = uiState.match ?: return
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -952,7 +960,8 @@ fun ScoreCard(match: Match) {
 }
 
 @Composable
-fun PlayerStatsSection(match: Match, viewModel: ScoringViewModel) {
+fun PlayerStatsSection(uiState: MatchUiState, viewModel: ScoringViewModel) {
+    val match = uiState.match ?: return
     val teamPlayers = if (match.battingTeamId == match.teamA.id) match.teamA.players else match.teamB.players
     val striker = if (match.strikerId != null) teamPlayers.find { it.id == match.strikerId } else null
     val nonStriker = if (match.nonStrikerId != null) teamPlayers.find { it.id == match.nonStrikerId } else null
@@ -1059,13 +1068,14 @@ fun PlayerRow(name: String, r: Int, b: Int, s4: Int, s6: Int, sr: Double, isStri
 
 @Composable
 fun ControlsSection(
-    match: Match,
+    uiState: MatchUiState,
     viewModel: ScoringViewModel,
     onShowWicket: () -> Unit,
     onShowExtraRuns: (ExtrasType) -> Unit,
     onShowOtherRuns: () -> Unit,
     onShowRetireHurt: () -> Unit
 ) {
+    val match = uiState.match ?: return
     val androidContext = LocalContext.current
     val isCompleted = match.status == MatchStatus.COMPLETED
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {

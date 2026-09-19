@@ -1,8 +1,9 @@
 package com.example.cricketscorer
 
+import androidx.compose.runtime.Immutable
 import java.util.UUID
 
-
+@Immutable
 data class Player(
     val id: String,
     val name: String,
@@ -19,6 +20,7 @@ enum class BattingStyle {
     RHB, LHB
 }
 
+@Immutable
 data class BattingStats(
     val runs: Int = 0,
     val balls: Int = 0,
@@ -34,6 +36,7 @@ data class BattingStats(
         get() = if (balls > 0) (runs.toDouble() / balls) * 100 else 0.0
 }
 
+@Immutable
 data class BowlingStats(
     val overs: Int = 0,
     val balls: Int = 0,
@@ -54,6 +57,7 @@ data class BowlingStats(
         get() = "$overs.${balls % 6}"
 }
 
+@Immutable
 data class FieldingStats(
     val catches: Int = 0,
     val runOuts: Int = 0,
@@ -61,6 +65,7 @@ data class FieldingStats(
     val droppedCatches: Int = 0
 )
 
+@Immutable
 data class Team(
     val id: String,
     val name: String,
@@ -80,6 +85,7 @@ enum class WicketType {
     NONE, BOWLED, CAUGHT, LBW, RUN_OUT, STUMPED, HIT_WICKET, HANDLED_BALL, OBSTRUCTING_FIELD, RETIRED_HURT
 }
 
+@Immutable
 data class Ball(
     val runs: Int,
     val extrasType: ExtrasType = ExtrasType.NONE,
@@ -104,6 +110,7 @@ data class Ball(
         get() = !isAdjustment && extrasType != ExtrasType.WIDE && extrasType != ExtrasType.NO_BALL && wicketType != WicketType.RETIRED_HURT
 }
 
+@Immutable
 data class WicketRecord(
     val wicketNumber: Int,
     val batterName: String,
@@ -115,6 +122,7 @@ data class WicketRecord(
     val dismissalReason: String? = null
 )
 
+@Immutable
 data class InningsSummary(
     val runs: Int,
     val wickets: Int,
@@ -130,6 +138,7 @@ data class InningsSummary(
     val battingOrder: List<String> = emptyList()
 )
 
+@Immutable
 data class Match(
     val id: String,
     val tournamentId: String? = null,
@@ -182,6 +191,7 @@ data class Match(
     val dateMillis: Long = System.currentTimeMillis()
 )
 
+@Immutable
 data class Partnership(
     val batter1Id: String,
     val batter1Name: String,
@@ -207,6 +217,7 @@ enum class MatchStatus {
     UPCOMING, LIVE, COMPLETED, ABANDONED
 }
 
+@Immutable
 data class Tournament(
     val id: String,
     val name: String,
@@ -312,6 +323,7 @@ fun Match.safeCopy(): Match {
     )
 }
 
+@Immutable
 data class TournamentSettings(
     val overs: Int = 20,
     val ballType: String = "Leather",
@@ -319,4 +331,28 @@ data class TournamentSettings(
     val maxOversPerBowler: Int? = null,
     val quotaBowlersCount: Int? = null,
     val quotaMaxOvers: Int? = null
+)
+
+@Immutable
+data class ActiveWicketContext(
+    val type: WicketType,
+    val initialStrikerId: String,
+    val initialNonStrikerId: String,
+    val initialBowlerId: String,
+    val completedRuns: Int,
+    val brokenEnd: String,
+    val dismissalReason: String? = null,
+    val dismissalFielderId: String? = null,
+    val hadCrossed: Boolean = false,
+    val expectedReplacementAction: PendingAction
+)
+
+@Immutable
+data class MatchUiState(
+    val match: Match? = null,
+    val isDarkMode: Boolean? = null,
+    val bowlerNotification: String? = null,
+    val activeWicketContext: ActiveWicketContext? = null,
+    val isSyncEnabled: Boolean = false,
+    val connectedDevicesCount: Int = 0
 )

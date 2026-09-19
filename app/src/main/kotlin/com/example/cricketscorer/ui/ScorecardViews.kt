@@ -31,11 +31,12 @@ import java.util.Locale
 
 @Composable
 fun ScorecardTab(
-    match: Match,
+    uiState: MatchUiState,
     viewedInnings: Int,
     graphicsLayer: GraphicsLayer,
     onInningsChange: (Int) -> Unit
 ) {
+    val match = uiState.match ?: return
     val teamA = match.teamA
     val teamB = match.teamB
     val context = LocalContext.current
