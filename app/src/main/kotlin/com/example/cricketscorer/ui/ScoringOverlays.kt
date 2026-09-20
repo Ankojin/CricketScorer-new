@@ -732,7 +732,7 @@ fun SquadList(uiState: MatchUiState, team: Team, title: String, viewModel: Scori
                             IconButton(onClick = { showEditDialog = player }, modifier = Modifier.size(24.dp)) {
                                 Icon(Icons.Default.Edit, contentDescription = "Edit", tint = Color.Gray, modifier = Modifier.size(16.dp))
                             }
-                            IconButton(onClick = { viewModel.deletePlayerFromMatch(player.id) }, modifier = Modifier.size(24.dp)) {
+                            IconButton(onClick = { viewModel.deletePlayerFromMatch(context, player.id) }, modifier = Modifier.size(24.dp)) {
                                 Icon(Icons.Default.Delete, contentDescription = "Remove", tint = Color.Red, modifier = Modifier.size(16.dp))
                             }
                         }
@@ -849,7 +849,7 @@ fun SquadList(uiState: MatchUiState, team: Team, title: String, viewModel: Scori
                                 Button(
                                     onClick = {
                                         if (selectedPlayers.isNotEmpty()) {
-                                            viewModel.addGlobalPlayersToMatch(context, selectedPlayers.toList())
+                                            viewModel.addGlobalPlayersToMatch(context, selectedPlayers.toList(), team.id)
                                             showAddDialog = false
                                         }
                                     },
@@ -867,7 +867,7 @@ fun SquadList(uiState: MatchUiState, team: Team, title: String, viewModel: Scori
                     if (!showGlobalPlaylist) {
                         Button(onClick = {
                             if (newPlayerName.isNotBlank()) {
-                                viewModel.addNewPlayerToMatch(context, newPlayerName, selectedStyle)
+                                viewModel.addNewPlayerToMatch(context, newPlayerName, selectedStyle, team.id)
                                 newPlayerName = ""
                                 showAddDialog = false
                             }

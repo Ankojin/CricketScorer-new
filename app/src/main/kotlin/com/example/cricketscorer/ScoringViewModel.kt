@@ -663,54 +663,69 @@ class ScoringViewModel : ViewModel() {
         }
     }
 
-    fun addNewPlayerToMatch(context: Context, playerName: String, battingStyle: BattingStyle) {
+    fun addNewPlayerToMatch(context: Context, playerName: String, battingStyle: BattingStyle, teamId: String) {
         val current = _matchState.value ?: return
-        val teamId = if (current.battingTeamId == current.teamA.id) current.teamA.id else current.teamB.id
-        
+        val newId = java.util.UUID.randomUUID().toString()
+        val newPlayer = Player(id = newId, name = playerName.trim(), battingStyle = battingStyle)
+
+        // 1. Update Repository (Async)
         TournamentRepository.addPlayerToTeam(current.tournamentId ?: "", teamId, playerName, battingStyle)
         
+        // 2. Update Local State (Immediate UI sync) 🏏🚀⚖️🏅
         _matchState.update { state ->
             if (state == null) return@update null
             
-            val tournament = TournamentRepository.getTournament(state.tournamentId ?: "") ?: return@update state
-            val masterTeamA = tournament.teams.find { it.id == state.teamA.id }
-            val masterTeamB = tournament.teams.find { it.id == state.teamB.id }
-            
-            val updatedMatch = state.copy(
-                teamA = masterTeamA ?: state.teamA,
-                teamB = masterTeamB ?: state.teamB
-            )
+            val updatedTeamA = if (state.teamA.id == teamId) {
+                state.teamA.copy(players = state.teamA.players + newPlayer)
+            } else state.teamA
+
+            val updatedTeamB = if (state.teamB.id == teamId) {
+                state.teamB.copy(players = state.teamB.players + newPlayer)
+            } else state.teamB
+
+            val updatedMatch = state.copy(teamA = updatedTeamA, teamB = updatedTeamB)
             ScoringEngine.clearCache(state.id)
-            ScoringEngine.recalculateMatchFromHistory(updatedMatch)
+            val finalMatch = ScoringEngine.recalculateMatchFromHistory(updatedMatch)
+            TournamentRepository.updateMatch(finalMatch.tournamentId ?: "", finalMatch)
+            finalMatch
         }
     }
 
-    fun addGlobalPlayersToMatch(context: Context, players: List<Player>) {
+    fun addGlobalPlayersToMatch(context: Context, players: List<Player>, teamId: String) {
         val current = _matchState.value ?: return
-        val teamId = if (current.battingTeamId == current.teamA.id) current.teamA.id else current.teamB.id
         
+        // 1. Update Repository (Async)
         TournamentRepository.addPlayersToTeam(current.tournamentId ?: "", teamId, players)
         
-        ScoringEngine.clearCache(current.id)
-        val updated = ScoringEngine.recalculateMatchFromHistory(_matchState.value!!)
-        _matchState.value = updated
-        TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)
+        // 2. Update Local State (Immediate UI sync) 🏏🚀⚖️🏅
+        _matchState.update { state ->
+            if (state == null) return@update null
+            
+            val updatedTeamA = if (state.teamA.id == teamId) {
+                state.teamA.copy(players = state.teamA.players + players)
+            } else state.teamA
+
+            val updatedTeamB = if (state.teamB.id == teamId) {
+                state.teamB.copy(players = state.teamB.players + players)
+            } else state.teamB
+
+            val updatedMatch = state.copy(teamA = updatedTeamA, teamB = updatedTeamB)
+            ScoringEngine.clearCache(state.id)
+            val finalMatch = ScoringEngine.recalculateMatchFromHistory(updatedMatch)
+            TournamentRepository.updateMatch(finalMatch.tournamentId ?: "", finalMatch)
+            finalMatch
+        }
     }
 
-    fun addGlobalPlayerToMatch(player: Player) {
-        val current = _matchState.value ?: return
-        val teamId = if (current.battingTeamId == current.teamA.id) current.teamA.id else current.teamB.id
-        
-        TournamentRepository.addPlayerToTeam(current.tournamentId ?: "", teamId, player.name, player.battingStyle ?: BattingStyle.RHB)
-        
-        ScoringEngine.clearCache(current.id)
-        val updated = ScoringEngine.recalculateMatchFromHistory(_matchState.value!!)
-        _matchState.value = updated
-        TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)
-    }
-
-    fun deletePlayerFromMatch(playerId: String) {
+    fun deletePlayerFromMatch(context: Context, playerId: String) {
         val currentMatch = _matchState.value ?: return
+        
+        // v2.33.8: Prevent removing active players 🏏🚀⚖️🏅
+        if (playerId == currentMatch.strikerId || playerId == currentMatch.nonStrikerId || playerId == currentMatch.currentBowlerId) {
+            Toast.makeText(context, "Cannot remove active player! 🚫", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val teamId = if (currentMatch.teamA.players.any { it.id == playerId }) currentMatch.teamA.id else currentMatch.teamB.id
         
         TournamentRepository.deletePlayer(currentMatch.tournamentId.orEmpty(), teamId, playerId)
@@ -728,7 +743,9 @@ class ScoringViewModel : ViewModel() {
             )
 
             ScoringEngine.clearCache(current.id)
-            ScoringEngine.recalculateMatchFromHistory(updatedMatch)
+            val finalMatch = ScoringEngine.recalculateMatchFromHistory(updatedMatch)
+            TournamentRepository.updateMatch(finalMatch.tournamentId ?: "", finalMatch)
+            finalMatch
         }
     }
 
