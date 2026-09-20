@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import com.example.cricketscorer.*
+import kotlinx.coroutines.delay
 import java.util.Locale
 
 @Composable
@@ -155,13 +156,17 @@ fun InningsOverOverlay(uiState: MatchUiState, viewModel: ScoringViewModel) {
 
 @Composable
 fun OverCompletedOverlay(summary: OverSummary, onDismiss: () -> Unit) {
+    LaunchedEffect(summary) {
+        delay(2000)
+        onDismiss()
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { },
         text = {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20)), // Deep Gully Green 🏏🚀⚖️🏅
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0D47A1)), // Deep Blue 🏏🚀⚖️🏅
                 shape = RoundedCornerShape(20.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
             ) {
@@ -255,7 +260,7 @@ fun OverCompletedOverlay(summary: OverSummary, onDismiss: () -> Unit) {
                     
                     Button(
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF1B5E20)),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF0D47A1)),
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
