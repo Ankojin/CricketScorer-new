@@ -97,10 +97,10 @@ dependencies {
 
 tasks.register("incrementVersionCode") {
     doLast {
-        // v2.26.47: Safety check - only increment if this is a real build, not a sync
-        val isSync = project.hasProperty("android.injected.build.model.only") || 
-                    gradle.startParameter.taskNames.isEmpty()
-        if (isSync) return@doLast
+        // v2.33.15: Safety check - only auto-increment for Release builds to avoid version-drift in debug. 🏏🚀⚖️🏅
+        // Manual bump: To manually change the version, edit 'VERSION_NAME' and 'VERSION_CODE' in version.properties.
+        val isRelease = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+        if (!isRelease) return@doLast
 
         val versionPropsFile = rootProject.file("version.properties")
         if (versionPropsFile.exists()) {
@@ -112,18 +112,17 @@ tasks.register("incrementVersionCode") {
             versionProps.setProperty("VERSION_CODE", (currentVCode + 1).toString())
             
             // Increment Version Name (patch version)
-            val currentVName = versionProps.getProperty("VERSION_NAME", "2.32.5")
+            val currentVName = versionProps.getProperty("VERSION_NAME", "2.33.0")
             val parts = currentVName.split(".").toMutableList()
             if (parts.size >= 3) {
                 val patch = parts.last().toInt()
                 parts[parts.size - 1] = (patch + 1).toString()
                 val newVName = parts.joinToString(".")
                 versionProps.setProperty("VERSION_NAME", newVName)
-                println("Version Name incremented to: $newVName")
             }
             
             versionPropsFile.outputStream().use { versionProps.store(it, null) }
-            println("Version Code incremented to: ${currentVCode + 1}")
+            println("Release Build detected: Version properties updated.")
         }
     }
 }
@@ -139,11 +138,8 @@ tasks.configureEach {
 
 tasks.register("copyApkToRoot") {
     doLast {
-        // v2.26.49: Fetch EXACT version from the properties file at execution time to reflect increments 🏏🚀⚖️🏅
-        val versionPropsFile = rootProject.file("version.properties")
-        val versionProps = Properties()
-        versionPropsFile.inputStream().use { versionProps.load(it) }
-        val vName = versionProps.getProperty("VERSION_NAME", "2.32.6")
+        // v2.33.15: Use the build configuration values directly to ensure the APK name matches the installed app. 🏏🚀⚖️🏅
+        val vName = android.defaultConfig.versionName
         
         val apkFile = file("${layout.buildDirectory.get().asFile}/outputs/apk/debug/app-debug.apk")
         
