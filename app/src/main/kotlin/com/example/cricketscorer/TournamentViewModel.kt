@@ -24,10 +24,10 @@ class TournamentViewModel : ViewModel() {
     }
 
     fun addPlayer(context: android.content.Context, tournamentId: String, teamId: String, name: String, bStyle: BattingStyle, isCaptain: Boolean = false, isViceCaptain: Boolean = false) {
-        // v2.27.0: Automatically save to global playlist 🏏🚀⚖️🏅
-        GlobalPlayerRepository.addPlayer(name, bStyle)
+        // v2.33.16: Upsert into Global Playlist first and reuse ID 🏏🚀⚖️🏅
+        val masterPlayer = GlobalPlayerRepository.addPlayer(name, bStyle).copy(isCaptain = isCaptain, isViceCaptain = isViceCaptain)
         
-        val success = TournamentRepository.addPlayerToTeam(tournamentId, teamId, name, bStyle, isCaptain, isViceCaptain)
+        val success = TournamentRepository.addPlayersToTeam(tournamentId, teamId, listOf(masterPlayer))
         if (!success) {
             Toast.makeText(context, "Player $name already exists in this team! 👤❌", Toast.LENGTH_SHORT).show()
         }

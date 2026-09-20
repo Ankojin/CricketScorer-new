@@ -167,7 +167,32 @@ fun MainNavigation(scoringViewModel: ScoringViewModel) {
                 )
             }
             composable("all_teams") {
-                AllTeamsScreen(onBack = { navController.popBackStack() })
+                AllTeamsScreen(
+                    onBack = { navController.popBackStack() },
+                    onTeamClick = { teamId, tournamentId ->
+                        navController.navigate("team_detail/$teamId" + (if (tournamentId != null) "?tournamentId=$tournamentId" else ""))
+                    }
+                )
+            }
+            composable(
+                route = "team_detail/{teamId}?tournamentId={tournamentId}",
+                arguments = listOf(
+                    navArgument("teamId") { type = NavType.StringType },
+                    navArgument("tournamentId") { 
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    }
+                )
+            ) { backStackEntry ->
+                val teamId = backStackEntry.arguments?.getString("teamId") ?: ""
+                val tournamentId = backStackEntry.arguments?.getString("tournamentId")
+                TeamDetailScreen(
+                    teamId = teamId,
+                    tournamentId = tournamentId,
+                    viewModel = tournamentViewModel,
+                    onBack = { navController.popBackStack() }
+                )
             }
             composable("all_players") {
                 AllPlayersScreen(onBack = { navController.popBackStack() })
