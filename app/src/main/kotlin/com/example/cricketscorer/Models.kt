@@ -352,7 +352,10 @@ data class OverSummary(
     val overNumber: Int,
     val runs: Int,
     val wickets: Int,
-    val ballLabels: List<String> = emptyList() // Added for Gully Crix visual style 🏏🚀⚖️🏅
+    val ballLabels: List<String> = emptyList(), // Added for Gully Crix visual style 🏏🚀⚖️🏅
+    val teamTotalRuns: Int = 0,
+    val teamTotalWickets: Int = 0,
+    val battingTeamName: String = ""
 )
 
 @Immutable

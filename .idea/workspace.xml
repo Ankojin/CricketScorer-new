@@ -9,7 +9,17 @@
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="61789d28-061d-4cfb-9044-cdd51be63bb1" name="Changes" comment="UI: add colored ball indicators (4/6/Wicket) in Overs tab&#10;               CoinFlipDialog: Reimages added with clean" />
+    <list default="true" id="61789d28-061d-4cfb-9044-cdd51be63bb1" name="Changes" comment="UI: add colored ball indicators (4/6/Wicket) in Overs tab&#10;               CoinFlipDialog: Reimages added with clean">
+      <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/deploymentTargetSelector.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/deploymentTargetSelector.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/Models.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/Models.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ScoringViewModel.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ScoringViewModel.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ui/ScoringOverlays.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ui/ScoringOverlays.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cricscore_v2.32.51.apk" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/local.properties" beforeDir="false" afterPath="$PROJECT_DIR$/local.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/version.properties" beforeDir="false" afterPath="$PROJECT_DIR$/version.properties" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -18,7 +28,7 @@
   <component name="ClangdSettings">
     <option name="formatViaClangd" value="false" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[LocalEmulator::path=C:\Users\ankoj\.android\avd\Pixel_10_Pro.avd]" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[LocalEmulator::path=C:\Users\AnkojiRaoNagisetty\.android\avd\Pixel_10_Pro_XL.avd]" />
   <component name="ExternalProjectsData">
     <projectState path="$PROJECT_DIR$">
       <ProjectState />
@@ -116,7 +126,7 @@
     &quot;settings.editor.selected.configurable&quot;: &quot;com.google.gct.login2.settings.GoogleLoginApplicationSettingsConfigurableProvider&quot;
   }
 }</component>
-  <component name="RunManager" selected="Android App.main">
+  <component name="RunManager" selected="Android App.app">
     <configuration name="androidTest" type="AndroidRunConfigurationType" factoryName="Android App" activateToolWindowBeforeRun="false">
       <module name="CricketScorer.app.androidTest" />
       <option name="ANDROID_RUN_CONFIGURATION_SCHEMA_VERSION" value="1" />

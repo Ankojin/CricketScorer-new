@@ -222,6 +222,23 @@ fun OverCompletedOverlay(summary: OverSummary, onDismiss: () -> Unit) {
                         }
                     }
 
+                    // v2.33.3: Team Score integration in Over Summary 🏏🚀⚖️🏅
+                    if (summary.battingTeamName.isNotBlank()) {
+                        Surface(
+                            color = Color.White.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "${summary.battingTeamName.uppercase()}: ${summary.teamTotalRuns}/${summary.teamTotalWickets}",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White
+                            )
+                        }
+                    }
+
                     // v2.33.2: Ball sequence display for Over Summary 🏏🚀⚖️🏅
                     Row(
                         modifier = Modifier.fillMaxWidth(),

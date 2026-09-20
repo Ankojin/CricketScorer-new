@@ -548,11 +548,15 @@ class ScoringViewModel : ViewModel() {
                     }
                 }
 
+                val bTeam = if (ScoringEngine.isTeamA(finalResult.battingTeamId, finalResult)) finalResult.teamA else finalResult.teamB
                 _finishedOverSummary.value = OverSummary(
                     overNumber = finalResult.totalBalls / 6,
                     runs = runs,
                     wickets = wickets,
-                    ballLabels = labels.reversed() // Reverse back to chronological order 🏏🚀⚖️🏅
+                    ballLabels = labels.reversed(), // Reverse back to chronological order 🏏🚀⚖️🏅
+                    teamTotalRuns = finalResult.totalRuns,
+                    teamTotalWickets = finalResult.totalWickets,
+                    battingTeamName = bTeam.name
                 )
 
                 val bowlingTeam = if (ScoringEngine.isTeamA(finalResult.bowlingTeamId, finalResult)) finalResult.teamA else finalResult.teamB
