@@ -1,6 +1,7 @@
 package com.example.cricketscorer.ui
 
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -158,68 +159,105 @@ fun OverCompletedOverlay(summary: OverSummary, onDismiss: () -> Unit) {
         text = {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF2E7D32)), // Strong Green
-                shape = RoundedCornerShape(16.dp)
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20)), // Deep Gully Green 🏏🚀⚖️🏅
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
             ) {
                 Column(
                     modifier = Modifier.padding(24.dp).fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
                         "END OF OVER ${summary.overNumber}",
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Black,
-                        color = Color.White.copy(alpha = 0.8f)
+                        color = Color.White.copy(alpha = 0.7f),
+                        letterSpacing = 1.sp
                     )
                     
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        horizontalArrangement = Arrangement.spacedBy(24.dp)
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 "${summary.runs}",
-                                style = MaterialTheme.typography.displayMedium,
+                                style = MaterialTheme.typography.displayLarge,
                                 fontWeight = FontWeight.Black,
                                 color = Color.White
                             )
                             Text(
                                 "RUNS",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White.copy(alpha = 0.7f)
+                                color = Color.White.copy(alpha = 0.6f)
                             )
                         }
                         
-                        Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color.White.copy(alpha = 0.3f)))
+                        Box(modifier = Modifier.width(1.dp).height(60.dp).background(Color.White.copy(alpha = 0.2f)))
 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            val wicketColor = if (summary.wickets > 0) Color(0xFFFFEB3B) else Color.White
+                            val wicketColor = if (summary.wickets > 0) Color(0xFFFF5252) else Color.White
                             Text(
                                 "${summary.wickets}",
-                                style = MaterialTheme.typography.displayMedium,
+                                style = MaterialTheme.typography.displayLarge,
                                 fontWeight = FontWeight.Black,
                                 color = wicketColor
                             )
                             Text(
                                 "WICKETS",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White.copy(alpha = 0.7f)
+                                color = Color.White.copy(alpha = 0.6f)
                             )
                         }
                     }
+
+                    // v2.33.2: Ball sequence display for Over Summary 🏏🚀⚖️🏅
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        summary.ballLabels.forEach { label ->
+                            val color = when {
+                                label.contains("W") -> Color(0xFFD32F2F)
+                                label == "4" -> Color(0xFF1976D2)
+                                label == "6" -> Color(0xFF7B1FA2)
+                                label.contains("wd") || label.contains("nb") -> Color(0xFFF57C00)
+                                else -> Color.White.copy(alpha = 0.1f)
+                            }
+                            val textColor = if (color == Color.White.copy(alpha = 0.1f)) Color.White else Color.White
+                            
+                            Surface(
+                                modifier = Modifier.size(32.dp).padding(horizontal = 2.dp),
+                                shape = CircleShape,
+                                color = color,
+                                border = if (color == Color.White.copy(alpha = 0.1f)) BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)) else null
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = if (label == "0") "•" else label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Black,
+                                        color = textColor,
+                                        fontSize = if (label.length > 2) 8.sp else 10.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
                     
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     
                     Button(
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF2E7D32)),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp)
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF1B5E20)),
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("OK", fontWeight = FontWeight.Black)
+                        Text("TAP TO CONTINUE", fontWeight = FontWeight.Black)
                     }
                 }
             }

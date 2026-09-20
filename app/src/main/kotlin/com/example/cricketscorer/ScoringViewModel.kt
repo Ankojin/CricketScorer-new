@@ -552,7 +552,7 @@ class ScoringViewModel : ViewModel() {
                     overNumber = finalResult.totalBalls / 6,
                     runs = runs,
                     wickets = wickets,
-                    ballLabels = labels
+                    ballLabels = labels.reversed() // Reverse back to chronological order 🏏🚀⚖️🏅
                 )
 
                 val bowlingTeam = if (ScoringEngine.isTeamA(finalResult.bowlingTeamId, finalResult)) finalResult.teamA else finalResult.teamB

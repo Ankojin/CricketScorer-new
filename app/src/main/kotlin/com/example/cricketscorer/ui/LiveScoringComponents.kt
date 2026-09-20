@@ -188,6 +188,8 @@ fun LiveTab(
         if (match.status == MatchStatus.LIVE) {
             item { MatchForecasterSection(uiState) }
         }
+        
+        item { CardBranding() }
     }
 }
 
