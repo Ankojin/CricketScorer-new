@@ -138,6 +138,7 @@ fun MainNavigation(scoringViewModel: ScoringViewModel) {
             composable("home") {
                 HomeScreen(
                     viewModel = scoringViewModel,
+                    tournamentViewModel = tournamentViewModel,
                     onNavigateToDashboard = { navController.navigate("dashboard") },
                     onNavigateToLiveScoring = { match ->
                         scoringViewModel.loadMatch(match)

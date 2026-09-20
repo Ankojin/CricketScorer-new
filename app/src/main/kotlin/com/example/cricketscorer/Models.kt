@@ -1,6 +1,9 @@
 package com.example.cricketscorer
 
+import androidx.compose.runtime.Immutable
+import java.util.UUID
 
+@Immutable
 data class Player(
     val id: String,
     val name: String,
@@ -17,6 +20,7 @@ enum class BattingStyle {
     RHB, LHB
 }
 
+@Immutable
 data class BattingStats(
     val runs: Int = 0,
     val balls: Int = 0,
@@ -32,6 +36,7 @@ data class BattingStats(
         get() = if (balls > 0) (runs.toDouble() / balls) * 100 else 0.0
 }
 
+@Immutable
 data class BowlingStats(
     val overs: Int = 0,
     val balls: Int = 0,
@@ -52,6 +57,7 @@ data class BowlingStats(
         get() = "$overs.${balls % 6}"
 }
 
+@Immutable
 data class FieldingStats(
     val catches: Int = 0,
     val runOuts: Int = 0,
@@ -59,6 +65,7 @@ data class FieldingStats(
     val droppedCatches: Int = 0
 )
 
+@Immutable
 data class Team(
     val id: String,
     val name: String,
@@ -78,6 +85,7 @@ enum class WicketType {
     NONE, BOWLED, CAUGHT, LBW, RUN_OUT, STUMPED, HIT_WICKET, HANDLED_BALL, OBSTRUCTING_FIELD, RETIRED_HURT
 }
 
+@Immutable
 data class Ball(
     val runs: Int,
     val extrasType: ExtrasType = ExtrasType.NONE,
@@ -102,6 +110,7 @@ data class Ball(
         get() = !isAdjustment && extrasType != ExtrasType.WIDE && extrasType != ExtrasType.NO_BALL && wicketType != WicketType.RETIRED_HURT
 }
 
+@Immutable
 data class WicketRecord(
     val wicketNumber: Int,
     val batterName: String,
@@ -113,6 +122,7 @@ data class WicketRecord(
     val dismissalReason: String? = null
 )
 
+@Immutable
 data class InningsSummary(
     val runs: Int,
     val wickets: Int,
@@ -128,6 +138,7 @@ data class InningsSummary(
     val battingOrder: List<String> = emptyList()
 )
 
+@Immutable
 data class Match(
     val id: String,
     val tournamentId: String? = null,
@@ -180,6 +191,7 @@ data class Match(
     val dateMillis: Long = System.currentTimeMillis()
 )
 
+@Immutable
 data class Partnership(
     val batter1Id: String,
     val batter1Name: String,
@@ -205,14 +217,113 @@ enum class MatchStatus {
     UPCOMING, LIVE, COMPLETED, ABANDONED
 }
 
+@Immutable
 data class Tournament(
     val id: String,
     val name: String,
     val teams: List<Team> = emptyList(),
     val matches: List<Match> = emptyList(),
-    val settings: TournamentSettings = TournamentSettings()
+    val settings: TournamentSettings = TournamentSettings(),
+    val participants: List<Player> = emptyList() // v2.31.9: Track all players for historical stats 🏏🚀⚖️🏅
 )
 
+// v2.32.3: Null-safe bridge for legacy data handling 🏏🚀⚖️🏅
+fun Tournament.safeCopy(
+    id: String? = null,
+    name: String? = null,
+    teams: List<Team>? = null,
+    matches: List<Match>? = null,
+    settings: TournamentSettings? = null,
+    participants: List<Player>? = null
+): Tournament {
+    return Tournament(
+        id = id ?: this.id ?: UUID.randomUUID().toString(),
+        name = name ?: this.name ?: "Tournament",
+        teams = teams ?: this.teams.orEmpty().filterNotNull().map { it.safeCopy() },
+        matches = matches ?: this.matches.orEmpty().filterNotNull().map { it.safeCopy() },
+        settings = settings ?: this.settings ?: TournamentSettings(),
+        participants = participants ?: this.participants.orEmpty().filterNotNull().map { it.safeCopy() }
+    )
+}
+
+fun Team.safeCopy(
+    id: String? = null,
+    name: String? = null,
+    players: List<Player>? = null
+): Team {
+    return Team(
+        id = id ?: this.id ?: UUID.randomUUID().toString(),
+        name = name ?: this.name ?: "Team",
+        players = players ?: this.players.orEmpty().filterNotNull().map { it.safeCopy() },
+        matchesPlayed = this.matchesPlayed,
+        wins = this.wins,
+        losses = this.losses,
+        points = this.points,
+        nrr = this.nrr
+    )
+}
+
+fun Player.safeCopy(): Player {
+    return Player(
+        id = this.id ?: UUID.randomUUID().toString(),
+        name = this.name ?: "Player",
+        battingStats = this.battingStats ?: BattingStats(),
+        bowlingStats = this.bowlingStats ?: BowlingStats(),
+        fieldingStats = this.fieldingStats ?: FieldingStats(),
+        isJoker = this.isJoker,
+        isCaptain = this.isCaptain,
+        isViceCaptain = this.isViceCaptain,
+        battingStyle = this.battingStyle ?: BattingStyle.RHB
+    )
+}
+
+fun Match.safeCopy(): Match {
+    return Match(
+        id = this.id ?: UUID.randomUUID().toString(),
+        tournamentId = this.tournamentId,
+        tournamentName = this.tournamentName,
+        teamA = this.teamA?.safeCopy() ?: Team("","", emptyList()),
+        teamB = this.teamB?.safeCopy() ?: Team("","", emptyList()),
+        tossWinnerId = this.tossWinnerId,
+        tossDecision = this.tossDecision,
+        initialBattingTeamId = this.initialBattingTeamId,
+        initialBowlingTeamId = this.initialBowlingTeamId,
+        target = this.target,
+        status = this.status ?: MatchStatus.UPCOMING,
+        currentInnings = this.currentInnings,
+        battingTeamId = this.battingTeamId ?: "",
+        bowlingTeamId = this.bowlingTeamId ?: "",
+        totalRuns = this.totalRuns,
+        totalWickets = this.totalWickets,
+        totalBalls = this.totalBalls,
+        wideCount = this.wideCount,
+        noBallCount = this.noBallCount,
+        byeCount = this.byeCount,
+        legByeCount = this.legByeCount,
+        ballHistory = this.ballHistory.orEmpty().filterNotNull(),
+        wicketHistory = this.wicketHistory.orEmpty().filterNotNull(),
+        strikerId = this.strikerId,
+        nonStrikerId = this.nonStrikerId,
+        currentBowlerId = this.currentBowlerId,
+        lastBowlerId = this.lastBowlerId,
+        winnerId = this.winnerId,
+        manOfTheMatchId = this.manOfTheMatchId,
+        oversPerInnings = this.oversPerInnings,
+        maxOversPerBowler = this.maxOversPerBowler,
+        pendingAction = this.pendingAction ?: PendingAction.NONE,
+        innings1Data = this.innings1Data,
+        isSecondInningsStarted = this.isSecondInningsStarted,
+        innings1EndTimeMillis = this.innings1EndTimeMillis,
+        innings2StartTimeMillis = this.innings2StartTimeMillis,
+        lastNotifiedBowlerId = this.lastNotifiedBowlerId,
+        battingOrder = this.battingOrder.orEmpty().filterNotNull(),
+        startTimeMillis = this.startTimeMillis,
+        endTimeMillis = this.endTimeMillis,
+        dateMillis = this.dateMillis
+    )
+}
+
+@Immutable
 data class TournamentSettings(
     val overs: Int = 20,
     val ballType: String = "Leather",
@@ -220,4 +331,37 @@ data class TournamentSettings(
     val maxOversPerBowler: Int? = null,
     val quotaBowlersCount: Int? = null,
     val quotaMaxOvers: Int? = null
+)
+
+@Immutable
+data class ActiveWicketContext(
+    val type: WicketType,
+    val initialStrikerId: String,
+    val initialNonStrikerId: String,
+    val initialBowlerId: String,
+    val completedRuns: Int,
+    val brokenEnd: String,
+    val dismissalReason: String? = null,
+    val dismissalFielderId: String? = null,
+    val hadCrossed: Boolean = false,
+    val expectedReplacementAction: PendingAction
+)
+
+@Immutable
+data class OverSummary(
+    val overNumber: Int,
+    val runs: Int,
+    val wickets: Int,
+    val ballLabels: List<String> = emptyList() // Added for Gully Crix visual style 🏏🚀⚖️🏅
+)
+
+@Immutable
+data class MatchUiState(
+    val match: Match? = null,
+    val isDarkMode: Boolean? = null,
+    val bowlerNotification: String? = null,
+    val activeWicketContext: ActiveWicketContext? = null,
+    val isSyncEnabled: Boolean = false,
+    val connectedDevicesCount: Int = 0,
+    val finishedOverSummary: OverSummary? = null
 )

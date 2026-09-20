@@ -28,6 +28,7 @@ import com.example.cricketscorer.ui.CardBranding
 @Composable
 fun HomeScreen(
     viewModel: ScoringViewModel,
+    tournamentViewModel: TournamentViewModel,
     onNavigateToDashboard: () -> Unit,
     onNavigateToLiveScoring: (Match) -> Unit,
     onNavigateToMatches: () -> Unit,
@@ -268,6 +269,21 @@ fun HomeScreen(
                                         }
                                     }
                                 )
+                            }
+                            
+                            HorizontalDivider()
+
+                            Button(
+                                onClick = {
+                                    tournamentViewModel.setupTestData()
+                                    Toast.makeText(context, "E2E Test match scheduled! Check 'MATCHES'", Toast.LENGTH_LONG).show()
+                                    showSettings = false
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                            ) {
+                                Text("DEBUG: SETUP 5-OVER E2E TEST", fontWeight = FontWeight.Black)
                             }
                             
                             if (isSyncEnabled && connectedEndpoints.isEmpty()) {
