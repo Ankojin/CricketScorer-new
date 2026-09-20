@@ -35,6 +35,7 @@ import com.example.cricketscorer.ui.CardBranding
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 import com.example.cricketscorer.ui.CaptureArea
+import com.example.cricketscorer.ui.findTeamNameForPlayer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1013,6 +1014,10 @@ fun TeamCard(
                                 Column(modifier = Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
                                     filteredGlobal.forEach { gp ->
                                         val isSelected = selectedPlayers.contains(gp)
+                                        
+                                        // find if player belongs to another team in THIS tournament
+                                        val existingTeamName = findTeamNameForPlayer(tournament, gp.name)
+                                        
                                         Row(
                                             modifier = Modifier.fillMaxWidth().clickable {
                                                 if (isSelected) selectedPlayers.remove(gp) else selectedPlayers.add(gp)
@@ -1022,7 +1027,17 @@ fun TeamCard(
                                             Checkbox(checked = isSelected, onCheckedChange = {
                                                 if (it) selectedPlayers.add(gp) else selectedPlayers.remove(gp)
                                             })
-                                            Text(gp.name + " (${gp.battingStyle})")
+                                            Column {
+                                                Text(gp.name + " (${gp.battingStyle})")
+                                                if (existingTeamName != null) {
+                                                    Text(
+                                                        text = if (existingTeamName.equals(team.name, true)) "Already in this team" else "Also in $existingTeamName",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = if (existingTeamName.equals(team.name, true)) MaterialTheme.colorScheme.error else Color.Gray,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
                                         }
                                         HorizontalDivider(thickness = 0.5.dp)
                                     }

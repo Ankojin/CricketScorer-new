@@ -824,6 +824,10 @@ fun SquadList(uiState: MatchUiState, team: Team, title: String, viewModel: Scori
                             }
                         } else {
                             Text("Select players to add:", fontWeight = FontWeight.Bold)
+                            
+                            val tournaments by TournamentRepository.tournaments.collectAsState()
+                            val currentTournament = tournaments.find { it.id == match.tournamentId }
+                            
                             val currentTeamPlayerNames = team.players.map { it.name.lowercase() }
                             val filteredGlobal = globalPlayers.filter { gp -> gp.name.lowercase() !in currentTeamPlayerNames }
                             val selectedPlayers = remember { mutableStateListOf<Player>() }
@@ -834,6 +838,10 @@ fun SquadList(uiState: MatchUiState, team: Team, title: String, viewModel: Scori
                                 } else {
                                     items(filteredGlobal) { gp ->
                                         val isSelected = selectedPlayers.contains(gp)
+                                        
+                                        // find if player belongs to another team
+                                        val existingTeamName = if (currentTournament != null) findTeamNameForPlayer(currentTournament, gp.name) else null
+                                        
                                         Row(
                                             modifier = Modifier.fillMaxWidth().clickable {
                                                 if (isSelected) selectedPlayers.remove(gp) else selectedPlayers.add(gp)
@@ -843,7 +851,17 @@ fun SquadList(uiState: MatchUiState, team: Team, title: String, viewModel: Scori
                                             Checkbox(checked = isSelected, onCheckedChange = {
                                                 if (it) selectedPlayers.add(gp) else selectedPlayers.remove(gp)
                                             })
-                                            Text(gp.name + " (${gp.battingStyle})")
+                                            Column {
+                                                Text(gp.name + " (${gp.battingStyle})")
+                                                if (existingTeamName != null) {
+                                                    Text(
+                                                        text = if (existingTeamName.equals(team.name, true)) "Already in this team" else "Also in $existingTeamName",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = if (existingTeamName.equals(team.name, true)) MaterialTheme.colorScheme.error else Color.Gray,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
                                         }
                                         HorizontalDivider(thickness = 0.5.dp)
                                     }

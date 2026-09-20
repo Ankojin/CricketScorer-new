@@ -150,3 +150,9 @@ fun calculatePartnerships(balls: List<Ball>, match: Match): List<Partnership> {
     
     return partnerships
 }
+
+fun findTeamNameForPlayer(tournament: Tournament, playerName: String): String? {
+    return tournament.teams.find { team ->
+        team.players.any { it.name.trim().equals(playerName.trim(), ignoreCase = true) }
+    }?.name
+}
