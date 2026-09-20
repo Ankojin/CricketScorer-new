@@ -97,18 +97,15 @@ dependencies {
 
 tasks.register("incrementVersionCode") {
     doLast {
-        // v2.33.15: Safety check - only auto-increment for Release builds to avoid version-drift in debug. 🏏🚀⚖️🏅
-        // Manual bump: To manually change the version, edit 'VERSION_NAME' and 'VERSION_CODE' in version.properties.
-        val isRelease = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
-        if (!isRelease) return@doLast
-
+        // v2.33.16: Force increment on every build to keep version rotating. 🏏🚀⚖️🏅
+        // Note: If you get "Installation Failed" in emulator, uninstall the app once.
         val versionPropsFile = rootProject.file("version.properties")
         if (versionPropsFile.exists()) {
             val versionProps = Properties()
             versionPropsFile.inputStream().use { versionProps.load(it) }
             
             // Increment Version Code
-            val currentVCode = versionProps.getProperty("VERSION_CODE", "40").toInt()
+            val currentVCode = versionProps.getProperty("VERSION_CODE", "100").toInt()
             versionProps.setProperty("VERSION_CODE", (currentVCode + 1).toString())
             
             // Increment Version Name (patch version)
@@ -122,7 +119,7 @@ tasks.register("incrementVersionCode") {
             }
             
             versionPropsFile.outputStream().use { versionProps.store(it, null) }
-            println("Release Build detected: Version properties updated.")
+            println("Version rotated successfully in version.properties.")
         }
     }
 }
