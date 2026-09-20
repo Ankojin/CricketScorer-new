@@ -59,16 +59,15 @@ fun ScoringOverlaysContainer(
         MatchSettingsDialog(uiState, viewModel, onDismiss = onNavigateToDashboard)
     } else if (match.pendingAction == PendingAction.START_SECOND_INNINGS) {
         InningsOverOverlay(uiState, viewModel)
+    } else if (uiState.finishedOverSummary != null) {
+        // v2.33.4: Priority - Show Over Summary only if no major match transitions are pending 🏏🚀⚖️🏅
+        OverCompletedOverlay(uiState.finishedOverSummary, onDismiss = onDismissOverSummary)
     } else if (match.pendingAction == PendingAction.SELECT_RUNS_DROPPED_CATCH) {
         DroppedCatchRunsOverlay(viewModel)
     } else if (match.pendingAction == PendingAction.SELECT_RUNS_WICKET) {
         RunOutRunsOverlay(viewModel)
     } else if (match.pendingAction != PendingAction.NONE && match.status != MatchStatus.COMPLETED) {
         PlayerSelectionOverlay(uiState, viewModel)
-    }
-
-    uiState.finishedOverSummary?.let { summary ->
-        OverCompletedOverlay(summary, onDismiss = onDismissOverSummary)
     }
 
     if (match.status == MatchStatus.COMPLETED && showMatchFinishedDialog) {

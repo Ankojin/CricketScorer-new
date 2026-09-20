@@ -521,44 +521,49 @@ class ScoringViewModel : ViewModel() {
             val finalResult = ScoringEngine.recalculateMatchFromHistory(transitionMatch)
             
             if (finalResult.status == MatchStatus.LIVE && ball.isLegalBall && finalResult.totalBalls % 6 == 0 && _bowlerNotification.value == null) {
-                // v2.33.2: Over Completion Summary 🏏🚀⚖️🏅
-                val lastOverBalls = mutableListOf<Ball>()
-                var physicalCount = 0
-                for (b in finalResult.ballHistory.reversed()) {
-                    if (b.isAdjustment) continue
-                    lastOverBalls.add(b)
-                    if (b.isPhysicalBall) physicalCount++
-                    if (physicalCount == 6) break
-                }
-                val runs = lastOverBalls.sumOf { it.runs + it.extraRuns }
-                val wickets = lastOverBalls.count { it.wicketType != WicketType.NONE && it.wicketType != WicketType.RETIRED_HURT }
-                
-                val labels = lastOverBalls.map { b ->
-                    when {
-                        b.wicketType == WicketType.RETIRED_HURT -> "RH"
-                        b.wicketType != WicketType.NONE -> "W"
-                        b.extrasType == ExtrasType.WIDE -> "${b.extraRuns}wd"
-                        b.extrasType == ExtrasType.NO_BALL -> {
-                            val total = b.runs + b.extraRuns
-                            if (total > 0) "${total}nb" else "nb"
-                        }
-                        b.extrasType == ExtrasType.BYE -> "${b.extraRuns}b"
-                        b.extrasType == ExtrasType.LEG_BYE -> "${b.extraRuns}lb"
-                        b.extrasType == ExtrasType.GRANTED -> "${b.runs}G"
-                        else -> "${b.runs}"
+                if (finalResult.pendingAction == PendingAction.START_SECOND_INNINGS) {
+                    // v2.33.4: Clear over summary if innings ended to prevent overlay overlap 🏏🚀⚖️🏅
+                    _finishedOverSummary.value = null
+                } else {
+                    // v2.33.2: Over Completion Summary 🏏🚀⚖️🏅
+                    val lastOverBalls = mutableListOf<Ball>()
+                    var physicalCount = 0
+                    for (b in finalResult.ballHistory.reversed()) {
+                        if (b.isAdjustment) continue
+                        lastOverBalls.add(b)
+                        if (b.isPhysicalBall) physicalCount++
+                        if (physicalCount == 6) break
                     }
-                }
+                    val runs = lastOverBalls.sumOf { it.runs + it.extraRuns }
+                    val wickets = lastOverBalls.count { it.wicketType != WicketType.NONE && it.wicketType != WicketType.RETIRED_HURT }
+                    
+                    val labels = lastOverBalls.map { b ->
+                        when {
+                            b.wicketType == WicketType.RETIRED_HURT -> "RH"
+                            b.wicketType != WicketType.NONE -> "W"
+                            b.extrasType == ExtrasType.WIDE -> "${b.extraRuns}wd"
+                            b.extrasType == ExtrasType.NO_BALL -> {
+                                val total = b.runs + b.extraRuns
+                                if (total > 0) "${total}nb" else "nb"
+                            }
+                            b.extrasType == ExtrasType.BYE -> "${b.extraRuns}b"
+                            b.extrasType == ExtrasType.LEG_BYE -> "${b.extraRuns}lb"
+                            b.extrasType == ExtrasType.GRANTED -> "${b.runs}G"
+                            else -> "${b.runs}"
+                        }
+                    }
 
-                val bTeam = if (ScoringEngine.isTeamA(finalResult.battingTeamId, finalResult)) finalResult.teamA else finalResult.teamB
-                _finishedOverSummary.value = OverSummary(
-                    overNumber = finalResult.totalBalls / 6,
-                    runs = runs,
-                    wickets = wickets,
-                    ballLabels = labels.reversed(), // Reverse back to chronological order 🏏🚀⚖️🏅
-                    teamTotalRuns = finalResult.totalRuns,
-                    teamTotalWickets = finalResult.totalWickets,
-                    battingTeamName = bTeam.name
-                )
+                    val bTeam = if (ScoringEngine.isTeamA(finalResult.battingTeamId, finalResult)) finalResult.teamA else finalResult.teamB
+                    _finishedOverSummary.value = OverSummary(
+                        overNumber = finalResult.totalBalls / 6,
+                        runs = runs,
+                        wickets = wickets,
+                        ballLabels = labels.reversed(), // Reverse back to chronological order 🏏🚀⚖️🏅
+                        teamTotalRuns = finalResult.totalRuns,
+                        teamTotalWickets = finalResult.totalWickets,
+                        battingTeamName = bTeam.name
+                    )
+                }
 
                 val bowlingTeam = if (ScoringEngine.isTeamA(finalResult.bowlingTeamId, finalResult)) finalResult.teamA else finalResult.teamB
                 val ballBowlerId = ball.bowlerId ?: ""
