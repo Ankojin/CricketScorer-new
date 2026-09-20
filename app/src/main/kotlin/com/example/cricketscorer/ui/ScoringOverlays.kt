@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import com.example.cricketscorer.*
+import java.util.Locale
 
 @Composable
 fun ScoringOverlaysContainer(
@@ -488,81 +490,107 @@ fun PlayerSelectionOverlay(uiState: MatchUiState, viewModel: ScoringViewModel) {
             }
         },
         text = {
-            val availablePlayers = team.players.filter { player ->
-                when (match.pendingAction ?: PendingAction.NONE) {
-                    PendingAction.SELECT_STRIKER, PendingAction.SELECT_NON_STRIKER,
-                    PendingAction.REPLACE_STRIKER, PendingAction.REPLACE_NON_STRIKER ->
-                        !player.battingStats.isOut && 
-                        player.id != match.strikerId && player.id != match.nonStrikerId
-                    PendingAction.SELECT_BOWLER, PendingAction.REPLACE_BOWLER ->
-                        player.id != match.lastBowlerId
-                    else -> true
+            val isBowlerAction = match.pendingAction == PendingAction.SELECT_BOWLER || match.pendingAction == PendingAction.REPLACE_BOWLER
+            
+            val displayedPlayers = if (isBowlerAction) {
+                // Show ALL bowlers but handle restrictions in the UI 🏏🚀⚖️🏅
+                team.players
+            } else {
+                team.players.filter { player ->
+                    when (match.pendingAction ?: PendingAction.NONE) {
+                        PendingAction.SELECT_STRIKER, PendingAction.SELECT_NON_STRIKER,
+                        PendingAction.REPLACE_STRIKER, PendingAction.REPLACE_NON_STRIKER ->
+                            !player.battingStats.isOut && 
+                            player.id != match.strikerId && player.id != match.nonStrikerId
+                        else -> true
+                    }
                 }
             }
 
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 400.dp)
+                    .heightIn(max = 450.dp)
             ) {
-                if (availablePlayers.isEmpty()) {
+                if (displayedPlayers.isEmpty()) {
                     item {
                         Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                             Text("No players found in this team.", textAlign = TextAlign.Center, color = Color.Gray)
                         }
                     }
                 } else {
-                    items(availablePlayers) { player ->
+                    items(displayedPlayers) { player ->
+                        val isLastBowler = isBowlerAction && player.id == match.lastBowlerId
+                        val isMaxedOut = isBowlerAction && viewModel.isSpellCompleted(player, match)
+                        val isDisabled = isLastBowler || isMaxedOut
+                        
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
+                                .graphicsLayer { alpha = if (isDisabled && isBowlerAction) 0.6f else 1f }
+                                .clickable(enabled = !isDisabled || !isBowlerAction) {
                                     if (match.pendingAction == PendingAction.SELECT_FIELDER || match.pendingAction == PendingAction.SELECT_FIELDER_DROPPED_CATCH) {
                                         viewModel.selectFielder(player.id)
                                     } else {
                                         viewModel.assignPlayerToAction(player.id)
                                     }
-                                    Toast
-                                        .makeText(context, "${player.name} selected! ✅", Toast.LENGTH_SHORT)
-                                        .show()
+                                    Toast.makeText(context, "${player.name} selected! ✅", Toast.LENGTH_SHORT).show()
                                 }
                                 .padding(vertical = 12.dp, horizontal = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
-                                modifier = Modifier.size(40.dp),
+                                modifier = Modifier.size(if (isBowlerAction) 44.dp else 40.dp),
                                 shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primaryContainer
+                                color = if (isLastBowler) Color.LightGray else MaterialTheme.colorScheme.primaryContainer,
+                                border = if (isLastBowler) BorderStroke(1.dp, Color.Gray) else null
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Text(player.name.take(1).uppercase(), fontWeight = FontWeight.Black)
                                 }
                             }
                             Spacer(Modifier.width(12.dp))
-                            Column {
-                                val isCaptain = player.isCaptain
+                            Column(modifier = Modifier.weight(1f)) {
                                 val isWK = player.id == match.teamAWicketKeeperId || player.id == match.teamBWicketKeeperId
-                                val roleSuffix = if (isCaptain) " (c)" else if (player.isViceCaptain) " (vc)" else ""
-                                Text(player.name + roleSuffix + (if (isWK) " 🧤" else ""), fontWeight = FontWeight.Bold)
-                                
-                                val action = match.pendingAction ?: PendingAction.NONE
-                                val isBowlerAction = action == PendingAction.SELECT_BOWLER || action == PendingAction.REPLACE_BOWLER
-                                val isFielderAction = action == PendingAction.SELECT_FIELDER || action == PendingAction.SELECT_FIELDER_DROPPED_CATCH
-                                
-                                val bStyle = (player.battingStyle ?: BattingStyle.RHB).name
-                                
-                                val subText = when {
-                                    isBowlerAction -> "Bowler"
-                                    isFielderAction -> "Fielder"
-                                    else -> "Batting: $bStyle"
-                                }
-                                
+                                val roleSuffix = if (player.isCaptain) " (c)" else if (player.isViceCaptain) " (vc)" else ""
                                 Text(
-                                    text = subText, 
-                                    style = MaterialTheme.typography.bodyMedium, 
+                                    text = player.name + roleSuffix + (if (isWK) " 🧤" else ""), 
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isFielderAction) MaterialTheme.colorScheme.primary else Color.Gray
+                                    style = MaterialTheme.typography.bodyLarge
                                 )
+                                
+                                if (isBowlerAction) {
+                                    val stats = player.bowlingStats
+                                    val maxOvers = match.maxOversPerBowler
+                                    val oversLabel = if (maxOvers != null) "${stats.formattedOvers} / $maxOvers ov" else "${stats.formattedOvers} ov"
+                                    
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "$oversLabel • ${stats.wickets}W • ER: ${String.format(
+                                                Locale.US, "%.2f", stats.economy)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (isMaxedOut) Color.Red else Color.Gray,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                } else {
+                                    val action = match.pendingAction ?: PendingAction.NONE
+                                    val isFielderAction = action == PendingAction.SELECT_FIELDER || action == PendingAction.SELECT_FIELDER_DROPPED_CATCH
+                                    val bStyle = (player.battingStyle ?: BattingStyle.RHB).name
+                                    Text(
+                                        text = if (isFielderAction) "Fielder" else "Batting: $bStyle", 
+                                        style = MaterialTheme.typography.bodyMedium, 
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isFielderAction) MaterialTheme.colorScheme.primary else Color.Gray
+                                    )
+                                }
+                            }
+                            
+                            if (isBowlerAction) {
+                                when {
+                                    isLastBowler -> Badge(containerColor = Color.Gray, contentColor = Color.White) { Text("LAST OVER") }
+                                    isMaxedOut -> Badge(containerColor = Color.Red, contentColor = Color.White) { Text("MAXED") }
+                                }
                             }
                         }
                         HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))

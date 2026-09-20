@@ -10,14 +10,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="61789d28-061d-4cfb-9044-cdd51be63bb1" name="Changes" comment="UI: add colored ball indicators (4/6/Wicket) in Overs tab&#10;               CoinFlipDialog: Reimages added with clean">
-      <change beforePath="$PROJECT_DIR$/.idea/deploymentTargetSelector.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/deploymentTargetSelector.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ScoringViewModel.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ScoringViewModel.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ui/LiveScoringComponents.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ui/LiveScoringComponents.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ui/ScoringOverlays.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/kotlin/com/example/cricketscorer/ui/ScoringOverlays.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/res/drawable/coin_heads.png" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/res/drawable/coin_heads.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/res/drawable/coin_tails.png" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/res/drawable/coin_tails.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cricscore_v2.32.43.apk" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cricscore_v2.32.47.apk" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/version.properties" beforeDir="false" afterPath="$PROJECT_DIR$/version.properties" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
