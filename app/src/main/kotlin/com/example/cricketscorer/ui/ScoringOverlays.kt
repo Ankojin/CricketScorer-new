@@ -56,7 +56,11 @@ fun ScoringOverlaysContainer(
     val match = uiState.match ?: return
 
     if (match.pendingAction == PendingAction.TOSS_REQUIRED || match.pendingAction == PendingAction.SELECT_MATCH_SETTINGS) {
-        MatchSettingsDialog(uiState, viewModel, onDismiss = onNavigateToDashboard)
+        MatchSettingsDialog(
+            uiState, 
+            viewModel, 
+            onDismiss = if (match.pendingAction == PendingAction.TOSS_REQUIRED) onNavigateToDashboard else ({ viewModel.cancelPendingAction() })
+        )
     } else if (match.pendingAction == PendingAction.START_SECOND_INNINGS) {
         InningsOverOverlay(uiState, viewModel)
     } else if (uiState.finishedOverSummary != null) {

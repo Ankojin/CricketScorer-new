@@ -166,6 +166,13 @@ fun MatchSettingsDialog(uiState: MatchUiState, viewModel: ScoringViewModel, onDi
                     }
                     
                     viewModel.updateMatchSettings(o, mO, qC, qL)
+                    
+                    // v2.33.11: Close dialog. 
+                    // If it was an automatic pending action, the engine just set it to NONE.
+                    // If it was a manual toggle (showOversDialog), we must call the dismiss lambda.
+                    if (match.pendingAction == PendingAction.NONE) {
+                        onDismiss?.invoke()
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp)
@@ -174,10 +181,7 @@ fun MatchSettingsDialog(uiState: MatchUiState, viewModel: ScoringViewModel, onDi
             }
         },
         dismissButton = {
-            TextButton(onClick = {
-                if (onDismiss != null) onDismiss()
-                else viewModel.cancelPendingAction()
-            }) {
+            TextButton(onClick = { onDismiss?.invoke() ?: viewModel.cancelPendingAction() }) {
                 Text("CANCEL")
             }
         }

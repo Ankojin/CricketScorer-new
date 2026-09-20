@@ -209,7 +209,7 @@ class ScoringViewModel : ViewModel() {
                 battingTeamId = battingTeamId,
                 bowlingTeamId = bowlingTeamId,
                 status = MatchStatus.LIVE,
-                pendingAction = PendingAction.SELECT_MATCH_SETTINGS
+                pendingAction = PendingAction.NONE
             )
             ScoringEngine.recalculateMatchFromHistory(updatedMatch)
         }
