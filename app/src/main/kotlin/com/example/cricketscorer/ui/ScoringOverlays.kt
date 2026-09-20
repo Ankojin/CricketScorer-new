@@ -113,6 +113,7 @@ fun InningsOverOverlay(uiState: MatchUiState, viewModel: ScoringViewModel) {
     val match = uiState.match ?: return
     AlertDialog(
         onDismissRequest = { },
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
         title = { Text("Innings Completed", fontWeight = FontWeight.Black) },
         text = {
             val teamName = if (match.initialBattingTeamId == match.teamA.id) match.teamA.name else match.teamB.name

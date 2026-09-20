@@ -156,10 +156,12 @@ class ScoringViewModel : ViewModel() {
                 pendingAction = PendingAction.NONE,
                 strikerId = null,
                 nonStrikerId = null,
-                currentBowlerId = null
+                currentBowlerId = null,
+                lastBowlerId = null // v2.33.13: Hard reset for new innings 🏏🚀⚖️🏅
             )
         }
         if (updated != null) {
+            ScoringEngine.clearCache(updated.id)
             val finalized = ScoringEngine.recalculateMatchFromHistory(updated)
             _matchState.value = finalized
             TournamentRepository.updateMatch(finalized.tournamentId ?: "", finalized)
