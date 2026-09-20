@@ -326,7 +326,8 @@ class ScoringViewModel : ViewModel() {
             strikerId = strikerId,
             nonStrikerId = nonStrikerId,
             bowlerId = currentMatch.currentBowlerId,
-            outPlayerId = victimId
+            outPlayerId = victimId,
+            isLegalBall = type != WicketType.RETIRED_HURT
         )
         recordBall(ball)
     }
@@ -336,8 +337,8 @@ class ScoringViewModel : ViewModel() {
         val sId = current.strikerId ?: return
         val nsId = current.nonStrikerId ?: return
         
-        val ball1 = Ball(runs = 0, wicketType = WicketType.RETIRED_HURT, strikerId = sId, nonStrikerId = nsId, bowlerId = current.currentBowlerId)
-        val ball2 = Ball(runs = 0, wicketType = WicketType.RETIRED_HURT, strikerId = sId, nonStrikerId = nsId, bowlerId = current.currentBowlerId, outPlayerId = nsId)
+        val ball1 = Ball(runs = 0, wicketType = WicketType.RETIRED_HURT, strikerId = sId, nonStrikerId = nsId, bowlerId = current.currentBowlerId, isLegalBall = false)
+        val ball2 = Ball(runs = 0, wicketType = WicketType.RETIRED_HURT, strikerId = sId, nonStrikerId = nsId, bowlerId = current.currentBowlerId, outPlayerId = nsId, isLegalBall = false)
         
         _matchState.update { state ->
             if (state == null) return@update null
@@ -520,7 +521,7 @@ class ScoringViewModel : ViewModel() {
             val finalResult = ScoringEngine.recalculateMatchFromHistory(transitionMatch)
             
             if (finalResult.status == MatchStatus.LIVE && ball.isLegalBall && finalResult.totalBalls % 6 == 0 && _bowlerNotification.value == null) {
-                // v2.33.2: Gully Crix Style Over Completion Summary 🏏🚀⚖️🏅
+                // v2.33.2: Over Completion Summary 🏏🚀⚖️🏅
                 val lastOverBalls = mutableListOf<Ball>()
                 var physicalCount = 0
                 for (b in finalResult.ballHistory.reversed()) {
