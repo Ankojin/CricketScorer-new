@@ -177,63 +177,73 @@ fun OverCompletedOverlay(summary: OverSummary, onDismiss: () -> Unit) {
                 ) {
                     Text(
                         "END OF OVER ${summary.overNumber}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.6f),
                         letterSpacing = 1.sp
                     )
                     
+                    // v2.33.4: Highly Prominent Team Score 🏆🏏🚀⚖️🏅
+                    if (summary.battingTeamName.isNotBlank()) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = summary.battingTeamName.uppercase(),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.8f)
+                            )
+                            Text(
+                                text = "${summary.teamTotalRuns}/${summary.teamTotalWickets}",
+                                style = MaterialTheme.typography.displayMedium,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    HorizontalDivider(modifier = Modifier.width(100.dp), thickness = 1.dp, color = Color.White.copy(alpha = 0.2f))
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        "OVER STATS",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.5f)
+                    )
+
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(24.dp)
+                        horizontalArrangement = Arrangement.spacedBy(32.dp)
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 "${summary.runs}",
-                                style = MaterialTheme.typography.displayLarge,
+                                style = MaterialTheme.typography.headlineLarge,
                                 fontWeight = FontWeight.Black,
                                 color = Color.White
                             )
                             Text(
                                 "RUNS",
-                                style = MaterialTheme.typography.labelMedium,
+                                style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White.copy(alpha = 0.6f)
+                                color = Color.White.copy(alpha = 0.5f)
                             )
                         }
-                        
-                        Box(modifier = Modifier.width(1.dp).height(60.dp).background(Color.White.copy(alpha = 0.2f)))
 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             val wicketColor = if (summary.wickets > 0) Color(0xFFFF5252) else Color.White
                             Text(
                                 "${summary.wickets}",
-                                style = MaterialTheme.typography.displayLarge,
+                                style = MaterialTheme.typography.headlineLarge,
                                 fontWeight = FontWeight.Black,
                                 color = wicketColor
                             )
                             Text(
                                 "WICKETS",
-                                style = MaterialTheme.typography.labelMedium,
+                                style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
-
-                    // v2.33.3: Team Score integration in Over Summary 🏏🚀⚖️🏅
-                    if (summary.battingTeamName.isNotBlank()) {
-                        Surface(
-                            color = Color.White.copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "${summary.battingTeamName.uppercase()}: ${summary.teamTotalRuns}/${summary.teamTotalWickets}",
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color.White
+                                color = Color.White.copy(alpha = 0.5f)
                             )
                         }
                     }
