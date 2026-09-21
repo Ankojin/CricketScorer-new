@@ -449,23 +449,18 @@ object TournamentRepository {
         val safeTeams = tournament.teams.orEmpty().filterNotNull()
         val resetTeams = safeTeams.map { resetTeamStats(it) }
         
-        @Suppress("UNNECESSARY_SAFE_CALL", "USELESS_ELVIS")
-        val safeParticipantsList = (tournament.participants ?: emptyList()).filterNotNull()
-        
-        var currentParticipants = if (safeParticipantsList.isEmpty()) {
-            safeTeams.flatMap { it.players.orEmpty().filterNotNull() }.distinctBy { it.id }.map { it.copy(battingStats = BattingStats(), bowlingStats = BowlingStats(), fieldingStats = FieldingStats()) }
-        } else {
-            safeParticipantsList.map { it.copy(battingStats = BattingStats(), bowlingStats = BowlingStats(), fieldingStats = FieldingStats()) }
-        }
-
+        var currentParticipants = tournament.participants.orEmpty().map { it.copy(battingStats = BattingStats(), bowlingStats = BowlingStats(), fieldingStats = FieldingStats()) }
         var currentTeams = resetTeams
         
-        tournament.matches.orEmpty().filterNotNull().filter { it.status == MatchStatus.COMPLETED }.forEach { match ->
-            currentTeams = updateTeamStandings(currentTeams, match)
-        }
-        
+        // v2.33.16: Run all matches through the ScoringEngine before aggregating 🏏🚀⚖️🏅
+        // This ensures standings are based on calculated match data, not raw DB snapshots.
         tournament.matches.orEmpty().filterNotNull().forEach { match ->
-            currentParticipants = aggregateParticipantStats(currentParticipants, match)
+            val calculatedMatch = ScoringEngine.recalculateMatchFromHistory(match)
+            
+            if (calculatedMatch.status == MatchStatus.COMPLETED) {
+                currentTeams = updateTeamStandings(currentTeams, calculatedMatch)
+            }
+            currentParticipants = aggregateParticipantStats(currentParticipants, calculatedMatch)
         }
         
         val finalizedTeams = currentTeams.map { team ->
@@ -474,12 +469,8 @@ object TournamentRepository {
             })
         }
         
-        return Tournament(
-            id = tournament.id,
-            name = tournament.name,
+        return tournament.copy(
             teams = finalizedTeams,
-            matches = tournament.matches.orEmpty().filterNotNull(),
-            settings = tournament.settings,
             participants = currentParticipants
         )
     }

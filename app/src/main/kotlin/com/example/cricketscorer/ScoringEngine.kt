@@ -176,11 +176,6 @@ object ScoringEngine {
             
             current = current.copy(strikerId = sId, nonStrikerId = nsId, currentBowlerId = if (overJustFinished) null else activeBId, lastBowlerId = lbId)
 
-            // v2.33.0: Commit Snapshot at the end of the over 🏏🚀⚖️🏅
-            if (overJustFinished) {
-                if (snapshots.none { it.ballHistory.size == current.ballHistory.size }) snapshots.add(current)
-            }
-
             val inningsEnded = current.totalWickets >= (battingTeam.players.size - 1).coerceAtLeast(1) || current.totalBalls >= current.oversPerInnings * 6
             
             if (current.currentInnings == 1 && inningsEnded) {
@@ -198,27 +193,50 @@ object ScoringEngine {
                     pendingAction = if (match.isSecondInningsStarted) PendingAction.NONE else PendingAction.START_SECOND_INNINGS
                 )
                 ballsInOver = 0
-                // Cache at innings transition
-                if (snapshots.none { it.ballHistory.size == current.ballHistory.size }) snapshots.add(current)
+                overJustFinished = true // v2.33.16: Force snapshot on innings change 🏏🚀⚖️🏅
             } else if (current.currentInnings == 2 && current.status == MatchStatus.LIVE && current.target != null && (current.totalBalls > 0 || current.totalWickets > 0)) {
                 val targetValue = current.target
                 if (current.totalRuns >= targetValue) {
                     current = current.copy(status = MatchStatus.COMPLETED, winnerId = current.battingTeamId)
+                    overJustFinished = true
                 } else if (inningsEnded) {
                     current = current.copy(status = MatchStatus.COMPLETED, winnerId = if (current.totalRuns < targetValue - 1) current.bowlingTeamId else null)
+                    overJustFinished = true
                 }
+            }
+
+            // v2.33.16: Snapshot commit moved to the END of loop to capture transitions 🏏🚀⚖️🏅
+            if (overJustFinished) {
+                if (snapshots.none { it.ballHistory.size == current.ballHistory.size }) snapshots.add(current)
             }
         }
 
         // 4. Final Targeted Pending Action Selection (UI logic)
         if (current.status == MatchStatus.LIVE) {
+            val batTeam = if (isTeamA(current.battingTeamId, current)) current.teamA else current.teamB
+            val inningsEnded = current.totalWickets >= (batTeam.players.size - 1).coerceAtLeast(1) || current.totalBalls >= current.oversPerInnings * 6
+
+            if (current.currentInnings == 1 && inningsEnded) {
+                // v2.33.19: Fix Innings Transition Stall - Handle boundary state outside processing loop 🏏🚀⚖️🏅
+                val i1EndTime = match.innings1EndTimeMillis ?: System.currentTimeMillis()
+                val i1StartTime = match.startTimeMillis ?: i1EndTime
+                val i1Duration = ((i1EndTime - i1StartTime) / 60000).toInt().coerceAtLeast(0)
+
+                current = current.copy(
+                    innings1Data = InningsSummary(current.totalRuns, current.totalWickets, current.totalBalls, current.battingTeamId, current.wicketHistory, current.wideCount, current.noBallCount, current.byeCount, current.legByeCount, itemsProcessed, i1Duration, current.battingOrder),
+                    currentInnings = 2, target = current.totalRuns + 1, battingTeamId = current.bowlingTeamId, bowlingTeamId = current.battingTeamId,
+                    totalRuns = 0, totalWickets = 0, totalBalls = 0, 
+                    wideCount = 0, noBallCount = 0, byeCount = 0, legByeCount = 0,
+                    wicketHistory = emptyList(), battingOrder = emptyList(),
+                    strikerId = null, nonStrikerId = null, currentBowlerId = null, lastBowlerId = null,
+                    pendingAction = if (match.isSecondInningsStarted) PendingAction.NONE else PendingAction.START_SECOND_INNINGS
+                )
+            }
+
             if (match.pendingAction == PendingAction.SELECT_MATCH_SETTINGS || match.pendingAction == PendingAction.TOSS_REQUIRED) {
                 current = current.copy(pendingAction = match.pendingAction)
             } else if (current.pendingAction == PendingAction.NONE) {
-                val batTeam = if (isTeamA(current.battingTeamId, current)) current.teamA else current.teamB
-                val inningsEnded = current.totalWickets >= (batTeam.players.size - 1).coerceAtLeast(1) || current.totalBalls >= current.oversPerInnings * 6
-                
-                if (!inningsEnded) {
+                if (!inningsEnded || current.currentInnings == 2) {
                     current = when {
                         current.strikerId == null -> current.copy(pendingAction = PendingAction.SELECT_STRIKER)
                         current.nonStrikerId == null -> current.copy(pendingAction = PendingAction.SELECT_NON_STRIKER)

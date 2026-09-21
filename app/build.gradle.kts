@@ -97,38 +97,37 @@ dependencies {
 
 tasks.register("incrementVersionCode") {
     doLast {
-        // v2.33.16: Force increment on every build to keep version rotating. 🏏🚀⚖️🏅
-        // Note: If you get "Installation Failed" in emulator, uninstall the app once.
+        // v2.33.18: Only rotate version after a successful RELEASE build. 🏏🚀⚖️🏅
+        // This ensures the current APK version matches the properties file exactly.
         val versionPropsFile = rootProject.file("version.properties")
         if (versionPropsFile.exists()) {
             val versionProps = Properties()
             versionPropsFile.inputStream().use { versionProps.load(it) }
             
-            // Increment Version Code
             val currentVCode = versionProps.getProperty("VERSION_CODE", "100").toInt()
             versionProps.setProperty("VERSION_CODE", (currentVCode + 1).toString())
             
-            // Increment Version Name (patch version)
             val currentVName = versionProps.getProperty("VERSION_NAME", "2.33.0")
             val parts = currentVName.split(".").toMutableList()
             if (parts.size >= 3) {
                 val patch = parts.last().toInt()
                 parts[parts.size - 1] = (patch + 1).toString()
-                val newVName = parts.joinToString(".")
-                versionProps.setProperty("VERSION_NAME", newVName)
+                versionProps.setProperty("VERSION_NAME", parts.joinToString("."))
             }
             
             versionPropsFile.outputStream().use { versionProps.store(it, null) }
-            println("Version rotated successfully in version.properties.")
+            println("Version rotated to prepare for NEXT release.")
         }
     }
 }
 
 tasks.configureEach {
     val isBuildTask = name.startsWith("assemble") || name.startsWith("bundle")
-    // v2.26.47: Prevent incrementing on minor IDE tasks/syncs
     if (isBuildTask && !name.contains("Test")) {
-        dependsOn("incrementVersionCode")
+        // v2.33.18: Rotate ONLY on Release. finalizedBy ensures rotation happens AFTER APK is generated. 🏏🚀⚖️🏅
+        if (name.contains("Release", ignoreCase = true)) {
+            finalizedBy("incrementVersionCode")
+        }
         finalizedBy("copyApkToRoot")
     }
 }

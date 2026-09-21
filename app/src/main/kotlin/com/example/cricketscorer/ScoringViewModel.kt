@@ -510,20 +510,19 @@ class ScoringViewModel : ViewModel() {
                 if (updatedMatch.nonStrikerId == outId) updatedMatch = updatedMatch.copy(nonStrikerId = null)
             }
 
-            val result = ScoringEngine.recalculateMatchFromHistory(updatedMatch)
+            val finalResult = ScoringEngine.recalculateMatchFromHistory(updatedMatch)
             
-            var transitionMatch = result
-            if (current.currentInnings == 1 && result.currentInnings == 2 && result.innings1EndTimeMillis == null) {
-                transitionMatch = transitionMatch.copy(innings1EndTimeMillis = System.currentTimeMillis())
+            // v2.33.16: Synchronized timestamps 🏏🚀⚖️🏅
+            var synchronizedMatch = finalResult
+            if (current.currentInnings == 1 && finalResult.currentInnings == 2 && finalResult.innings1EndTimeMillis == null) {
+                synchronizedMatch = synchronizedMatch.copy(innings1EndTimeMillis = System.currentTimeMillis())
             }
-            if (current.status == MatchStatus.LIVE && result.status == MatchStatus.COMPLETED && result.endTimeMillis == null) {
-                transitionMatch = transitionMatch.copy(endTimeMillis = System.currentTimeMillis())
+            if (current.status == MatchStatus.LIVE && finalResult.status == MatchStatus.COMPLETED && finalResult.endTimeMillis == null) {
+                synchronizedMatch = synchronizedMatch.copy(endTimeMillis = System.currentTimeMillis())
             }
             
-            val finalResult = ScoringEngine.recalculateMatchFromHistory(transitionMatch)
-            
-            if (finalResult.status == MatchStatus.LIVE && ball.isLegalBall && finalResult.totalBalls % 6 == 0 && _bowlerNotification.value == null) {
-                if (finalResult.pendingAction == PendingAction.START_SECOND_INNINGS) {
+            if (synchronizedMatch.status == MatchStatus.LIVE && ball.isLegalBall && synchronizedMatch.totalBalls % 6 == 0 && _bowlerNotification.value == null) {
+                if (synchronizedMatch.pendingAction == PendingAction.START_SECOND_INNINGS) {
                     // v2.33.4: Clear over summary if innings ended to prevent overlay overlap 🏏🚀⚖️🏅
                     _finishedOverSummary.value = null
                 } else {
