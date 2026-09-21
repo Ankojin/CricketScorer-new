@@ -162,7 +162,7 @@ fun InningsOverOverlay(uiState: MatchUiState, viewModel: ScoringViewModel) {
 @Composable
 fun OverCompletedOverlay(summary: OverSummary, onDismiss: () -> Unit) {
     LaunchedEffect(summary) {
-        delay(2000)
+        delay(10000)
         onDismiss()
     }
     AlertDialog(

@@ -4,6 +4,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -199,6 +201,7 @@ fun CoinFlipDialog(uiState: MatchUiState, onResult: (String, String) -> Unit, on
     var coinResult by remember { mutableStateOf<String?>(null) }
     var callerChoice by remember { mutableStateOf<String?>(null) }
     var tossCallerId by remember { mutableStateOf(match.teamA.id) }
+    
     val rotation = remember { Animatable(0f) }
     val scale = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
@@ -210,115 +213,128 @@ fun CoinFlipDialog(uiState: MatchUiState, onResult: (String, String) -> Unit, on
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                // 1. CALLER SELECTION (Who is calling?)
+                Column {
+                    Text("Who is calling?", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = tossCallerId == match.teamA.id,
+                            onClick = { if (!isFlipping && coinResult == null) tossCallerId = match.teamA.id },
+                            label = { Text(match.teamA.name.uppercase(), fontWeight = FontWeight.Bold) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = tossCallerId == match.teamB.id,
+                            onClick = { if (!isFlipping && coinResult == null) tossCallerId = match.teamB.id },
+                            label = { Text(match.teamB.name.uppercase(), fontWeight = FontWeight.Bold) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                // 2. SIDE CHOICE (Heads or Tails?)
+                Column {
+                    Text("Choose Side:", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        listOf("HEADS", "TAILS").forEach { choice ->
+                            FilterChip(
+                                selected = callerChoice == choice,
+                                onClick = { if (!isFlipping) callerChoice = choice },
+                                label = { Text(choice, fontWeight = FontWeight.Black) },
+                                enabled = !isFlipping && coinResult == null,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                // 3. THE ANIMATED COIN
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(16.dp)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("Toss Call by", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                FilterChip(
-                                    selected = tossCallerId == match.teamA.id,
-                                    onClick = { if (!isFlipping && coinResult == null) tossCallerId = match.teamA.id },
-                                    label = { Text(match.teamA.name.uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = if(tossCallerId == match.teamA.id) FontWeight.Black else FontWeight.Normal) }
-                                )
-                                FilterChip(
-                                    selected = tossCallerId == match.teamB.id,
-                                    onClick = { if (!isFlipping && coinResult == null) tossCallerId = match.teamB.id },
-                                    label = { Text(match.teamB.name.uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = if(tossCallerId == match.teamB.id) FontWeight.Black else FontWeight.Normal) }
-                                )
-                            }
-                        }
-                        
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                listOf("HEADS", "TAILS").forEach { choice ->
-                                    FilterChip(
-                                        selected = callerChoice == choice,
-                                        onClick = { if (!isFlipping) callerChoice = choice },
-                                        label = { Text(choice, style = MaterialTheme.typography.labelSmall) },
-                                        enabled = !isFlipping && coinResult == null
-                                    )
-                                }
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .graphicsLayer {
-                                        rotationY = rotation.value
-                                        scaleX = scale.value
-                                        scaleY = scale.value
-                                        cameraDistance = 12f * density
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                val isHeadsSide = (rotation.value / 180).toInt() % 2 == 0
-                                Image(
-                                    painter = painterResource(
-                                        id = if (isHeadsSide) R.drawable.coin_heads else R.drawable.coin_tails
-                                    ),
-                                    contentDescription = if (isHeadsSide) "Heads" else "Tails",
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.height(8.dp))
-
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    isFlipping = true
-                                    coinResult = null
-                                    winnerId = null
-                                    
-                                    launch { scale.animateTo(1.4f, tween(400, easing = FastOutSlowInEasing)) }
-                                    
-                                    val targetRotation = 180f * 12 + (if (Random().nextBoolean()) 0f else 180f)
-                                    rotation.animateTo(
-                                        targetValue = targetRotation,
-                                        animationSpec = tween(durationMillis = 1500, easing = FastOutSlowInEasing)
-                                    )
-                                    
-                                    scale.animateTo(1f, tween(300))
-                                    
-                                    val isHeads = (targetRotation / 180).toInt() % 2 == 0
-                                    val result = if (isHeads) "HEADS" else "TAILS"
-                                    coinResult = result
-                                    isFlipping = false
-                                    
-                                    if (callerChoice != null) {
-                                        val otherTeamId = if (tossCallerId == match.teamA.id) match.teamB.id else match.teamA.id
-                                        winnerId = if (callerChoice == result) tossCallerId else otherTeamId
-                                    }
-                                }
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .graphicsLayer {
+                                rotationY = rotation.value
+                                scaleX = scale.value
+                                scaleY = scale.value
+                                cameraDistance = 12f * density
                             },
-                            enabled = !isFlipping && callerChoice != null && coinResult == null,
-                            modifier = Modifier.fillMaxWidth().height(40.dp),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(if (isFlipping) "FLIPPING..." else "FLIP COIN", style = MaterialTheme.typography.labelLarge)
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // v2.33.17: Precise Image Mapping. 0/360deg = HEADS, 180/540deg = TAILS 🏏🚀⚖️🏅
+                        val rotationVal = rotation.value.toInt()
+                        val isHeadsVisible = (rotationVal / 180) % 2 == 0
+                        Image(
+                            painter = painterResource(id = if (isHeadsVisible) R.drawable.coin_heads else R.drawable.coin_tails),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        scope.launch {
+                            isFlipping = true
+                            coinResult = null
+                            winnerId = null
+                            
+                            launch { scale.animateTo(1.5f, tween(500, easing = FastOutSlowInEasing)) }
+                            
+                            // 12 full rotations + random end side (0 or 180)
+                            val finalResultIsHeads = Random().nextBoolean()
+                            val targetRotation = (180f * 24) + (if (finalResultIsHeads) 0f else 180f)
+                            
+                            rotation.animateTo(
+                                targetValue = targetRotation,
+                                animationSpec = tween(durationMillis = 1800, easing = FastOutSlowInEasing)
+                            )
+                            
+                            scale.animateTo(1f, tween(300))
+                            
+                            val resultText = if (finalResultIsHeads) "HEADS" else "TAILS"
+                            coinResult = resultText
+                            isFlipping = false
+                            
+                            if (callerChoice != null) {
+                                val otherTeamId = if (tossCallerId == match.teamA.id) match.teamB.id else match.teamA.id
+                                winnerId = if (callerChoice == resultText) tossCallerId else otherTeamId
+                            }
                         }
-                        
-                        if (coinResult != null) {
-                            val winnerName = if (winnerId == match.teamA.id) match.teamA.name else match.teamB.name
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Column {
-                                    Text("Result: $coinResult", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
-                                    Text("$winnerName won!", fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32), style = MaterialTheme.typography.labelSmall)
-                                }
-                                TextButton(onClick = { 
-                                    coinResult = null
-                                    callerChoice = null
-                                    winnerId = null
-                                    scope.launch { rotation.snapTo(0f) }
-                                }) {
-                                    Text("RE-FLIP", style = MaterialTheme.typography.labelSmall)
-                                }
+                    },
+                    enabled = !isFlipping && callerChoice != null && coinResult == null,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(if (isFlipping) "FLIPPING..." else "FLIP COIN")
+                }
+                
+                if (coinResult != null) {
+                    val winnerName = if (winnerId == match.teamA.id) match.teamA.name else match.teamB.name
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(modifier = Modifier.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column {
+                                Text("RESULT: $coinResult", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+                                Text("$winnerName won!", fontWeight = FontWeight.ExtraBold, color = Color(0xFF2E7D32))
+                            }
+                            TextButton(onClick = { 
+                                coinResult = null
+                                callerChoice = null
+                                winnerId = null
+                                scope.launch { rotation.snapTo(0f) }
+                            }) {
+                                Text("RE-FLIP", color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
@@ -326,7 +342,8 @@ fun CoinFlipDialog(uiState: MatchUiState, onResult: (String, String) -> Unit, on
 
                 HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.5f))
 
-                Text("Toss Winner", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                // MANUAL OVERRIDE SECTION
+                Text("Manual Winner Override:", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = winnerId == match.teamA.id,
@@ -343,31 +360,18 @@ fun CoinFlipDialog(uiState: MatchUiState, onResult: (String, String) -> Unit, on
                 }
                 
                 if (winnerId != null) {
-                    Spacer(Modifier.height(8.dp))
                     Text("Decision", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         Button(
                             onClick = { decision = "BAT" },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (decision == "BAT") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (decision == "BAT") Color.White else Color.Black
-                            ),
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("BAT FIRST")
-                        }
+                            colors = ButtonDefaults.buttonColors(containerColor = if (decision == "BAT") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant, contentColor = if (decision == "BAT") Color.White else Color.Black),
+                            modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)
+                        ) { Text("BAT FIRST") }
                         Button(
                             onClick = { decision = "BOWL" },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (decision == "BOWL") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (decision == "BOWL") Color.White else Color.Black
-                            ),
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("BOWL FIRST")
-                        }
+                            colors = ButtonDefaults.buttonColors(containerColor = if (decision == "BOWL") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant, contentColor = if (decision == "BOWL") Color.White else Color.Black),
+                            modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)
+                        ) { Text("BOWL FIRST") }
                     }
                 }
             }
