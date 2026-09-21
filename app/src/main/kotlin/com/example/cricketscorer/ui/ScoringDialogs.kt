@@ -236,7 +236,8 @@ fun CoinFlipDialog(uiState: MatchUiState, onResult: (String, String) -> Unit, on
 
                 // 2. SIDE CHOICE (Heads or Tails?)
                 Column {
-                    Text("Choose Side:", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    val callerName = if (tossCallerId == match.teamA.id) match.teamA.name else match.teamB.name
+                    Text("$callerName calls:", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                     Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         listOf("HEADS", "TAILS").forEach { choice ->
                             FilterChip(
@@ -318,23 +319,30 @@ fun CoinFlipDialog(uiState: MatchUiState, onResult: (String, String) -> Unit, on
                 }
                 
                 if (coinResult != null) {
+                    val callerName = if (tossCallerId == match.teamA.id) match.teamA.name else match.teamB.name
                     val winnerName = if (winnerId == match.teamA.id) match.teamA.name else match.teamB.name
                     Card(
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(modifier = Modifier.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Column {
-                                Text("RESULT: $coinResult", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
-                                Text("$winnerName won!", fontWeight = FontWeight.ExtraBold, color = Color(0xFF2E7D32))
-                            }
-                            TextButton(onClick = { 
-                                coinResult = null
-                                callerChoice = null
-                                winnerId = null
-                                scope.launch { rotation.snapTo(0f) }
-                            }) {
-                                Text("RE-FLIP", color = MaterialTheme.colorScheme.error)
+                        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "$callerName called $callerChoice · Coin: $coinResult · $winnerName wins!",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black,
+                                color = Color(0xFF1B5E20),
+                                textAlign = TextAlign.Center
+                            )
+                            TextButton(
+                                onClick = { 
+                                    coinResult = null
+                                    callerChoice = null
+                                    winnerId = null
+                                    scope.launch { rotation.snapTo(0f) }
+                                },
+                                modifier = Modifier.padding(top = 8.dp)
+                            ) {
+                                Text("RE-FLIP", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge)
                             }
                         }
                     }
