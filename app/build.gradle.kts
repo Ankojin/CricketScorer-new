@@ -35,12 +35,19 @@ android {
         }
     }
 
+    val localProperties = Properties()
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { localProperties.load(it) }
+    }
+
+
     signingConfigs {
         create("release") {
             storeFile = file("../release.jks")
-            storePassword = "cricscore_pass"
-            keyAlias = "cricscore"
-            keyPassword = "cricscore_pass"
+            storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD") ?: System.getenv("RELEASE_STORE_PASSWORD")
+            keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS") ?: System.getenv("RELEASE_KEY_ALIAS") ?: "cricscore"
+            keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD") ?: System.getenv("RELEASE_KEY_PASSWORD")
         }
     }
 
@@ -134,13 +141,20 @@ tasks.configureEach {
 
 tasks.register("copyApkToRoot") {
     doLast {
-        // v2.33.15: Use the build configuration values directly to ensure the APK name matches the installed app. 🏏🚀⚖️🏅
+        // v2.33.20: Copy Release APK if it exists, fallback to Debug. 🏏🚀⚖️🏅
         val vName = android.defaultConfig.versionName
+        val buildDir = layout.buildDirectory.get().asFile
         
-        val apkFile = file("${layout.buildDirectory.get().asFile}/outputs/apk/debug/app-debug.apk")
+        val releaseApk = file("$buildDir/outputs/apk/release/app-release.apk")
+        val debugApk = file("$buildDir/outputs/apk/debug/app-debug.apk")
+        
+        val apkFile = if (releaseApk.exists()) releaseApk else debugApk
         
         if (apkFile.exists()) {
-            // Automated Cleanup - Delete old APKs to prevent root clutter
+            val isRelease = apkFile == releaseApk
+            val suffix = if (isRelease) "" else "-debug"
+            
+            // Automated Cleanup
             project.fileTree(rootProject.projectDir)
                 .matching { include("cricscore_v*.apk") }
                 .forEach { it.delete() }
@@ -148,9 +162,9 @@ tasks.register("copyApkToRoot") {
             copy {
                 from(apkFile)
                 into(rootProject.projectDir)
-                rename { "cricscore_v$vName.apk" }
+                rename { "cricscore_v$vName$suffix.apk" }
             }
-            println("APK copied to root: cricscore_v$vName.apk matching internal version $vName")
+            println("APK copied to root: cricscore_v$vName$suffix.apk (Source: ${if (isRelease) "Release" else "Debug"})")
         }
     }
 }

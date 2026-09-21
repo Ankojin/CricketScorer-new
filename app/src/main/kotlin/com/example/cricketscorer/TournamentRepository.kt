@@ -198,79 +198,64 @@ object TournamentRepository {
         val tournament = _tournaments.value.find { it.id == tournamentId } ?: return false
         val trimmedName = playerName.trim()
         
-        val isDuplicate = tournament.teams.flatMap { it.players }.any { 
-            it.name.trim().equals(trimmedName, ignoreCase = true) 
+        // v2.33.17: Rotation Logic - Find existing player by name in tournament or global list 🏏🚀⚖️🏅
+        val existingInTournament = tournament.teams.flatMap { it.players }.find { it.name.trim().equals(trimmedName, ignoreCase = true) }
+        val globalMaster = GlobalPlayerRepository.players.value.find { it.name.trim().equals(trimmedName, ignoreCase = true) }
+        
+        val playerToAdd = when {
+            existingInTournament != null -> existingInTournament.copy(battingStyle = bStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain)
+            globalMaster != null -> globalMaster.copy(battingStyle = bStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain)
+            else -> Player(
+                id = UUID.randomUUID().toString(), 
+                name = trimmedName,
+                battingStyle = bStyle,
+                isCaptain = isCaptain,
+                isViceCaptain = isViceCaptain
+            )
         }
         
-        if (isDuplicate) return false
-
-        updateTournament(tournamentId) { t ->
-            var createdPlayer: Player? = null
-            val updatedTeams = t.teams.map { team ->
-                if (team.id == teamId) {
-                    val newPlayer = Player(
-                        id = UUID.randomUUID().toString(), 
-                        name = trimmedName,
-                        battingStyle = bStyle,
-                        isCaptain = isCaptain,
-                        isViceCaptain = isViceCaptain
-                    )
-                    createdPlayer = newPlayer
-                    team.copy(players = team.players + newPlayer)
-                } else team
-            }
-            
-            val playerToAdd = createdPlayer
-            val updatedParticipants = if (playerToAdd != null) (t.participants.orEmpty() + playerToAdd) else t.participants.orEmpty()
-
-            val updatedMatches = if (playerToAdd != null) {
-                t.matches.orEmpty().map { match ->
-                    if (match.status == MatchStatus.LIVE || match.status == MatchStatus.UPCOMING) {
-                        val updatedTeamA = if (match.teamA.id == teamId || playerToAdd.isJoker) {
-                            match.teamA.copy(players = match.teamA.players.orEmpty() + playerToAdd)
-                        } else match.teamA
-
-                        val updatedTeamB = if (match.teamB.id == teamId || playerToAdd.isJoker) {
-                            match.teamB.copy(players = match.teamB.players.orEmpty() + playerToAdd)
-                        } else match.teamB
-
-                        match.copy(teamA = updatedTeamA, teamB = updatedTeamB)
-                    } else match
-                }
-            } else t.matches.orEmpty()
-
-            t.safeCopy(teams = updatedTeams, matches = updatedMatches, participants = updatedParticipants)
-        }
-        return true
+        return addPlayersToTeam(tournamentId, teamId, listOf(playerToAdd))
     }
 
     fun addPlayersToTeam(tournamentId: String, teamId: String, players: List<Player>): Boolean {
         val tournament = _tournaments.value.find { it.id == tournamentId } ?: return false
-        val existingInTournamentNames = tournament.teams.flatMap { it.players }.map { it.name.trim().lowercase() }
-        val validNewPlayers = players.filter { it.name.trim().lowercase() !in existingInTournamentNames }
         
-        if (validNewPlayers.isEmpty()) return false
+        // v2.33.17: Filter out players already in the target team 🏏🚀⚖️🏅
+        val targetTeam = tournament.teams.find { it.id == teamId } ?: return false
+        val playersToProcess = players.filter { p -> targetTeam.players.none { it.id == p.id } }
+        
+        if (playersToProcess.isEmpty()) return false
 
         updateTournament(tournamentId) { t ->
-            val updatedTeams = t.teams.map { team ->
-                if (team.id == teamId) {
-                    team.copy(players = team.players + validNewPlayers)
+            val playerIdsToMove = playersToProcess.map { it.id }.toSet()
+
+            // 1. Remove moving players from any other teams in this tournament
+            val teamsWithRemovals = t.teams.map { team ->
+                if (team.id != teamId) {
+                    team.copy(players = team.players.filter { it.id !in playerIdsToMove })
                 } else team
             }
             
-            val updatedParticipants = (t.participants.orEmpty() + validNewPlayers).distinctBy { it.id }
+            // 2. Add players to target team
+            val updatedTeams = teamsWithRemovals.map { team ->
+                if (team.id == teamId) {
+                    team.copy(players = team.players + playersToProcess)
+                } else team
+            }
+            
+            val updatedParticipants = (t.participants.orEmpty() + playersToProcess).distinctBy { it.id }
 
+            // 3. Update matches with the moved rosters
             val updatedMatches = t.matches.orEmpty().map { match ->
                 if (match.status == MatchStatus.LIVE || match.status == MatchStatus.UPCOMING) {
                     var newTeamA = match.teamA
                     var newTeamB = match.teamB
 
-                    if (match.teamA.id == teamId) {
-                        newTeamA = match.teamA.copy(players = match.teamA.players.orEmpty() + validNewPlayers)
-                    }
-                    if (match.teamB.id == teamId) {
-                        newTeamB = match.teamB.copy(players = match.teamB.players.orEmpty() + validNewPlayers)
-                    }
+                    val masterA = updatedTeams.find { it.id == match.teamA.id }
+                    val masterB = updatedTeams.find { it.id == match.teamB.id }
+                    
+                    if (masterA != null) newTeamA = match.teamA.copy(players = masterA.players)
+                    if (masterB != null) newTeamB = match.teamB.copy(players = masterB.players)
 
                     match.copy(teamA = newTeamA, teamB = newTeamB)
                 } else match

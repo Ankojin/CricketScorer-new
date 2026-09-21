@@ -34,7 +34,8 @@ class TournamentViewModel : ViewModel() {
     }
 
     fun addGlobalPlayer(tournamentId: String, teamId: String, player: Player) {
-        TournamentRepository.addPlayerToTeam(tournamentId, teamId, player.name, player.battingStyle ?: BattingStyle.RHB)
+        // v2.33.17: Use the existing player object directly to ensure ID preservation 🏏🚀⚖️🏅
+        TournamentRepository.addPlayersToTeam(tournamentId, teamId, listOf(player))
     }
 
     fun addGlobalPlayers(tournamentId: String, teamId: String, players: List<Player>) {
