@@ -2,6 +2,7 @@ package com.example.cricketscorer.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -10,6 +11,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -91,12 +93,26 @@ fun OversTab(uiState: MatchUiState, viewModel: ScoringViewModel, graphicsLayer: 
             match.ballHistory.drop(splitIdx).mapIndexed { index, ball -> (index + splitIdx) to ball }
         }
 
+        val overs = remember(inningsBallsWithIndices) {
+            val list = mutableListOf<List<Pair<Int, Ball>>>()
+            var currentOver = mutableListOf<Pair<Int, Ball>>()
+            inningsBallsWithIndices.forEach { (idx, ball) ->
+                currentOver.add(idx to ball)
+                if (ball.isPhysicalBall && currentOver.count { it.second.isPhysicalBall } == 6) {
+                    list.add(currentOver.toList())
+                    currentOver = mutableListOf()
+                }
+            }
+            if (currentOver.isNotEmpty()) list.add(currentOver)
+            list
+        }
+
         Box(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            modifier = Modifier.fillMaxSize()
         ) {
-            Column(
+            LazyColumn(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxSize()
                     .padding(16.dp)
                     .drawWithContent {
                         this@drawWithContent.drawContent()
@@ -109,82 +125,76 @@ fun OversTab(uiState: MatchUiState, viewModel: ScoringViewModel, graphicsLayer: 
                         drawLayer(graphicsLayer)
                     }
             ) {
-                CaptureArea {
-                    Column(modifier = Modifier.fillMaxWidth().background(Color.White)) {
-                        val overs = mutableListOf<List<Pair<Int, Ball>>>()
-                        var currentOver = mutableListOf<Pair<Int, Ball>>()
-                        
-                        inningsBallsWithIndices.forEach { (idx, ball) ->
-                            currentOver.add(idx to ball)
-                            if (ball.isPhysicalBall && currentOver.count { it.second.isPhysicalBall } == 6) {
-                                overs.add(currentOver.toList())
-                                currentOver = mutableListOf()
-                            }
-                        }
-                        if (currentOver.isNotEmpty()) overs.add(currentOver)
-                        
-                        val reversedOvers = overs.reversed()
-                        reversedOvers.forEachIndexed { index, overBalls ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color.White),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(16.dp)) {
-                                    val overNum = overs.size - index
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Column {
-                                            Text("Over $overNum", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
-                                            
-                                            // v2.27.1: Filter out adjustments for sequence and display 🏏🚀⚖️🏅
-                                            val validBalls = overBalls.filter { !it.second.isAdjustment }
-                                            
-                                            val sequence = mutableListOf<Pair<String, Int>>()
-                                            validBalls.forEach { (_, b) ->
-                                                val name = recoverName(b.bowlerId, match, "Bowler")
-                                                if (sequence.isEmpty() || sequence.last().first != name) {
-                                                    sequence.add(name to if (b.isPhysicalBall) 1 else 0)
-                                                } else {
-                                                    val last = sequence.removeAt(sequence.size - 1)
-                                                    sequence.add(last.first to (last.second + (if (b.isPhysicalBall) 1 else 0)))
-                                                }
-                                            }
-                                            val bowlersInOver = sequence.joinToString(", ") { "${it.first} (${it.second})" }
-                                            
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                CricketBallIcon(modifier = Modifier.size(10.dp).padding(end = 4.dp))
-                                                Text("Bowlers: $bowlersInOver", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                        val validBalls = overBalls.filter { !it.second.isAdjustment }
-                                        val overRuns = validBalls.sumOf { it.second.runs + it.second.extraRuns }
-                                        val overWickets = validBalls.count { it.second.wicketType != WicketType.NONE && it.second.wicketType != WicketType.RETIRED_HURT }
-                                        Text("$overRuns Runs" + (if (overWickets > 0) ", $overWickets Wkts" else ""), fontWeight = FontWeight.Bold, color = Color.DarkGray)
-                                    }
-                                    val validBalls = overBalls.filter { !it.second.isAdjustment }
-                                    val droppedInOver = validBalls.filter { it.second.isDroppedCatch }
-                                    if (droppedInOver.isNotEmpty()) {
-                                        val droppedNames = droppedInOver.map { recoverName(it.second.fielderId, match, "Fielder") }.joinToString(", ")
-                                        Text("🤲 Dropped by: $droppedNames", style = MaterialTheme.typography.labelSmall, color = Color(0xFFE65100), fontWeight = FontWeight.Bold)
-                                    }
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        validBalls.forEach { (idx, ball) ->
-                                            BallBox(
-                                                ball = ball, 
-                                                onClick = { 
-                                                    if (match.status != MatchStatus.COMPLETED) {
-                                                        editingBallIndex = idx 
+                item {
+                    CaptureArea {
+                        Column(modifier = Modifier.fillMaxWidth().background(Color.White)) {
+                            val reversedOvers = overs.reversed()
+                            reversedOvers.forEachIndexed { index, overBalls ->
+                                val overNum = overs.size - index
+                                key(overNum) {
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                                    ) {
+                                        Column(modifier = Modifier.padding(16.dp)) {
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Column {
+                                                    Text("Over $overNum", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                                                    
+                                                    // v2.27.1: Filter out adjustments for sequence and display 🏏🚀⚖️🏅
+                                                    val validBalls = overBalls.filter { !it.second.isAdjustment }
+                                                    
+                                                    val sequence = mutableListOf<Pair<String, Int>>()
+                                                    validBalls.forEach { (_, b) ->
+                                                        val name = recoverName(b.bowlerId, match, "Bowler")
+                                                        if (sequence.isEmpty() || sequence.last().first != name) {
+                                                            sequence.add(name to if (b.isPhysicalBall) 1 else 0)
+                                                        } else {
+                                                            val last = sequence.removeAt(sequence.size - 1)
+                                                            sequence.add(last.first to (last.second + (if (b.isPhysicalBall) 1 else 0)))
+                                                        }
+                                                    }
+                                                    val bowlersInOver = sequence.joinToString(", ") { "${it.first} (${it.second})" }
+                                                    
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        CricketBallIcon(modifier = Modifier.size(10.dp).padding(end = 4.dp))
+                                                        Text("Bowlers: $bowlersInOver", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
                                                     }
                                                 }
-                                            )
+                                                val validBalls = overBalls.filter { !it.second.isAdjustment }
+                                                val overRuns = validBalls.sumOf { it.second.runs + it.second.extraRuns }
+                                                val overWickets = validBalls.count { it.second.wicketType != WicketType.NONE && it.second.wicketType != WicketType.RETIRED_HURT }
+                                                Text("$overRuns Runs" + (if (overWickets > 0) ", $overWickets Wkts" else ""), fontWeight = FontWeight.Bold, color = Color.DarkGray)
+                                            }
+                                            val validBalls = overBalls.filter { !it.second.isAdjustment }
+                                            val droppedInOver = validBalls.filter { it.second.isDroppedCatch }
+                                            if (droppedInOver.isNotEmpty()) {
+                                                val droppedNames = droppedInOver.map { recoverName(it.second.fielderId, match, "Fielder") }.joinToString(", ")
+                                                Text("🤲 Dropped by: $droppedNames", style = MaterialTheme.typography.labelSmall, color = Color(0xFFE65100), fontWeight = FontWeight.Bold)
+                                            }
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                validBalls.forEach { (idx, ball) ->
+                                                    key(idx) {
+                                                        BallBox(
+                                                            ball = ball, 
+                                                            onClick = { 
+                                                                if (match.status != MatchStatus.COMPLETED) {
+                                                                    editingBallIndex = idx 
+                                                                }
+                                                            }
+                                                        )
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
+                            CardBranding()
+                            Spacer(modifier = Modifier.height(32.dp))
                         }
-                        CardBranding()
-                        Spacer(modifier = Modifier.height(32.dp))
                     }
                 }
             }

@@ -11,6 +11,9 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -207,26 +210,53 @@ fun ScoreCard(uiState: MatchUiState) {
             
             Text(battingTeam.name.uppercase(), fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.labelLarge)
             
+            val totalRuns = match.totalRuns
+            val totalWickets = match.totalWickets
+            val totalBalls = match.totalBalls
+            val target = match.target
+            val status = match.status
+            val oversPerInnings = match.oversPerInnings
+            val innings1Data = match.innings1Data
+
+            val scoreText by remember(totalRuns, totalWickets) {
+                derivedStateOf { "$totalRuns/$totalWickets" }
+            }
+            val oversString by remember(totalBalls) {
+                derivedStateOf { "(${totalBalls / 6}.${totalBalls % 6})" }
+            }
+            val crrText by remember(totalRuns, totalBalls) {
+                derivedStateOf {
+                    val crr = if (totalBalls > 0) (totalRuns.toDouble() / totalBalls) * 6 else 0.0
+                    "CRR: ${String.format(Locale.US, "%.2f", crr)}"
+                }
+            }
+
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-                Text(text = "${match.totalRuns}/${match.totalWickets}", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
+                Text(text = scoreText, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
-                    Text(text = "(${match.totalBalls / 6}.${match.totalBalls % 6})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
-                    val crr = if (match.totalBalls > 0) (match.totalRuns.toDouble() / match.totalBalls) * 6 else 0.0
-                    Text(text = "CRR: ${String.format(Locale.US, "%.2f", crr)}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    Text(text = oversString, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
+                    Text(text = crrText, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 }
             }
 
             if (match.currentInnings == 2) {
-                val needed = (match.target ?: 0) - match.totalRuns
-                val ballsLeft = (match.oversPerInnings * 6) - match.totalBalls
-                if (needed > 0 && match.status != MatchStatus.COMPLETED) {
-                    Text("Need $needed off $ballsLeft balls", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium)
+                val neededText by remember(target, totalRuns, totalBalls, oversPerInnings, status) {
+                    derivedStateOf {
+                        val needed = (target ?: 0) - totalRuns
+                        val ballsLeft = (oversPerInnings * 6) - totalBalls
+                        if (needed > 0 && status != MatchStatus.COMPLETED) {
+                            "Need $needed off $ballsLeft balls"
+                        } else ""
+                    }
+                }
+                if (neededText.isNotEmpty()) {
+                    Text(text = neededText, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium)
                 }
                 
                 // Show Innings 1 Score for context
-                match.innings1Data?.let { i1 ->
-                    Text(text = "Target: ${match.target} (${bowlingTeam.name}: ${i1.runs}/${i1.wickets})", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Medium)
+                innings1Data?.let { i1 ->
+                    Text(text = "Target: $target (${bowlingTeam.name}: ${i1.runs}/${i1.wickets})", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Medium)
                 }
             }
         }
