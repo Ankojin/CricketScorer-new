@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.example.cricketscorer.Ball
 import com.example.cricketscorer.Match
 import com.example.cricketscorer.WicketType
+import java.util.Locale
 
 data class ChartPoint(
     val over: Float,
@@ -93,6 +94,8 @@ fun ProgressChartCard(
     val i2TotalRuns = i2Balls.sumOf { it.runs + it.extraRuns }
     val i2TotalWickets = i2Balls.count { it.wicketType != WicketType.NONE && it.wicketType != WicketType.RETIRED_HURT }
 
+    val hasActiveSecondInnings = match.isSecondInningsStarted && i2Balls.isNotEmpty()
+
     val team1Color = Color(0xFFE53935)
     val team2Color = Color(0xFF1E88E5)
 
@@ -126,7 +129,7 @@ fun ProgressChartCard(
                         color = Color.DarkGray
                     )
                 }
-                if (match.isSecondInningsStarted) {
+                if (hasActiveSecondInnings) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.width(16.dp).height(3.dp).background(team2Color))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -146,8 +149,8 @@ fun ProgressChartCard(
             val density = LocalDensity.current
 
             val paddingLeft = with(density) { 36.dp.toPx() }
-            val paddingRight = with(density) { 12.dp.toPx() }
-            val paddingTop = with(density) { 12.dp.toPx() }
+            val paddingRight = with(density) { 16.dp.toPx() }
+            val paddingTop = with(density) { 16.dp.toPx() }
             val paddingBottom = with(density) { 24.dp.toPx() }
 
             Canvas(
@@ -160,15 +163,16 @@ fun ProgressChartCard(
 
                 val maxOverData = maxOf(
                     i1Points.maxOfOrNull { it.over } ?: 0f,
-                    i2Points.maxOfOrNull { it.over } ?: 0f
+                    if (hasActiveSecondInnings) (i2Points.maxOfOrNull { it.over } ?: 0f) else 0f
                 )
                 val totalOvers = maxOf(match.oversPerInnings.toFloat(), maxOverData, 1f)
 
                 val maxRunsData = maxOf(
                     i1Points.maxOfOrNull { it.cumulativeRuns } ?: 0,
-                    i2Points.maxOfOrNull { it.cumulativeRuns } ?: 0
+                    if (hasActiveSecondInnings) (i2Points.maxOfOrNull { it.cumulativeRuns } ?: 0) else 0
                 )
-                val maxRuns = maxOf(maxRunsData, 20)
+                // Headroom padding of 10%
+                val maxRuns = maxOf((maxRunsData * 1.1f).toInt(), 20)
                 val maxRunsAxis = ((maxRuns + 19) / 20) * 20
 
                 // Horizontal Grid & Y-Axis Labels
@@ -224,14 +228,14 @@ fun ProgressChartCard(
                         if (point.isWicket) {
                             val x = paddingLeft + (point.over / totalOvers) * chartWidth
                             val y = paddingTop + chartHeight - (point.cumulativeRuns.toFloat() / maxRunsAxis) * chartHeight
-                            drawCircle(color = Color.White, radius = 4.5f.dp.toPx(), center = Offset(x, y))
-                            drawCircle(color = team1Color, radius = 2.5f.dp.toPx(), center = Offset(x, y))
+                            drawCircle(color = Color.White, radius = 5.dp.toPx(), center = Offset(x, y))
+                            drawCircle(color = team1Color, radius = 3.dp.toPx(), center = Offset(x, y))
                         }
                     }
                 }
 
                 // Draw Innings 2 Line
-                if (match.isSecondInningsStarted && i2Points.isNotEmpty()) {
+                if (hasActiveSecondInnings && i2Points.isNotEmpty()) {
                     val path = Path()
                     i2Points.forEachIndexed { index, point ->
                         val x = paddingLeft + (point.over / totalOvers) * chartWidth
@@ -244,8 +248,8 @@ fun ProgressChartCard(
                         if (point.isWicket) {
                             val x = paddingLeft + (point.over / totalOvers) * chartWidth
                             val y = paddingTop + chartHeight - (point.cumulativeRuns.toFloat() / maxRunsAxis) * chartHeight
-                            drawCircle(color = Color.White, radius = 4.5f.dp.toPx(), center = Offset(x, y))
-                            drawCircle(color = team2Color, radius = 2.5f.dp.toPx(), center = Offset(x, y))
+                            drawCircle(color = Color.White, radius = 5.dp.toPx(), center = Offset(x, y))
+                            drawCircle(color = team2Color, radius = 3.dp.toPx(), center = Offset(x, y))
                         }
                     }
                 }
@@ -264,6 +268,8 @@ fun OverByOverChartCard(
 ) {
     val i1Overs = buildOverData(i1Balls)
     val i2Overs = buildOverData(i2Balls)
+
+    val hasActiveSecondInnings = match.isSecondInningsStarted && i2Balls.isNotEmpty()
 
     val team1Color = Color(0xFFE53935)
     val team2Color = Color(0xFF1E88E5)
@@ -298,7 +304,7 @@ fun OverByOverChartCard(
                         color = Color.DarkGray
                     )
                 }
-                if (match.isSecondInningsStarted) {
+                if (hasActiveSecondInnings) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(12.dp).background(team2Color, RoundedCornerShape(2.dp)))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -318,8 +324,8 @@ fun OverByOverChartCard(
             val density = LocalDensity.current
 
             val paddingLeft = with(density) { 36.dp.toPx() }
-            val paddingRight = with(density) { 12.dp.toPx() }
-            val paddingTop = with(density) { 12.dp.toPx() }
+            val paddingRight = with(density) { 16.dp.toPx() }
+            val paddingTop = with(density) { 16.dp.toPx() }
             val paddingBottom = with(density) { 24.dp.toPx() }
 
             Canvas(
@@ -332,16 +338,17 @@ fun OverByOverChartCard(
 
                 val maxOverIdx = maxOf(
                     i1Overs.maxOfOrNull { it.overIndex } ?: 0,
-                    i2Overs.maxOfOrNull { it.overIndex } ?: 0,
+                    if (hasActiveSecondInnings) (i2Overs.maxOfOrNull { it.overIndex } ?: 0) else 0,
                     match.oversPerInnings
                 )
                 val totalOversCount = maxOf(maxOverIdx, 1)
 
                 val maxOverRuns = maxOf(
                     i1Overs.maxOfOrNull { it.runs } ?: 0,
-                    i2Overs.maxOfOrNull { it.runs } ?: 0
+                    if (hasActiveSecondInnings) (i2Overs.maxOfOrNull { it.runs } ?: 0) else 0
                 )
-                val maxOverRunsAxis = maxOf(((maxOverRuns + 5) / 6) * 6, 6)
+                // Headroom padding of 10%
+                val maxOverRunsAxis = maxOf((((maxOverRuns * 1.1f).toInt() + 5) / 6) * 6, 6)
 
                 // Horizontal Grid & Y-Axis Labels
                 val intervals = 3
@@ -365,7 +372,7 @@ fun OverByOverChartCard(
                 val segmentWidth = chartWidth / totalOversCount
                 val groupPadding = segmentWidth * 0.12f
                 val availableWidth = segmentWidth - (groupPadding * 2)
-                val barWidth = if (match.isSecondInningsStarted) availableWidth / 2f else availableWidth
+                val barWidth = if (hasActiveSecondInnings) availableWidth / 2f else availableWidth
 
                 // Draw Innings 1 Bars
                 i1Overs.forEach { overData ->
@@ -386,15 +393,15 @@ fun OverByOverChartCard(
 
                         if (overData.wickets > 0) {
                             val markerX = barLeft + barWidth / 2f
-                            val markerY = barTop - 5.dp.toPx()
-                            drawCircle(color = Color.White, radius = 4.dp.toPx(), center = Offset(markerX, markerY))
+                            val markerY = barTop - 6.dp.toPx()
+                            drawCircle(color = Color.White, radius = 4.5.dp.toPx(), center = Offset(markerX, markerY))
                             drawCircle(color = team1Color, radius = 2.5f.dp.toPx(), center = Offset(markerX, markerY))
                         }
                     }
                 }
 
                 // Draw Innings 2 Bars
-                if (match.isSecondInningsStarted) {
+                if (hasActiveSecondInnings) {
                     i2Overs.forEach { overData ->
                         val idx = overData.overIndex - 1
                         if (idx < totalOversCount) {
@@ -413,8 +420,8 @@ fun OverByOverChartCard(
 
                             if (overData.wickets > 0) {
                                 val markerX = barLeft + barWidth / 2f
-                                val markerY = barTop - 5.dp.toPx()
-                                drawCircle(color = Color.White, radius = 4.dp.toPx(), center = Offset(markerX, markerY))
+                                val markerY = barTop - 6.dp.toPx()
+                                drawCircle(color = Color.White, radius = 4.5.dp.toPx(), center = Offset(markerX, markerY))
                                 drawCircle(color = team2Color, radius = 2.5f.dp.toPx(), center = Offset(markerX, markerY))
                             }
                         }
