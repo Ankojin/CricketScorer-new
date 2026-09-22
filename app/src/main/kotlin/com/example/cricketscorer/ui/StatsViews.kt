@@ -85,6 +85,23 @@ fun StatsTab(uiState: MatchUiState, graphicsLayer: GraphicsLayer) {
                     Column(modifier = Modifier.fillMaxWidth().background(Color.White).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         MatchSummaryCard(uiState)
                         MotmSection(uiState)
+                        
+                        ProgressChartCard(
+                            match = match,
+                            i1Balls = i1Balls,
+                            i2Balls = i2Balls,
+                            i1TeamName = i1Team.name,
+                            i2TeamName = i2Team.name
+                        )
+                        
+                        OverByOverChartCard(
+                            match = match,
+                            i1Balls = i1Balls,
+                            i2Balls = i2Balls,
+                            i1TeamName = i1Team.name,
+                            i2TeamName = i2Team.name
+                        )
+
                         ScoringBreakdownCard(match, i1Stats, i2Stats)
                         BestPerformancesBatters(teamA, teamB)
                         BestPerformancesBowlers(teamA, teamB)
