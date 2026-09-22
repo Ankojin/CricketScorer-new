@@ -181,11 +181,36 @@ object TournamentRepository {
         }
     }
 
-    fun addTeamToTournament(tournamentId: String, teamName: String) {
+    fun addTeamToTournament(tournamentId: String, teamName: String, colorHex: String? = null) {
         updateTournament(tournamentId) { t ->
-            val newTeam = Team(id = UUID.randomUUID().toString(), name = teamName)
+            val otherTeamColors = t.teams.mapNotNull { it.colorHex }
+            val finalColor = if (colorHex != null && otherTeamColors.any { it.equals(colorHex, ignoreCase = true) }) {
+                null
+            } else {
+                colorHex
+            }
+            val newTeam = Team(id = UUID.randomUUID().toString(), name = teamName, colorHex = finalColor)
             t.safeCopy(teams = t.teams.orEmpty() + newTeam)
         }
+    }
+
+    fun updateTeamDetails(tournamentId: String, teamId: String, newName: String, newColorHex: String?): Boolean {
+        var success = true
+        updateTournament(tournamentId) { t ->
+            val otherTeamColors = t.teams.filter { it.id != teamId }.mapNotNull { it.colorHex }
+            if (newColorHex != null && otherTeamColors.any { it.equals(newColorHex, ignoreCase = true) }) {
+                success = false
+                return@updateTournament t
+            }
+            
+            val updatedTeams = t.teams.map { team ->
+                if (team.id == teamId) {
+                    team.copy(name = newName.trim(), colorHex = newColorHex)
+                } else team
+            }
+            t.safeCopy(teams = updatedTeams)
+        }
+        return success
     }
 
     fun deleteTeam(tournamentId: String, teamId: String) {

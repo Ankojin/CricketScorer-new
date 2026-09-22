@@ -1,6 +1,38 @@
 package com.example.cricketscorer.ui
 
+import androidx.compose.ui.graphics.Color
 import com.example.cricketscorer.*
+
+fun parseTeamColor(hex: String?, fallback: Color): Color {
+    if (hex.isNullOrBlank()) return fallback
+    return try {
+        Color(android.graphics.Color.parseColor(hex))
+    } catch (e: Exception) {
+        fallback
+    }
+}
+
+fun Team.colorOrDefault(fallback: Color): Color {
+    return parseTeamColor(this.colorHex, fallback)
+}
+
+val TEAM_PALETTE = listOf(
+    "#E53935", // Red
+    "#1E88E5", // Blue
+    "#43A047", // Green
+    "#FB8C00", // Orange
+    "#8E24AA", // Purple
+    "#00897B", // Teal
+    "#6D4C41", // Brown
+    "#546E7A", // Blue Grey
+    "#C2185B", // Pink
+    "#F9A825", // Amber
+    "#5E35B1", // Deep Purple
+    "#039BE5"  // Light Blue
+)
+
+val DEFAULT_TEAM_A_COLOR = Color(0xFFE53935)
+val DEFAULT_TEAM_B_COLOR = Color(0xFF1E88E5)
 
 data class InningsStats(
     val singlesRuns: Int = 0,

@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -32,6 +33,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import com.example.cricketscorer.ui.CardBranding
+import com.example.cricketscorer.ui.TeamColorPicker
+import com.example.cricketscorer.ui.findTeamNameForPlayer
+import com.example.cricketscorer.ui.parseTeamColor
+import com.example.cricketscorer.ui.colorOrDefault
+import com.example.cricketscorer.ui.DEFAULT_TEAM_A_COLOR
+import com.example.cricketscorer.ui.DEFAULT_TEAM_B_COLOR
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 import com.example.cricketscorer.ui.CaptureArea
@@ -59,7 +66,6 @@ fun TournamentDetailsScreen(
     val statsGraphicsLayer = rememberGraphicsLayer()
 
     var showAddTeamDialog by remember { mutableStateOf(false) }
-    var teamNameToAdd by remember { mutableStateOf("") }
     
     var showScheduleDialog by remember { mutableStateOf(false) }
 
@@ -164,25 +170,38 @@ fun TournamentDetailsScreen(
             }
         }
 
+        var teamNameToAdd by remember { mutableStateOf("") }
+        var teamColorToAdd by remember { mutableStateOf<String?>(null) }
+
         if (showAddTeamDialog) {
             AlertDialog(
                 onDismissRequest = { showAddTeamDialog = false },
                 title = { Text("Create New Team", fontWeight = FontWeight.Bold) },
                 text = {
-                    OutlinedTextField(
-                        value = teamNameToAdd,
-                        onValueChange = { teamNameToAdd = it },
-                        label = { Text("Team Name") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp)
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        OutlinedTextField(
+                            value = teamNameToAdd,
+                            onValueChange = { teamNameToAdd = it },
+                            label = { Text("Team Name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        
+                        val otherTeamColors = tournament?.teams?.mapNotNull { it.colorHex } ?: emptyList()
+                        TeamColorPicker(
+                            selectedColorHex = teamColorToAdd,
+                            otherTeamColorsHex = otherTeamColors,
+                            onColorSelected = { teamColorToAdd = it }
+                        )
+                    }
                 },
                 confirmButton = {
                     Button(
                         onClick = {
                             if (teamNameToAdd.isNotBlank()) {
-                                viewModel.addTeam(tournamentId, teamNameToAdd)
+                                viewModel.addTeam(tournamentId, teamNameToAdd, teamColorToAdd)
                                 teamNameToAdd = ""
+                                teamColorToAdd = null
                                 showAddTeamDialog = false
                             }
                         },
@@ -369,7 +388,12 @@ fun PointsTableTab(tournament: Tournament) {
                                 modifier = Modifier.fillMaxWidth().padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("${index + 1}. ${team.name}", modifier = Modifier.weight(3f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Row(modifier = Modifier.weight(3f), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("${index + 1}. ", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                    Surface(modifier = Modifier.size(6.dp), shape = CircleShape, color = team.colorOrDefault(Color.Gray)) {}
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(team.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                                }
                                 Text(team.matchesPlayed.toString(), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                                 Text(team.wins.toString(), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                                 Text(team.losses.toString(), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
@@ -477,7 +501,11 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
                         val team = item.second
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(player.name + " (${(player.battingStyle ?: BattingStyle.RHB).name})", modifier = Modifier.weight(3f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
-                            Text(getTeamAbbr(team.name), modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, color = Color.Gray, textAlign = TextAlign.Center)
+                            Row(modifier = Modifier.weight(1.5f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                                Surface(modifier = Modifier.size(6.dp), shape = CircleShape, color = team.colorOrDefault(Color.Gray)) {}
+                                Spacer(Modifier.width(4.dp))
+                                Text(getTeamAbbr(team.name), style = MaterialTheme.typography.bodySmall, color = Color.Gray, textAlign = TextAlign.Center)
+                            }
                             Text("${player.battingStats.runs}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Black, textAlign = TextAlign.End)
                             Text(String.format(java.util.Locale.US, "%.0f", player.battingStats.strikeRate), modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
                             Text("${player.battingStats.fours}", modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
@@ -495,7 +523,11 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                             val roleSuffix = if (player.isCaptain) " (c)" else if (player.isViceCaptain) " (vc)" else ""
                             Text(player.name + roleSuffix, modifier = Modifier.weight(3f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
-                            Text(getTeamAbbr(team.name), modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, color = Color.Gray, textAlign = TextAlign.Center)
+                            Row(modifier = Modifier.weight(1.5f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                                Surface(modifier = Modifier.size(6.dp), shape = CircleShape, color = team.colorOrDefault(Color.Gray)) {}
+                                Spacer(Modifier.width(4.dp))
+                                Text(getTeamAbbr(team.name), style = MaterialTheme.typography.bodySmall, color = Color.Gray, textAlign = TextAlign.Center)
+                            }
                             Text("${player.bowlingStats.wickets}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Black, color = Color(0xFFD32F2F), textAlign = TextAlign.End)
                             Text(String.format(java.util.Locale.US, "%.2f", player.bowlingStats.economy), modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
                             Text("${player.bowlingStats.runsConceded}", modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
@@ -633,10 +665,14 @@ fun TeamSummaryCard(team: Team, totalTeamRuns: Int, matchesPlayed: Int, highScor
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
+        border = androidx.compose.foundation.BorderStroke(1.dp, team.colorOrDefault(MaterialTheme.colorScheme.outlineVariant))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(team.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(modifier = Modifier.size(10.dp), shape = CircleShape, color = team.colorOrDefault(MaterialTheme.colorScheme.primary)) {}
+                Spacer(Modifier.width(8.dp))
+                Text(team.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = team.colorOrDefault(MaterialTheme.colorScheme.primary))
+            }
             Spacer(modifier = Modifier.height(16.dp))
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -867,12 +903,16 @@ fun TeamCard(
     var editedIsCaptain by remember { mutableStateOf(false) }
     var editedIsViceCaptain by remember { mutableStateOf(false) }
 
+    var showEditTeamDialog by remember { mutableStateOf(false) }
+    var editedTeamName by remember(team.id) { mutableStateOf(team.name) }
+    var editedTeamColor by remember(team.id) { mutableStateOf(team.colorHex) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
+        border = androidx.compose.foundation.BorderStroke(1.dp, parseTeamColor(team.colorHex, Color.Transparent))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -880,12 +920,23 @@ fun TeamCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = team.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1A1A1A)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Surface(
+                        modifier = Modifier.size(12.dp),
+                        shape = CircleShape,
+                        color = parseTeamColor(team.colorHex, if (tournament.teams.indexOf(team) == 0) DEFAULT_TEAM_A_COLOR else DEFAULT_TEAM_B_COLOR)
+                    ) {}
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = team.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1A1A1A)
+                    )
+                    IconButton(onClick = { showEditTeamDialog = true }, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit Team", tint = Color.Gray, modifier = Modifier.size(16.dp))
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Button(
                         onClick = { showAddPlayerDialog = true },
@@ -948,6 +999,54 @@ fun TeamCard(
                     }
                 }
             }
+        }
+
+        if (showEditTeamDialog) {
+            AlertDialog(
+                onDismissRequest = { showEditTeamDialog = false },
+                title = { Text("Edit Team", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        OutlinedTextField(
+                            value = editedTeamName,
+                            onValueChange = { editedTeamName = it },
+                            label = { Text("Team Name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        
+                        val otherTeamColors = tournament.teams.filter { it.id != team.id }.mapNotNull { it.colorHex }
+                        TeamColorPicker(
+                            selectedColorHex = editedTeamColor,
+                            otherTeamColorsHex = otherTeamColors,
+                            onColorSelected = { editedTeamColor = it }
+                        )
+                    }
+                },
+                confirmButton = {
+                    val context = LocalContext.current
+                    Button(
+                        onClick = {
+                            if (editedTeamName.isNotBlank()) {
+                                val success = viewModel.updateTeamDetails(tournamentId, team.id, editedTeamName, editedTeamColor)
+                                if (!success) {
+                                    Toast.makeText(context, "Color already used by the other team", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    showEditTeamDialog = false
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Save")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEditTeamDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
 
         if (showAddPlayerDialog) {

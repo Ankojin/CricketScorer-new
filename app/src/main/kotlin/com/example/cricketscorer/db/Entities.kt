@@ -30,7 +30,8 @@ data class TeamEntity(
     val wins: Int,
     val losses: Int,
     val points: Int,
-    val nrr: Double
+    val nrr: Double,
+    val colorHex: String?
 )
 
 @Entity(
@@ -436,7 +437,8 @@ fun TeamEntity.toDomain(players: List<Player>): Team = Team(
     wins = wins,
     losses = losses,
     points = points,
-    nrr = nrr
+    nrr = nrr,
+    colorHex = colorHex
 )
 
 fun Team.toEntity(tournamentId: String): TeamEntity = TeamEntity(
@@ -447,7 +449,8 @@ fun Team.toEntity(tournamentId: String): TeamEntity = TeamEntity(
     wins = wins,
     losses = losses,
     points = points,
-    nrr = nrr
+    nrr = nrr,
+    colorHex = colorHex
 )
 
 fun Tournament.toEntity(): TournamentEntity = TournamentEntity(

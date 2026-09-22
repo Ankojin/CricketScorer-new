@@ -2,20 +2,118 @@ package com.example.cricketscorer.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cricketscorer.*
+
+@Composable
+fun TeamColorPicker(
+    selectedColorHex: String?,
+    otherTeamColorsHex: List<String>,
+    onColorSelected: (String?) -> Unit
+) {
+    Column {
+        Text(
+            "Team Color",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        // Multi-line wrap flow for chips
+        BoxWithConstraints {
+            val scope = this
+            val chipSize = 44.dp
+            val spacing = 8.dp
+            val columns = (scope.maxWidth / (chipSize + spacing)).toInt().coerceAtLeast(1)
+            
+            Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
+                TEAM_PALETTE.chunked(columns).forEach { rowColors ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
+                        rowColors.forEach { hex ->
+                            val isSelected = selectedColorHex?.equals(hex, ignoreCase = true) == true
+                            val isDisabled = otherTeamColorsHex.any { it.equals(hex, ignoreCase = true) }
+                            
+                            ColorChip(
+                                hex = hex,
+                                isSelected = isSelected,
+                                isDisabled = isDisabled,
+                                onClick = { if (!isDisabled) onColorSelected(hex) }
+                            )
+                        }
+                    }
+                }
+                
+                TextButton(
+                    onClick = { onColorSelected(null) },
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text("Clear (Default)", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ColorChip(
+    hex: String,
+    isSelected: Boolean,
+    isDisabled: Boolean,
+    onClick: () -> Unit
+) {
+    val color = remember(hex) { Color(android.graphics.Color.parseColor(hex)) }
+    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+    val borderThickness = if (isSelected) 3.dp else 1.dp
+    
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .background(
+                if (isDisabled) color.copy(alpha = 0.2f) else color,
+                CircleShape
+            )
+            .border(
+                borderThickness,
+                if (isSelected) borderColor else Color.Black.copy(alpha = 0.1f),
+                CircleShape
+            )
+            .clickable(enabled = !isDisabled) { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        if (isSelected) {
+            Icon(
+                Icons.Default.Check,
+                contentDescription = null,
+                tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        if (isDisabled) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.White.copy(alpha = 0.5f), CircleShape)
+            )
+        }
+    }
+}
 
 @Composable
 fun CricketBallIcon(modifier: Modifier = Modifier) {

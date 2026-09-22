@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.platform.LocalContext
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 import com.example.cricketscorer.*
+import com.example.cricketscorer.ui.colorOrDefault
 import com.example.cricketscorer.ui.CaptureArea
 import com.example.cricketscorer.ui.CardBranding
 import kotlinx.coroutines.delay
@@ -192,12 +194,16 @@ fun InningsScorecard(
     val safeBowlingPlayers = bowlingTeamPlayers ?: emptyList()
 
     Column(modifier = Modifier.fillMaxWidth().background(Color.White)) {
+        val teamColor = team.colorOrDefault(MaterialTheme.colorScheme.primary)
+        val isLight = teamColor.luminance() > 0.5f
+        val contentColor = if (isLight) Color.Black else Color.White
+        
         Box(
-            modifier = Modifier.fillMaxWidth().background(Color(0xFFE3F2FD)).padding(16.dp)
+            modifier = Modifier.fillMaxWidth().background(teamColor).padding(16.dp)
         ) {
             Column {
-                Text(text = "🏏 ${team.name} 🏆", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = Color(0xFF003366))
-                Text(text = "($maxBalls balls maximum)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text(text = "🏏 ${team.name} 🏆", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = contentColor)
+                Text(text = "($maxBalls balls maximum)", style = MaterialTheme.typography.bodySmall, color = contentColor.copy(alpha = 0.7f))
             }
         }
         

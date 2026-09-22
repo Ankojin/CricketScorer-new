@@ -74,7 +74,8 @@ data class Team(
     val wins: Int = 0,
     val losses: Int = 0,
     val points: Int = 0,
-    val nrr: Double = 0.0
+    val nrr: Double = 0.0,
+    val colorHex: String? = null
 )
 
 enum class ExtrasType {
@@ -249,7 +250,8 @@ fun Tournament.safeCopy(
 fun Team.safeCopy(
     id: String? = null,
     name: String? = null,
-    players: List<Player>? = null
+    players: List<Player>? = null,
+    colorHex: String? = null
 ): Team {
     return Team(
         id = id ?: this.id ?: UUID.randomUUID().toString(),
@@ -259,7 +261,8 @@ fun Team.safeCopy(
         wins = this.wins,
         losses = this.losses,
         points = this.points,
-        nrr = this.nrr
+        nrr = this.nrr,
+        colorHex = colorHex ?: this.colorHex
     )
 }
 

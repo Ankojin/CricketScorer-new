@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cricketscorer.*
+import com.example.cricketscorer.ui.colorOrDefault
 import java.util.Locale
 
 @Composable
@@ -40,6 +41,9 @@ fun MatchSummaryCard(uiState: MatchUiState) {
         }
     }
 
+    val colorA = teamA.colorOrDefault(MaterialTheme.colorScheme.primary)
+    val colorB = teamB.colorOrDefault(MaterialTheme.colorScheme.secondary)
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FA)),
@@ -50,12 +54,20 @@ fun MatchSummaryCard(uiState: MatchUiState) {
             Text("MATCH SUMMARY", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(12.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(teamA?.name ?: "Team A", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(modifier = Modifier.size(8.dp), shape = CircleShape, color = colorA) {}
+                    Spacer(Modifier.width(8.dp))
+                    Text(teamA?.name ?: "Team A", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                }
                 Text(getScoreString(teamA?.id), fontWeight = FontWeight.Black, style = MaterialTheme.typography.bodyLarge)
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(teamB?.name ?: "Team B", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(modifier = Modifier.size(8.dp), shape = CircleShape, color = colorB) {}
+                    Spacer(Modifier.width(8.dp))
+                    Text(teamB?.name ?: "Team B", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                }
                 Text(getScoreString(teamB?.id), fontWeight = FontWeight.Black, style = MaterialTheme.typography.bodyLarge)
             }
             if (match.status == MatchStatus.COMPLETED) {
@@ -222,19 +234,19 @@ fun MatchForecasterSection(uiState: MatchUiState) {
             
             // Win Probability Meter
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(teamA.name.uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                Text(teamB.name.uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                Text(teamA.name.uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = teamA.colorOrDefault(MaterialTheme.colorScheme.primary))
+                Text(teamB.name.uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = teamB.colorOrDefault(MaterialTheme.colorScheme.secondary))
             }
             Spacer(Modifier.height(4.dp))
             Box(modifier = Modifier.fillMaxWidth().height(10.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)) {
                 Row(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.fillMaxHeight().weight(teamAWinProb.toFloat()).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp)))
-                    Box(modifier = Modifier.fillMaxHeight().weight(teamBWinProb.toFloat()).background(MaterialTheme.colorScheme.secondary, RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp)))
+                    Box(modifier = Modifier.fillMaxHeight().weight(teamAWinProb.toFloat()).background(teamA.colorOrDefault(MaterialTheme.colorScheme.primary), RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp)))
+                    Box(modifier = Modifier.fillMaxHeight().weight(teamBWinProb.toFloat()).background(teamB.colorOrDefault(MaterialTheme.colorScheme.secondary), RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp)))
                 }
             }
             Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("${teamAWinProb.toInt()}%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
-                Text("${teamBWinProb.toInt()}%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.secondary)
+                Text("${teamAWinProb.toInt()}%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = teamA.colorOrDefault(MaterialTheme.colorScheme.primary))
+                Text("${teamBWinProb.toInt()}%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = teamB.colorOrDefault(MaterialTheme.colorScheme.secondary))
             }
             
             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), thickness = 0.5.dp)

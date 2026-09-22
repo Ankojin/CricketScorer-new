@@ -1,11 +1,13 @@
 package com.example.cricketscorer
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -21,12 +23,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.cricketscorer.ui.CardBranding
+import com.example.cricketscorer.ui.TeamColorPicker
+import com.example.cricketscorer.ui.colorOrDefault
 import com.example.cricketscorer.ui.findTeamNameForPlayer
+import com.example.cricketscorer.ui.parseTeamColor
+import com.example.cricketscorer.ui.TEAM_PALETTE
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,8 +71,18 @@ fun AllTeamsScreen(
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Surface(modifier = Modifier.size(40.dp), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-                                Box(contentAlignment = Alignment.Center) { Text(team.name.take(1).uppercase(), fontWeight = FontWeight.Bold) }
+                            Surface(
+                                modifier = Modifier.size(40.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                color = parseTeamColor(team.colorHex, MaterialTheme.colorScheme.primaryContainer)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    val teamColor = parseTeamColor(team.colorHex, Color.Transparent)
+                                    val textColor = if (team.colorHex != null) {
+                                        if (teamColor.luminance() > 0.5f) Color.Black else Color.White
+                                    } else MaterialTheme.colorScheme.onPrimaryContainer
+                                    Text(team.name.take(1).uppercase(), fontWeight = FontWeight.Bold, color = textColor)
+                                }
                             }
                             Spacer(Modifier.width(16.dp))
                             Column {
@@ -296,6 +313,10 @@ fun TeamDetailScreen(
     val team = tournament?.teams?.find { it.id == teamId }
     val globalPlayers by GlobalPlayerRepository.players.collectAsState()
     
+    var showEditTeamDialog by remember { mutableStateOf(false) }
+    var editedTeamName by remember(team?.id) { mutableStateOf(team?.name ?: "") }
+    var editedTeamColor by remember(team?.id) { mutableStateOf(team?.colorHex) }
+
     var showAddDialog by remember { mutableStateOf(false) }
     var newPlayerName by remember { mutableStateOf("") }
     var selectedStyle by remember { mutableStateOf(BattingStyle.RHB) }
@@ -304,7 +325,14 @@ fun TeamDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(team?.name ?: "Team Details", fontWeight = FontWeight.Black) },
+                title = { 
+                    val teamColor = team?.colorOrDefault(MaterialTheme.colorScheme.primary) ?: MaterialTheme.colorScheme.primary
+                    val contentColor = if (team?.colorHex != null) {
+                        if (teamColor.luminance() > 0.5f) Color.Black else Color.White
+                    } else Color.White
+                    
+                    Text(team?.name ?: "Team Details", fontWeight = FontWeight.Black, color = contentColor) 
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -312,12 +340,20 @@ fun TeamDetailScreen(
                 },
                 actions = {
                     if (team != null) {
+                        IconButton(onClick = { showEditTeamDialog = true }) {
+                            Icon(Icons.Default.Edit, contentDescription = "Edit Team")
+                        }
                         IconButton(onClick = { showAddDialog = true }) {
-                            Icon(Icons.Default.PersonAdd, contentDescription = "Add Player", tint = Color.White)
+                            Icon(Icons.Default.PersonAdd, contentDescription = "Add Player")
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primary, titleContentColor = Color.White, navigationIconContentColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = team?.colorOrDefault(MaterialTheme.colorScheme.primary) ?: MaterialTheme.colorScheme.primary,
+                    titleContentColor = Color.White, 
+                    navigationIconContentColor = Color.White,
+                    actionIconContentColor = Color.White
+                )
             )
         }
     ) { padding ->
@@ -364,6 +400,53 @@ fun TeamDetailScreen(
                 }
                 item { CardBranding() }
             }
+        }
+
+        if (showEditTeamDialog && tournament != null && team != null) {
+            AlertDialog(
+                onDismissRequest = { showEditTeamDialog = false },
+                title = { Text("Edit Team", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        OutlinedTextField(
+                            value = editedTeamName,
+                            onValueChange = { editedTeamName = it },
+                            label = { Text("Team Name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        
+                        val otherTeamColors = tournament.teams.filter { it.id != team.id }.mapNotNull { it.colorHex }
+                        TeamColorPicker(
+                            selectedColorHex = editedTeamColor,
+                            otherTeamColorsHex = otherTeamColors,
+                            onColorSelected = { editedTeamColor = it }
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (editedTeamName.isNotBlank()) {
+                                val success = viewModel.updateTeamDetails(tournament.id, team.id, editedTeamName, editedTeamColor)
+                                if (!success) {
+                                    Toast.makeText(context, "Color already used by the other team", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    showEditTeamDialog = false
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Save")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEditTeamDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
 
         if (showAddDialog && tournament != null && team != null) {

@@ -17,12 +17,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cricketscorer.*
+import com.example.cricketscorer.ui.colorOrDefault
+import com.example.cricketscorer.ui.parseTeamColor
 import java.util.Locale
 import androidx.compose.foundation.basicMarquee
 
@@ -131,12 +134,24 @@ fun LiveTab(
         item {
             val battingTeam = if (match.battingTeamId == match.teamA.id) match.teamA else match.teamB
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "${match.teamA.name} vs ${match.teamB.name}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val colorA = match.teamA.colorOrDefault(MaterialTheme.colorScheme.primary)
+                    val colorB = match.teamB.colorOrDefault(MaterialTheme.colorScheme.secondary)
+                    
+                    Text(
+                        text = match.teamA.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black,
+                        color = colorA
+                    )
+                    Text(" vs ", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    Text(
+                        text = match.teamB.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black,
+                        color = colorB
+                    )
+                }
                 if (match.tossWinnerId != null) {
                     val tossWinnerName = if (match.tossWinnerId == match.teamA.id) match.teamA.name else match.teamB.name
                     Text(
@@ -146,12 +161,20 @@ fun LiveTab(
                         fontWeight = FontWeight.Medium
                     )
                 }
-                Text(
-                    text = "INNINGS ${match.currentInnings} • ${battingTeam.name.uppercase()}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.secondary,
-                    fontWeight = FontWeight.Black
-                )
+                
+                Surface(
+                    color = battingTeam.colorOrDefault(MaterialTheme.colorScheme.secondary).copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    Text(
+                        text = "INNINGS ${match.currentInnings} • ${battingTeam.name.uppercase()}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = battingTeam.colorOrDefault(MaterialTheme.colorScheme.secondary),
+                        fontWeight = FontWeight.Black,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    )
+                }
             }
         }
         item { ScoreCard(uiState) }
@@ -199,16 +222,29 @@ fun LiveTab(
 @Composable
 fun ScoreCard(uiState: MatchUiState) {
     val match = uiState.match ?: return
+    val battingTeam = if (match.battingTeamId == match.teamA.id) match.teamA else match.teamB
+    val bowlingTeam = if (match.battingTeamId == match.teamA.id) match.teamB else match.teamA
+    
+    val teamColor = battingTeam.colorOrDefault(MaterialTheme.colorScheme.primary)
+    val isLightColor = teamColor.luminance() > 0.5f
+    val contentColor = if (isLightColor) Color.Black else Color.White
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        colors = CardDefaults.cardColors(
+            containerColor = teamColor,
+            contentColor = contentColor
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            val battingTeam = if (match.battingTeamId == match.teamA.id) match.teamA else match.teamB
-            val bowlingTeam = if (match.battingTeamId == match.teamA.id) match.teamB else match.teamA
-            
-            Text(battingTeam.name.uppercase(), fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.labelLarge)
+            Text(
+                battingTeam.name.uppercase(),
+                fontWeight = FontWeight.ExtraBold,
+                style = MaterialTheme.typography.labelLarge,
+                color = contentColor.copy(alpha = 0.8f)
+            )
             
             val totalRuns = match.totalRuns
             val totalWickets = match.totalWickets
@@ -232,10 +268,10 @@ fun ScoreCard(uiState: MatchUiState) {
             }
 
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-                Text(text = scoreText, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
+                Text(text = scoreText, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Black)
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
-                    Text(text = oversString, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
+                    Text(text = oversString, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = contentColor.copy(alpha = 0.8f))
                     Text(text = crrText, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 }
             }
@@ -251,12 +287,22 @@ fun ScoreCard(uiState: MatchUiState) {
                     }
                 }
                 if (neededText.isNotEmpty()) {
-                    Text(text = neededText, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = neededText,
+                        fontWeight = FontWeight.Black,
+                        color = if (isLightColor) Color(0xFFD32F2F) else Color(0xFFFFCDD2),
+                        style = MaterialTheme.typography.titleMedium
+                    )
                 }
                 
                 // Show Innings 1 Score for context
                 innings1Data?.let { i1 ->
-                    Text(text = "Target: $target (${bowlingTeam.name}: ${i1.runs}/${i1.wickets})", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Medium)
+                    Text(
+                        text = "Target: $target (${bowlingTeam.name}: ${i1.runs}/${i1.wickets})",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = contentColor.copy(alpha = 0.6f),
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }

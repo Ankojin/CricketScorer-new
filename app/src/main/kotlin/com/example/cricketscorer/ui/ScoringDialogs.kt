@@ -356,13 +356,25 @@ fun CoinFlipDialog(uiState: MatchUiState, onResult: (String, String) -> Unit, on
                     FilterChip(
                         selected = winnerId == match.teamA.id,
                         onClick = { if (!isFlipping) winnerId = match.teamA.id },
-                        label = { Text(match.teamA.name.uppercase(), fontWeight = FontWeight.Black) },
+                        label = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(modifier = Modifier.size(8.dp), shape = CircleShape, color = match.teamA.colorOrDefault(MaterialTheme.colorScheme.primary)) {}
+                                Spacer(Modifier.width(6.dp))
+                                Text(match.teamA.name.uppercase(), fontWeight = FontWeight.Black, style = MaterialTheme.typography.labelSmall)
+                            }
+                        },
                         enabled = !isFlipping
                     )
                     FilterChip(
                         selected = winnerId == match.teamB.id,
                         onClick = { if (!isFlipping) winnerId = match.teamB.id },
-                        label = { Text(match.teamB.name.uppercase(), fontWeight = FontWeight.Black) },
+                        label = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(modifier = Modifier.size(8.dp), shape = CircleShape, color = match.teamB.colorOrDefault(MaterialTheme.colorScheme.secondary)) {}
+                                Spacer(Modifier.width(6.dp))
+                                Text(match.teamB.name.uppercase(), fontWeight = FontWeight.Black, style = MaterialTheme.typography.labelSmall)
+                            }
+                        },
                         enabled = !isFlipping
                     )
                 }

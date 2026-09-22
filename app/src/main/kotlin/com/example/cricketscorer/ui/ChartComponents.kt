@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.example.cricketscorer.Ball
 import com.example.cricketscorer.Match
 import com.example.cricketscorer.WicketType
+import com.example.cricketscorer.ui.colorOrDefault
 import java.util.Locale
 
 data class ChartPoint(
@@ -96,8 +97,11 @@ fun ProgressChartCard(
 
     val hasActiveSecondInnings = match.isSecondInningsStarted && i2Balls.isNotEmpty()
 
-    val team1Color = Color(0xFFE53935)
-    val team2Color = Color(0xFF1E88E5)
+    val i1Team = if (match.initialBattingTeamId == match.teamA.id) match.teamA else match.teamB
+    val i2Team = if (match.initialBattingTeamId == match.teamA.id) match.teamB else match.teamA
+
+    val team1Color = i1Team.colorOrDefault(Color(0xFFE53935))
+    val team2Color = i2Team.colorOrDefault(Color(0xFF1E88E5))
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -271,8 +275,11 @@ fun OverByOverChartCard(
 
     val hasActiveSecondInnings = match.isSecondInningsStarted && i2Balls.isNotEmpty()
 
-    val team1Color = Color(0xFFE53935)
-    val team2Color = Color(0xFF1E88E5)
+    val i1Team = if (match.initialBattingTeamId == match.teamA.id) match.teamA else match.teamB
+    val i2Team = if (match.initialBattingTeamId == match.teamA.id) match.teamB else match.teamA
+
+    val team1Color = i1Team.colorOrDefault(Color(0xFFE53935))
+    val team2Color = i2Team.colorOrDefault(Color(0xFF1E88E5))
 
     Card(
         modifier = Modifier.fillMaxWidth(),

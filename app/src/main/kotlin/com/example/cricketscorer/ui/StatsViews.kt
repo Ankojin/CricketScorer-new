@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 import com.example.cricketscorer.*
+import com.example.cricketscorer.ui.colorOrDefault
 import com.example.cricketscorer.ui.CaptureArea
 import com.example.cricketscorer.ui.CardBranding
 import kotlinx.coroutines.delay
@@ -86,6 +87,11 @@ fun StatsTab(uiState: MatchUiState, graphicsLayer: GraphicsLayer) {
                         MatchSummaryCard(uiState)
                         MotmSection(uiState)
                         
+                        ScoringBreakdownCard(match, i1Stats, i2Stats)
+                        BestPerformancesBatters(teamA, teamB)
+                        BestPerformancesBowlers(teamA, teamB)
+                        PartnershipsSection(match, i1Team, i2Team)
+
                         ProgressChartCard(
                             match = match,
                             i1Balls = i1Balls,
@@ -102,10 +108,6 @@ fun StatsTab(uiState: MatchUiState, graphicsLayer: GraphicsLayer) {
                             i2TeamName = i2Team.name
                         )
 
-                        ScoringBreakdownCard(match, i1Stats, i2Stats)
-                        BestPerformancesBatters(teamA, teamB)
-                        BestPerformancesBowlers(teamA, teamB)
-                        PartnershipsSection(match, i1Team, i2Team)
                         CardBranding()
                         Spacer(modifier = Modifier.height(32.dp))
                     }
@@ -145,32 +147,34 @@ fun PartnershipsSection(match: Match, team1: Team, team2: Team) {
                         
                         Spacer(modifier = Modifier.height(16.dp))
                         
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), RoundedCornerShape(6.dp))
-                                .padding(vertical = 6.dp, horizontal = 10.dp)
-                        ) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    label.uppercase(),
-                                    fontWeight = FontWeight.ExtraBold,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                val teamName = if (isFirst) {
-                                    if (match.initialBattingTeamId == match.teamA.id) match.teamA.name else match.teamB.name
+                                val team = if (isFirst) {
+                                    if (match.initialBattingTeamId == match.teamA.id) match.teamA else match.teamB
                                 } else {
-                                    if (match.initialBattingTeamId == match.teamA.id) match.teamB.name else match.teamA.name
+                                    if (match.initialBattingTeamId == match.teamA.id) match.teamB else match.teamA
                                 }
-                                Text(
-                                    "${teamName.uppercase()}  $inningsTotalRuns/$inningsTotalWickets",
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color.DarkGray
-                                )
-                            }
-                        }
+                                val teamColor = team.colorOrDefault(MaterialTheme.colorScheme.primary)
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(teamColor.copy(alpha = 0.08f), RoundedCornerShape(6.dp))
+                                        .padding(vertical = 6.dp, horizontal = 10.dp)
+                                ) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            label.uppercase(),
+                                            fontWeight = FontWeight.ExtraBold,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = teamColor
+                                        )
+                                        Text(
+                                            "${team.name.uppercase()}  $inningsTotalRuns/$inningsTotalWickets",
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color.DarkGray
+                                        )
+                                    }
+                                }
                         
                         partnerships.forEach { p ->
                             PartnershipRow(p)

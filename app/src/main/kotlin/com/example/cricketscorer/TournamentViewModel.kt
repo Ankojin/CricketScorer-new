@@ -15,12 +15,16 @@ class TournamentViewModel : ViewModel() {
         TournamentRepository.deleteTournament(id)
     }
 
-    fun addTeam(tournamentId: String, name: String) {
-        TournamentRepository.addTeamToTournament(tournamentId, name)
+    fun addTeam(tournamentId: String, name: String, colorHex: String? = null) {
+        TournamentRepository.addTeamToTournament(tournamentId, name, colorHex)
     }
 
     fun deleteTeam(tournamentId: String, teamId: String) {
         TournamentRepository.deleteTeam(tournamentId, teamId)
+    }
+
+    fun updateTeamDetails(tournamentId: String, teamId: String, newName: String, newColorHex: String?): Boolean {
+        return TournamentRepository.updateTeamDetails(tournamentId, teamId, newName, newColorHex)
     }
 
     fun addPlayer(context: android.content.Context, tournamentId: String, teamId: String, name: String, bStyle: BattingStyle, isCaptain: Boolean = false, isViceCaptain: Boolean = false) {
