@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
@@ -114,6 +116,114 @@ fun NoActiveMatchState(onNavigateToMatches: () -> Unit) {
 }
 
 @Composable
+fun CompactLiveScoreHeader(uiState: MatchUiState) {
+    val match = uiState.match ?: return
+    val battingTeam = if (match.battingTeamId == match.teamA.id) match.teamA else match.teamB
+
+    val colorA = match.teamA.colorOrDefault(MaterialTheme.colorScheme.primary)
+    val colorB = match.teamB.colorOrDefault(MaterialTheme.colorScheme.secondary)
+    val battingColor = battingTeam.colorOrDefault(MaterialTheme.colorScheme.primary)
+
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Line 1: TeamA vs TeamB
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = match.teamA.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                    color = colorA,
+                    maxLines = 1
+                )
+                Text(
+                    text = " vs ",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                    fontSize = 10.sp
+                )
+                Text(
+                    text = match.teamB.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                    color = colorB,
+                    maxLines = 1
+                )
+                if (match.tossWinnerId != null) {
+                    val tossWinnerName = if (match.tossWinnerId == match.teamA.id) match.teamA.name else match.teamB.name
+                    Text(
+                        text = " • $tossWinnerName won toss",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray,
+                        fontSize = 10.sp,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            // Line 2: Batting Team + Score "R/W" + Overs "(o.b Ov)" + CRR
+            Row(
+                modifier = Modifier.padding(top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = battingTeam.name.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                    color = battingColor,
+                    maxLines = 1
+                )
+                Text(
+                    text = "${match.totalRuns}/${match.totalWickets}",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black
+                )
+                Text(
+                    text = "(${match.totalBalls / 6}.${match.totalBalls % 6} Ov)",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Gray
+                )
+                val crr = if (match.totalBalls > 0) (match.totalRuns.toDouble() / match.totalBalls) * 6 else 0.0
+                Text(
+                    text = "CRR: ${String.format(Locale.US, "%.1f", crr)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Gray
+                )
+            }
+
+            // Line 3: Target info if 2nd innings
+            if (match.currentInnings == 2 && match.target != null && match.status != MatchStatus.COMPLETED) {
+                val needed = match.target - match.totalRuns
+                val ballsLeft = (match.oversPerInnings * 6) - match.totalBalls
+                Text(
+                    text = "Target ${match.target} • Need $needed off $ballsLeft b",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 11.sp,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun LiveTab(
     uiState: MatchUiState,
     viewModel: ScoringViewModel,
@@ -123,74 +233,36 @@ fun LiveTab(
     onShowRetireHurt: () -> Unit
 ) {
     val match = uiState.match ?: return
-    LazyColumn(
+
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item {
-            val battingTeam = if (match.battingTeamId == match.teamA.id) match.teamA else match.teamB
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val colorA = match.teamA.colorOrDefault(MaterialTheme.colorScheme.primary)
-                    val colorB = match.teamB.colorOrDefault(MaterialTheme.colorScheme.secondary)
-                    
-                    Text(
-                        text = match.teamA.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Black,
-                        color = colorA
-                    )
-                    Text(" vs ", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                    Text(
-                        text = match.teamB.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Black,
-                        color = colorB
-                    )
-                }
-                if (match.tossWinnerId != null) {
-                    val tossWinnerName = if (match.tossWinnerId == match.teamA.id) match.teamA.name else match.teamB.name
-                    Text(
-                        text = "$tossWinnerName won toss • ${match.tossDecision}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.Gray,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                
-                Surface(
-                    color = battingTeam.colorOrDefault(MaterialTheme.colorScheme.secondary).copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(4.dp),
-                    modifier = Modifier.padding(top = 4.dp)
-                ) {
-                    Text(
-                        text = "INNINGS ${match.currentInnings} • ${battingTeam.name.uppercase()}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = battingTeam.colorOrDefault(MaterialTheme.colorScheme.secondary),
-                        fontWeight = FontWeight.Black,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                    )
-                }
-            }
-        }
-        item { ScoreCard(uiState) }
-        item { PlayerStatsSection(uiState, viewModel) }
-        
-        item {
+        // TOP — compact score (not scrollable)
+        CompactLiveScoreHeader(uiState)
+
+        // MIDDLE — scroll only player stats
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            PlayerStatsSection(uiState, viewModel)
+
             if (match.status == MatchStatus.COMPLETED) {
                 val winnerTeam = if (match.winnerId == match.teamA.id) match.teamA else if (match.winnerId == match.teamB.id) match.teamB else null
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("MATCH SUMMARY", fontWeight = FontWeight.Black, style = MaterialTheme.typography.labelLarge)
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = if (winnerTeam != null) "${winnerTeam.name} 🏅" else "MATCH DRAWN 🤝",
                             style = MaterialTheme.typography.headlineSmall,
@@ -200,22 +272,32 @@ fun LiveTab(
                     }
                 }
             } else {
-                ControlsSection(
-                    uiState = uiState,
-                    viewModel = viewModel,
-                    onShowWicket = onShowWicket,
-                    onShowExtraRuns = onShowExtraRuns,
-                    onShowOtherRuns = onShowOtherRuns,
-                    onShowRetireHurt = onShowRetireHurt
-                )
+                MatchForecasterSection(uiState)
             }
+
+            CardBranding()
         }
 
-        if (match.status == MatchStatus.LIVE) {
-            item { MatchForecasterSection(uiState) }
+        // BOTTOM — controls always visible
+        if (match.status != MatchStatus.COMPLETED) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 8.dp,
+                tonalElevation = 2.dp
+            ) {
+                Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                    ControlsSection(
+                        uiState = uiState,
+                        viewModel = viewModel,
+                        onShowWicket = onShowWicket,
+                        onShowExtraRuns = onShowExtraRuns,
+                        onShowOtherRuns = onShowOtherRuns,
+                        onShowRetireHurt = onShowRetireHurt
+                    )
+                }
+            }
         }
-        
-        item { CardBranding() }
     }
 }
 
@@ -428,9 +510,10 @@ fun ControlsSection(
     val match = uiState.match ?: return
     val androidContext = LocalContext.current
     val isCompleted = match.status == MatchStatus.COMPLETED
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        // Row 1: DOT, 1, 1D, 2, 3, 4, 6
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Row 1: DOT, 1, 1G, 2, 3, 4, 6
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             RunButton(runs = 0, modifier = Modifier.weight(1f), label = "DOT", enabled = !isCompleted) { viewModel.handleRuns(0, true) }
             RunButton(runs = 1, modifier = Modifier.weight(1f), enabled = !isCompleted) { viewModel.handleRuns(1, true) }
             RunButton(
@@ -444,59 +527,73 @@ fun ControlsSection(
             RunButton(runs = 4, modifier = Modifier.weight(1f), label = "4 💥", enabled = !isCompleted) { viewModel.handleRuns(4, true) }
             RunButton(runs = 6, modifier = Modifier.weight(1f), label = "6 💥", enabled = !isCompleted) { viewModel.handleRuns(6, true) }
         }
-        // Row 2: WIDE, NO-BALL, BYE, L-BYE, OVERTHROW
+
+        // Row 2: WIDE, NO-BALL, BYE, L-BYE, DROP, OVERTHROW
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             ExtraButton("WIDE", ExtrasType.WIDE, viewModel, onShowExtraRuns, modifier = Modifier.weight(1f), enabled = !isCompleted)
-            ExtraButton("NO-BALL", ExtrasType.NO_BALL, viewModel, onShowExtraRuns, modifier = Modifier.weight(1.3f), enabled = !isCompleted)
+            ExtraButton("NO-BALL", ExtrasType.NO_BALL, viewModel, onShowExtraRuns, modifier = Modifier.weight(1.2f), enabled = !isCompleted)
             ExtraButton("BYE", ExtrasType.BYE, viewModel, onShowExtraRuns, modifier = Modifier.weight(1f), enabled = !isCompleted)
-            ExtraButton("L-BYE", ExtrasType.LEG_BYE, viewModel, onShowExtraRuns, modifier = Modifier.weight(1.1f), enabled = !isCompleted)
+            ExtraButton("L-BYE", ExtrasType.LEG_BYE, viewModel, onShowExtraRuns, modifier = Modifier.weight(1f), enabled = !isCompleted)
+            Button(
+                onClick = { viewModel.handleDroppedCatch() },
+                enabled = !isCompleted,
+                modifier = Modifier.weight(1.1f).height(42.dp),
+                contentPadding = PaddingValues(0.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
+            ) {
+                Text("🤲 DROP", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1, fontSize = 11.sp)
+            }
             Button(
                 onClick = onShowOtherRuns,
                 enabled = !isCompleted,
-                modifier = Modifier.weight(1.8f).height(48.dp),
+                modifier = Modifier.weight(1.4f).height(42.dp),
                 contentPadding = PaddingValues(0.dp),
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer, contentColor = MaterialTheme.colorScheme.onTertiaryContainer)
             ) {
-                Text("⚾ OVERTHROW", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text("⚾ OVERTHROW", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1, fontSize = 11.sp)
             }
         }
+
         // Row 3: WICKET (Red), RETIRE HURT (Grey), UNDO
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Button(
                 onClick = onShowWicket,
-                modifier = Modifier.weight(1.5f).height(56.dp),
+                modifier = Modifier.weight(1.4f).height(44.dp),
                 enabled = !isCompleted,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F), contentColor = Color.White),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(10.dp),
                 contentPadding = PaddingValues(0.dp)
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text("🏏", fontSize = 22.sp)
-                    Text("WICKET", fontWeight = FontWeight.Black, fontSize = 13.sp, letterSpacing = 0.5.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    Text("🏏 ", fontSize = 16.sp)
+                    Text("WICKET", fontWeight = FontWeight.Black, fontSize = 13.sp)
                 }
             }
             Button(
                 onClick = onShowRetireHurt,
-                modifier = Modifier.weight(1.2f).height(56.dp),
+                modifier = Modifier.weight(1.1f).height(44.dp),
                 enabled = !isCompleted,
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(0.dp)
             ) {
-                Text("🤕 RETIRE", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                Text("🤕 RETIRE", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, maxLines = 1)
             }
             Button(
                 onClick = { viewModel.undo(androidContext) },
-                modifier = Modifier.weight(1.3f).height(56.dp),
+                modifier = Modifier.weight(1.1f).height(44.dp),
                 enabled = !isCompleted,
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(0.dp)
             ) {
-                Text("⏪ UNDO", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                Text("⏪ UNDO", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
         }
     }

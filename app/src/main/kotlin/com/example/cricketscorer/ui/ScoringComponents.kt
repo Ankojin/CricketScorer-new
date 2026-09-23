@@ -164,15 +164,16 @@ fun ExtraButton(label: String, type: ExtrasType, viewModel: ScoringViewModel, on
             }
         },
         enabled = enabled,
-        modifier = modifier.height(48.dp),
+        modifier = modifier.height(42.dp),
         shape = RoundedCornerShape(8.dp),
-        contentPadding = PaddingValues(horizontal = 4.dp)
+        contentPadding = PaddingValues(0.dp)
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
+            fontSize = 11.sp,
             textAlign = TextAlign.Center
         )
     }
