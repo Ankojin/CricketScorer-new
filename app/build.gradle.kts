@@ -110,7 +110,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.14.0")
     implementation("com.google.android.gms:play-services-nearby:19.0.0")
     
-    val room_version = "2.7.0-alpha12"
+    val room_version = "2.8.5"
     implementation("androidx.room:room-runtime:$room_version")
     implementation("androidx.room:room-ktx:$room_version")
     ksp("androidx.room:room-compiler:$room_version")
