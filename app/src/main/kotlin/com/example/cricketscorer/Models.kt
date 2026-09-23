@@ -140,6 +140,38 @@ data class InningsSummary(
 )
 
 @Immutable
+data class GullyRules(
+    // SQUAD & TEAMS
+    val commonPlayer: Boolean = false,
+    val unequalTeams: Boolean = false,
+    val playersJoinMidMatch: Boolean = false,
+    val playersSwitchMidMatch: Boolean = false,
+
+    // BATTING FORMAT
+    val lastManStanding: Boolean = false,
+    val singleSideBatting: Boolean = false,
+
+    // SCORING & MATCH
+    val noExtraRunsForWidesNoBalls: Boolean = false
+) {
+    val squadCount: Int
+        get() = (if (commonPlayer) 1 else 0) +
+                (if (unequalTeams) 1 else 0) +
+                (if (playersJoinMidMatch) 1 else 0) +
+                (if (playersSwitchMidMatch) 1 else 0)
+
+    val battingCount: Int
+        get() = (if (lastManStanding) 1 else 0) +
+                (if (singleSideBatting) 1 else 0)
+
+    val scoringCount: Int
+        get() = if (noExtraRunsForWidesNoBalls) 1 else 0
+
+    val totalActiveCount: Int
+        get() = squadCount + battingCount + scoringCount
+}
+
+@Immutable
 data class Match(
     val id: String,
     val tournamentId: String? = null,
@@ -180,6 +212,7 @@ data class Match(
     val maxOversPerBowler: Int? = null,
     val quotaBowlersCount: Int? = null,
     val quotaMaxOvers: Int? = null,
+    val gullyRules: GullyRules = GullyRules(),
     val pendingAction: PendingAction? = PendingAction.NONE,
     val innings1Data: InningsSummary? = null,
     val isSecondInningsStarted: Boolean = false,
@@ -313,6 +346,9 @@ fun Match.safeCopy(): Match {
         manOfTheMatchId = this.manOfTheMatchId,
         oversPerInnings = this.oversPerInnings,
         maxOversPerBowler = this.maxOversPerBowler,
+        quotaBowlersCount = this.quotaBowlersCount,
+        quotaMaxOvers = this.quotaMaxOvers,
+        gullyRules = this.gullyRules,
         pendingAction = this.pendingAction ?: PendingAction.NONE,
         innings1Data = this.innings1Data,
         isSecondInningsStarted = this.isSecondInningsStarted,

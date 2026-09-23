@@ -418,7 +418,8 @@ object TournamentRepository {
                 bowlingTeamId = teamB.id,
                 oversPerInnings = t.settings.overs,
                 maxOversPerBowler = t.settings.maxOversPerBowler,
-                dateMillis = scheduledDate ?: System.currentTimeMillis()
+                dateMillis = scheduledDate ?: System.currentTimeMillis(),
+                gullyRules = GullyRulesRepository.gullyRules.value
             )
             t.safeCopy(matches = t.matches.orEmpty() + match)
         }

@@ -7,5 +7,6 @@ class CricketScorerApp : Application() {
         super.onCreate()
         TournamentRepository.init(this)
         GlobalPlayerRepository.init(this)
+        GullyRulesRepository.init(this)
     }
 }

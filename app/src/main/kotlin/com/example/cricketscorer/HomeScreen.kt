@@ -3,6 +3,7 @@ package com.example.cricketscorer
 import android.content.Context
 import android.location.LocationManager
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -10,7 +11,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -212,11 +217,16 @@ fun HomeScreen(
             }
 
             if (showSettings) {
+                val gullyRules by GullyRulesRepository.gullyRules.collectAsState()
+
                 AlertDialog(
                     onDismissRequest = { showSettings = false },
                     title = { Text("Settings", fontWeight = FontWeight.Black) },
                     text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Column(
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -270,7 +280,24 @@ fun HomeScreen(
                                     }
                                 )
                             }
-                            
+
+                            if (isSyncEnabled && connectedEndpoints.isEmpty()) {
+                                Text(
+                                    "Status: Searching for devices...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+
+                            HorizontalDivider()
+
+                            GullyRulesSettingsSection(
+                                gullyRules = gullyRules,
+                                onRuleChange = { updated -> GullyRulesRepository.updateRules(updated) }
+                            )
+
                             HorizontalDivider()
 
                             Button(
@@ -284,16 +311,6 @@ fun HomeScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
                             ) {
                                 Text("DEBUG: SETUP 5-OVER E2E TEST", fontWeight = FontWeight.Black)
-                            }
-                            
-                            if (isSyncEnabled && connectedEndpoints.isEmpty()) {
-                                Text(
-                                    "Status: Searching for devices...",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(top = 4.dp)
-                                )
                             }
                         }
                     },
@@ -323,6 +340,220 @@ fun QuickActionChip(text: String, onClick: () -> Unit) {
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Black,
             color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+fun GullyRulesSettingsSection(
+    gullyRules: GullyRules,
+    onRuleChange: (GullyRules) -> Unit
+) {
+    var isSquadExpanded by remember { mutableStateOf(false) }
+    var isBattingExpanded by remember { mutableStateOf(false) }
+    var isScoringExpanded by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Gully Rules", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+                    Text("Applies to newly created matches", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        "${gullyRules.totalActiveCount}/7 active",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Section 1: Squad & Teams
+            ExpandableRuleSection(
+                title = "SQUAD & TEAMS",
+                activeCountText = "${gullyRules.squadCount}/4",
+                isExpanded = isSquadExpanded,
+                onToggleExpand = { isSquadExpanded = !isSquadExpanded }
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    GullyRuleRow(
+                        title = "Common player",
+                        subtitle = "Plays for both sides (gully) · optional",
+                        checked = gullyRules.commonPlayer,
+                        onCheckedChange = { onRuleChange(gullyRules.copy(commonPlayer = it)) }
+                    )
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    GullyRuleRow(
+                        title = "Start with unequal teams",
+                        subtitle = "Teams can have different player counts. Each side is all out on its own squad size.",
+                        checked = gullyRules.unequalTeams,
+                        onCheckedChange = { onRuleChange(gullyRules.copy(unequalTeams = it)) }
+                    )
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    GullyRuleRow(
+                        title = "Players can join mid-match",
+                        subtitle = "Add late arrivals to either team while the match is on.",
+                        checked = gullyRules.playersJoinMidMatch,
+                        onCheckedChange = { onRuleChange(gullyRules.copy(playersJoinMidMatch = it)) }
+                    )
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    GullyRuleRow(
+                        title = "Players can switch mid-match",
+                        subtitle = "Move/swap players who haven't batted or bowled yet.",
+                        checked = gullyRules.playersSwitchMidMatch,
+                        onCheckedChange = { onRuleChange(gullyRules.copy(playersSwitchMidMatch = it)) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Section 2: Batting Format
+            ExpandableRuleSection(
+                title = "BATTING FORMAT",
+                activeCountText = "${gullyRules.battingCount}/2",
+                isExpanded = isBattingExpanded,
+                onToggleExpand = { isBattingExpanded = !isBattingExpanded }
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    GullyRuleRow(
+                        title = "Last man standing",
+                        subtitle = "Last batter bats alone (gully). Off = all out one wicket earlier.",
+                        checked = gullyRules.lastManStanding,
+                        onCheckedChange = { onRuleChange(gullyRules.copy(lastManStanding = it)) }
+                    )
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    GullyRuleRow(
+                        title = "Single-side batting",
+                        subtitle = "One batter at a time — no non-striker, strike never rotates.",
+                        checked = gullyRules.singleSideBatting,
+                        onCheckedChange = { onRuleChange(gullyRules.copy(singleSideBatting = it)) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Section 3: Scoring & Match
+            ExpandableRuleSection(
+                title = "SCORING & MATCH",
+                activeCountText = "${gullyRules.scoringCount}/1",
+                isExpanded = isScoringExpanded,
+                onToggleExpand = { isScoringExpanded = !isScoringExpanded }
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    GullyRuleRow(
+                        title = "No runs for wides & no-balls",
+                        subtitle = "Still re-bowled, but no extra penalty run is added.",
+                        checked = gullyRules.noExtraRunsForWidesNoBalls,
+                        onCheckedChange = { onRuleChange(gullyRules.copy(noExtraRunsForWidesNoBalls = it)) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ExpandableRuleSection(
+    title: String,
+    activeCountText: String,
+    isExpanded: Boolean,
+    onToggleExpand: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggleExpand)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Text(
+                    activeCountText,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Gray
+                )
+            }
+            if (isExpanded) {
+                Box(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
+                    content()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun GullyRuleRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray,
+                lineHeight = 14.sp
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
         )
     }
 }

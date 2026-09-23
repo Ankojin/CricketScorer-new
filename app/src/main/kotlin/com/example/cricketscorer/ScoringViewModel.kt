@@ -188,7 +188,10 @@ class ScoringViewModel : ViewModel() {
 
     fun loadMatch(match: Match) {
         ScoringEngine.clearCache(match.id)
-        val recalculated = ScoringEngine.recalculateMatchFromHistory(match)
+        val matchWithRules = if (match.status == MatchStatus.UPCOMING) {
+            match.copy(gullyRules = GullyRulesRepository.gullyRules.value)
+        } else match
+        val recalculated = ScoringEngine.recalculateMatchFromHistory(matchWithRules)
         _matchState.value = recalculated
         notifiedBowlerIds.clear()
         if (recalculated.tossWinnerId == null && recalculated.status != MatchStatus.COMPLETED) {
@@ -606,6 +609,15 @@ class ScoringViewModel : ViewModel() {
             if (bowlerToNotifyId != null) {
                 _matchState.update { finalWithNotification }
             }
+        }
+    }
+
+    fun updateMatchGullyRules(newRules: GullyRules) {
+        val updated = _matchState.updateAndGet { current ->
+            current?.copy(gullyRules = newRules)
+        }
+        updated?.let {
+            TournamentRepository.updateMatch(it.tournamentId ?: "", it)
         }
     }
 

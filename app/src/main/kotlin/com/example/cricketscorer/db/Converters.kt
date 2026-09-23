@@ -64,4 +64,17 @@ class Converters {
         val type = object : TypeToken<List<WicketRecord>>() {}.type
         return gson.fromJson(value, type)
     }
+
+    @TypeConverter
+    fun fromGullyRules(value: GullyRules?): String? = gson.toJson(value ?: GullyRules())
+
+    @TypeConverter
+    fun toGullyRules(value: String?): GullyRules {
+        if (value.isNullOrEmpty()) return GullyRules()
+        return try {
+            gson.fromJson(value, GullyRules::class.java) ?: GullyRules()
+        } catch (e: Exception) {
+            GullyRules()
+        }
+    }
 }

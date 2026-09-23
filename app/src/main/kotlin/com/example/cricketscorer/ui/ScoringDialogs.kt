@@ -49,6 +49,7 @@ fun MatchSettingsDialog(uiState: MatchUiState, viewModel: ScoringViewModel, onDi
     
     var tempTossWinnerId by remember(match.id) { mutableStateOf(match.tossWinnerId) }
     var tempTossDecision by remember(match.id) { mutableStateOf(match.tossDecision) }
+    var matchGullyRules by remember(match.id) { mutableStateOf(match.gullyRules) }
     var showFlipDialog by remember { mutableStateOf(false) }
 
     val onActionDismiss = {
@@ -60,7 +61,7 @@ fun MatchSettingsDialog(uiState: MatchUiState, viewModel: ScoringViewModel, onDi
         onDismissRequest = onActionDismiss,
         title = { Text("Match Settings", fontWeight = FontWeight.Black) },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Text("Overs per Innings", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
@@ -153,6 +154,15 @@ fun MatchSettingsDialog(uiState: MatchUiState, viewModel: ScoringViewModel, onDi
                         onCheckedChange = { viewModel.toggleTheme(it) }
                     )
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                GullyRulesSettingsSection(
+                    gullyRules = matchGullyRules,
+                    onRuleChange = { matchGullyRules = it }
+                )
             }
         },
         confirmButton = {
@@ -167,6 +177,7 @@ fun MatchSettingsDialog(uiState: MatchUiState, viewModel: ScoringViewModel, onDi
                         viewModel.handleToss(tempTossWinnerId!!, tempTossDecision!!)
                     }
                     
+                    viewModel.updateMatchGullyRules(matchGullyRules)
                     viewModel.updateMatchSettings(o, mO, qC, qL)
                     
                     // v2.33.11: Close dialog. 
