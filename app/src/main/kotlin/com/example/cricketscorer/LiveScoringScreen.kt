@@ -1,9 +1,6 @@
 package com.example.cricketscorer
 
-import com.example.cricketscorer.ui.*
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -15,20 +12,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.cricketscorer.ui.MatchSettingsDialog
-import com.example.cricketscorer.ui.CoinFlipDialog
-import com.example.cricketscorer.ui.WicketDialog
-import com.example.cricketscorer.ui.ExtraRunsDialog
-import com.example.cricketscorer.ui.OtherRunsDialog
-import com.example.cricketscorer.ui.RetireHurtDialog
-import com.example.cricketscorer.ui.InningsOverOverlay
-import com.example.cricketscorer.ui.DroppedCatchRunsOverlay
-import com.example.cricketscorer.ui.RunOutRunsOverlay
-import com.example.cricketscorer.ui.PlayerSelectionOverlay
-import com.example.cricketscorer.ui.ManageSquadsOverlay
-import java.util.Locale
+import com.example.cricketscorer.ui.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,7 +29,6 @@ fun LiveScoringScreen(
     var viewedInnings by remember(match?.currentInnings) { mutableIntStateOf(match?.currentInnings ?: 1) }
     var showMatchFinishedDialog by remember { mutableStateOf(false) }
     
-    // v2.26.72: Auto-trigger celebration when match state changes to COMPLETED 🏏🚀⚖️🏅
     LaunchedEffect(match?.status, match?.id) {
         if (match?.status == MatchStatus.COMPLETED && match?.ballHistory?.isNotEmpty() == true) {
             showMatchFinishedDialog = true
@@ -99,9 +83,6 @@ fun LiveScoringScreen(
                             }
                         }
                     },
-                    navigationIcon = {
-                        // Clean Top Bar v2.19
-                    },
                     actions = {
                         IconButton(onClick = { showManageSquads = true }) {
                             Icon(Icons.Default.PersonAdd, contentDescription = "Manage Squads")
@@ -129,16 +110,16 @@ fun LiveScoringScreen(
                     }
                 ) {
                     Tab(selected = selectedTabIndex == 0, onClick = { selectedTabIndex = 0 }) {
-                        Text("LIVE", modifier = Modifier.padding(12.dp), fontWeight = FontWeight.Bold)
+                        Text("LIVE", modifier = Modifier.padding(vertical = 10.dp), fontWeight = FontWeight.Bold)
                     }
                     Tab(selected = selectedTabIndex == 1, onClick = { selectedTabIndex = 1 }) {
-                        Text("SCORE", modifier = Modifier.padding(12.dp), fontWeight = FontWeight.Bold)
+                        Text("CARD", modifier = Modifier.padding(vertical = 10.dp), fontWeight = FontWeight.Bold)
                     }
                     Tab(selected = selectedTabIndex == 2, onClick = { selectedTabIndex = 2 }) {
-                        Text("OVERS", modifier = Modifier.padding(12.dp), fontWeight = FontWeight.Bold)
+                        Text("OVERS", modifier = Modifier.padding(vertical = 10.dp), fontWeight = FontWeight.Bold)
                     }
                     Tab(selected = selectedTabIndex == 3, onClick = { selectedTabIndex = 3 }) {
-                        Text("STATS", modifier = Modifier.padding(12.dp), fontWeight = FontWeight.Bold)
+                        Text("STATS", modifier = Modifier.padding(vertical = 10.dp), fontWeight = FontWeight.Bold)
                     }
                 }
             }
