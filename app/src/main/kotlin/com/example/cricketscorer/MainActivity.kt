@@ -78,14 +78,17 @@ class MainActivity : ComponentActivity() {
 fun MainNavigation(scoringViewModel: ScoringViewModel) {
     val navController = rememberNavController()
     val tournamentViewModel: TournamentViewModel = viewModel()
-    
-    // Rest of MainNavigation...
+    val tournaments by TournamentRepository.tournaments.collectAsState()
+    val hasLiveMatch = remember(tournaments) {
+        tournaments.flatMap { it.matches }.any { it.status == MatchStatus.LIVE }
+    }
 
     Scaffold(
         bottomBar = {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp
+                tonalElevation = 8.dp,
+                windowInsets = NavigationBarDefaults.windowInsets
             ) {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = navBackStackEntry?.destination
@@ -102,7 +105,22 @@ fun MainNavigation(scoringViewModel: ScoringViewModel) {
                     } == true
 
                     NavigationBarItem(
-                        icon = { Icon(item.icon, contentDescription = item.label) },
+                        icon = {
+                            if (item.route == "live_scoring" && hasLiveMatch) {
+                                BadgedBox(
+                                    badge = {
+                                        Badge(
+                                            containerColor = MaterialTheme.colorScheme.error,
+                                            contentColor = Color.White
+                                        )
+                                    }
+                                ) {
+                                    Icon(item.icon, contentDescription = item.label)
+                                }
+                            } else {
+                                Icon(item.icon, contentDescription = item.label)
+                            }
+                        },
                         label = { Text(item.label) },
                         selected = isSelected,
                         colors = NavigationBarItemDefaults.colors(

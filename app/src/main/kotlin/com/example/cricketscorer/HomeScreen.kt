@@ -199,19 +199,43 @@ fun HomeScreen(
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        item { QuickActionChip("SERIES", onNavigateToDashboard) }
-                        item { QuickActionChip("PLAYLIST", onNavigateToPlayers) }
-                        item { QuickActionChip("TEAMS", onNavigateToTeams) }
-                        item { QuickActionChip("MATCHES", onNavigateToMatches) }
+                    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                        if (maxWidth < 360.dp) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    QuickActionChip("SERIES", onNavigateToDashboard, Modifier.weight(1f))
+                                    QuickActionChip("PLAYLIST", onNavigateToPlayers, Modifier.weight(1f))
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    QuickActionChip("TEAMS", onNavigateToTeams, Modifier.weight(1f))
+                                    QuickActionChip("MATCHES", onNavigateToMatches, Modifier.weight(1f))
+                                }
+                            }
+                        } else {
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                item { QuickActionChip("SERIES", onNavigateToDashboard) }
+                                item { QuickActionChip("PLAYLIST", onNavigateToPlayers) }
+                                item { QuickActionChip("TEAMS", onNavigateToTeams) }
+                                item { QuickActionChip("MATCHES", onNavigateToMatches) }
+                            }
+                        }
                     }
                 }
 
                 item {
-                    Spacer(modifier = Modifier.height(48.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
                     CardBranding()
                 }
             }
@@ -326,9 +350,10 @@ fun HomeScreen(
 }
 
 @Composable
-fun QuickActionChip(text: String, onClick: () -> Unit) {
+fun QuickActionChip(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
+        modifier = modifier,
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(12.dp),
         shadowElevation = 2.dp,
@@ -336,7 +361,7 @@ fun QuickActionChip(text: String, onClick: () -> Unit) {
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Black,
             color = MaterialTheme.colorScheme.primary
