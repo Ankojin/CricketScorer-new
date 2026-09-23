@@ -73,23 +73,27 @@ object TournamentRepository {
         }
     }
 
-    private suspend fun saveTournamentToDb(t: Tournament) {
+    private suspend fun saveTournamentToDb(tRaw: Tournament) {
+        val t = tRaw.safeCopy()
         db.withTransaction {
             db.tournamentDao().insertTournament(t.toEntity())
             
-            val teamEntities = t.teams.map { it.toEntity(t.id) }
+            val teams = t.teams.orEmpty().map { it.safeCopy() }
+            val teamEntities = teams.map { it.toEntity(t.id) }
             db.teamDao().insertTeams(teamEntities)
             
-            val playerEntities = t.participants.map { p ->
-                val teamId = t.teams.find { team -> team.players.any { tp -> tp.id == p.id } }?.id
+            val participants = t.participants.orEmpty().map { it.safeCopy() }
+            val playerEntities = participants.map { p ->
+                val teamId = teams.find { team -> team.players.orEmpty().any { tp -> tp.id == p.id } }?.id
                 p.toEntity(t.id, teamId)
             }
             db.playerDao().insertPlayers(playerEntities)
             
-            t.matches.forEach { m ->
+            t.matches.orEmpty().forEach { mRaw ->
+                val m = mRaw.safeCopy()
                 db.matchDao().insertMatch(m.toEntity())
                 db.ballDao().deleteBallsByMatch(m.id)
-                db.ballDao().insertBalls(m.ballHistory.map { it.toEntity(m.id) })
+                db.ballDao().insertBalls(m.ballHistory.orEmpty().map { it.toEntity(m.id) })
             }
         }
     }
@@ -125,20 +129,35 @@ object TournamentRepository {
         return try {
             val jsonObject = gson.fromJson(json, JsonObject::class.java)
             
-            val tournament: Tournament = if (jsonObject.has("type") && jsonObject.get("type").asString == "UNIFIED_BACKUP") {
+            val rawTournament: Tournament? = if (jsonObject.has("type") && jsonObject.get("type")?.asString == "UNIFIED_BACKUP") {
                 val tJson = jsonObject.get("tournament")
                 val pJson = jsonObject.get("globalPlaylist")
                 
-                val playersType = object : TypeToken<List<Player>>() {}.type
-                val importedPlayers: List<Player> = gson.fromJson(pJson, playersType)
-                importedPlayers.forEach { GlobalPlayerRepository.addPlayer(it.name, it.battingStyle ?: BattingStyle.RHB) }
+                if (pJson != null && !pJson.isJsonNull) {
+                    try {
+                        val playersType = object : TypeToken<List<Player>>() {}.type
+                        val importedPlayers: List<Player>? = gson.fromJson(pJson, playersType)
+                        importedPlayers.orEmpty().filterNotNull().forEach { 
+                            GlobalPlayerRepository.addPlayer(it.name ?: "Player", it.battingStyle ?: BattingStyle.RHB) 
+                        }
+                    } catch (e: Exception) {
+                        Log.w("TournamentRepository", "Skipped playlist import due to error", e)
+                    }
+                }
                 
-                gson.fromJson(tJson, Tournament::class.java)
+                if (tJson != null && !tJson.isJsonNull) {
+                    gson.fromJson(tJson, Tournament::class.java)
+                } else null
             } else {
                 gson.fromJson(json, Tournament::class.java)
             }
             
-            if (tournament == null || tournament.id.isNullOrBlank() || tournament.name.isNullOrBlank()) {
+            if (rawTournament == null) {
+                return false
+            }
+
+            val tournament = rawTournament.safeCopy()
+            if (tournament.id.isBlank() || tournament.name.isBlank()) {
                 return false
             }
 

@@ -246,37 +246,43 @@ fun PlayerEntity.toDomain(): Player = Player(
     battingStyle = battingStyle
 )
 
-fun Player.toEntity(tournamentId: String, teamId: String?): PlayerEntity = PlayerEntity(
-    id = id,
-    tournamentId = tournamentId,
-    teamId = teamId,
-    name = name,
-    isJoker = isJoker,
-    isCaptain = isCaptain,
-    isViceCaptain = isViceCaptain,
-    battingStyle = battingStyle,
-    battingRuns = battingStats.runs,
-    battingBalls = battingStats.balls,
-    battingFours = battingStats.fours,
-    battingSixes = battingStats.sixes,
-    battingIsOut = battingStats.isOut,
-    battingIsRetiredHurt = battingStats.isRetiredHurt,
-    battingWicketType = battingStats.wicketType,
-    battingDismissalBowlerId = battingStats.dismissalBowlerId,
-    battingDismissalFielderId = battingStats.dismissalFielderId,
-    bowlingOvers = bowlingStats.overs,
-    bowlingBalls = bowlingStats.balls,
-    bowlingMaidens = bowlingStats.maidens,
-    bowlingRunsConceded = bowlingStats.runsConceded,
-    bowlingWickets = bowlingStats.wickets,
-    bowlingDotBalls = bowlingStats.dotBalls,
-    bowlingWides = bowlingStats.wides,
-    bowlingNoBalls = bowlingStats.noBalls,
-    fieldingCatches = fieldingStats.catches,
-    fieldingRunOuts = fieldingStats.runOuts,
-    fieldingStumpings = fieldingStats.stumpings,
-    fieldingDroppedCatches = fieldingStats.droppedCatches
-)
+fun Player.toEntity(tournamentId: String, teamId: String?): PlayerEntity {
+    val p = this.safeCopy()
+    val bStats = p.battingStats ?: BattingStats()
+    val bwStats = p.bowlingStats ?: BowlingStats()
+    val fStats = p.fieldingStats ?: FieldingStats()
+    return PlayerEntity(
+        id = p.id,
+        tournamentId = tournamentId,
+        teamId = teamId,
+        name = p.name,
+        isJoker = p.isJoker,
+        isCaptain = p.isCaptain,
+        isViceCaptain = p.isViceCaptain,
+        battingStyle = p.battingStyle ?: BattingStyle.RHB,
+        battingRuns = bStats.runs,
+        battingBalls = bStats.balls,
+        battingFours = bStats.fours,
+        battingSixes = bStats.sixes,
+        battingIsOut = bStats.isOut,
+        battingIsRetiredHurt = bStats.isRetiredHurt,
+        battingWicketType = bStats.wicketType ?: WicketType.NONE,
+        battingDismissalBowlerId = bStats.dismissalBowlerId,
+        battingDismissalFielderId = bStats.dismissalFielderId,
+        bowlingOvers = bwStats.overs,
+        bowlingBalls = bwStats.balls,
+        bowlingMaidens = bwStats.maidens,
+        bowlingRunsConceded = bwStats.runsConceded,
+        bowlingWickets = bwStats.wickets,
+        bowlingDotBalls = bwStats.dotBalls,
+        bowlingWides = bwStats.wides,
+        bowlingNoBalls = bwStats.noBalls,
+        fieldingCatches = fStats.catches,
+        fieldingRunOuts = fStats.runOuts,
+        fieldingStumpings = fStats.stumpings,
+        fieldingDroppedCatches = fStats.droppedCatches
+    )
+}
 
 fun BallEntity.toDomain(): Ball = Ball(
     runs = runs,
@@ -463,15 +469,17 @@ fun Tournament.toEntity(): TournamentEntity = TournamentEntity(
 )
 
 fun TournamentWithDetails.toDomain(): Tournament = tournament.let { t ->
-    val finalizedTeams = teams.map { te ->
-        te.toDomain(players.filter { it.teamId == te.id }.map { it.toDomain() })
+    val safePlayers = players.orEmpty().map { it.toDomain() }
+    val finalizedTeams = teams.orEmpty().map { te ->
+        val teamPlayers = safePlayers.filter { p -> players.orEmpty().find { it.id == p.id }?.teamId == te.id }
+        te.toDomain(teamPlayers)
     }
     Tournament(
         id = t.id,
         name = t.name,
-        settings = t.settings,
+        settings = t.settings ?: TournamentSettings(),
         teams = finalizedTeams,
-        matches = matches.map { it.toDomain(finalizedTeams) },
-        participants = players.map { it.toDomain() }
-    )
+        matches = matches.orEmpty().map { it.toDomain(finalizedTeams) },
+        participants = safePlayers
+    ).safeCopy()
 }

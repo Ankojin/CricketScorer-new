@@ -124,7 +124,7 @@ fun HomeScreen(
                                             fontWeight = FontWeight.Black
                                         )
                                         Text(
-                                            "Innings ${liveMatch.currentInnings} • Live on ${android.os.Build.MODEL}",
+                                            "Innings ${liveMatch.currentInnings} • Live",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = Color.Gray
                                         )

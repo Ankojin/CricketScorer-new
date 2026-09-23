@@ -348,7 +348,7 @@ fun Match.safeCopy(): Match {
         maxOversPerBowler = this.maxOversPerBowler,
         quotaBowlersCount = this.quotaBowlersCount,
         quotaMaxOvers = this.quotaMaxOvers,
-        gullyRules = this.gullyRules,
+        gullyRules = this.gullyRules ?: GullyRules(),
         pendingAction = this.pendingAction ?: PendingAction.NONE,
         innings1Data = this.innings1Data,
         isSecondInningsStarted = this.isSecondInningsStarted,

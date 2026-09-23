@@ -124,7 +124,7 @@ fun CompactLiveScoreHeader(uiState: MatchUiState) {
     val battingColor = battingTeam.colorOrDefault(MaterialTheme.colorScheme.primary)
 
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -132,10 +132,10 @@ fun CompactLiveScoreHeader(uiState: MatchUiState) {
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Line 1: TeamA vs TeamB
+            // Line 1 (small): Team A vs Team B · toss
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
@@ -172,11 +172,34 @@ fun CompactLiveScoreHeader(uiState: MatchUiState) {
                 }
             }
 
-            // Line 2: Batting Team + Score "R/W" + Overs "(o.b Ov)" + CRR
+            // Line 2 (main): big score "${totalRuns}/${totalWickets}" + overs "(o.b Ov)"
             Row(
-                modifier = Modifier.padding(top = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "${match.totalRuns}/${match.totalWickets}",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "(${match.totalBalls / 6}.${match.totalBalls % 6} Ov)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Gray
+                )
+            }
+
+            // Line 3 (small): batting team name + CRR (+ target if 2nd innings)
+            val crr = if (match.totalBalls > 0) (match.totalRuns.toDouble() / match.totalBalls) * 6 else 0.0
+            val crrStr = String.format(Locale.US, "%.1f", crr)
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(top = 1.dp)
             ) {
                 Text(
                     text = battingTeam.name.uppercase(),
@@ -186,37 +209,22 @@ fun CompactLiveScoreHeader(uiState: MatchUiState) {
                     maxLines = 1
                 )
                 Text(
-                    text = "${match.totalRuns}/${match.totalWickets}",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Black
-                )
-                Text(
-                    text = "(${match.totalBalls / 6}.${match.totalBalls % 6} Ov)",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Gray
-                )
-                val crr = if (match.totalBalls > 0) (match.totalRuns.toDouble() / match.totalBalls) * 6 else 0.0
-                Text(
-                    text = "CRR: ${String.format(Locale.US, "%.1f", crr)}",
+                    text = " • CRR: $crrStr",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = Color.Gray
                 )
-            }
-
-            // Line 3: Target info if 2nd innings
-            if (match.currentInnings == 2 && match.target != null && match.status != MatchStatus.COMPLETED) {
-                val needed = match.target - match.totalRuns
-                val ballsLeft = (match.oversPerInnings * 6) - match.totalBalls
-                Text(
-                    text = "Target ${match.target} • Need $needed off $ballsLeft b",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error,
-                    fontSize = 11.sp,
-                    maxLines = 1
-                )
+                if (match.currentInnings == 2 && match.target != null && match.status != MatchStatus.COMPLETED) {
+                    val needed = match.target - match.totalRuns
+                    val ballsLeft = (match.oversPerInnings * 6) - match.totalBalls
+                    Text(
+                        text = " • Target ${match.target} (Need $needed off $ballsLeft b)",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }
@@ -449,17 +457,17 @@ fun ControlsSection(
             ExtraButton("L-BYE", ExtrasType.LEG_BYE, viewModel, onShowExtraRuns, modifier = Modifier.weight(1f), enabled = !isCompleted)
         }
 
-        // Row 3: WICKET, DROP, OVERTHROW, RETIRE, UNDO
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Row 3: WICKET, DROP, RETIRE, UNDO
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Button(
                 onClick = onShowWicket,
-                modifier = Modifier.weight(1.3f).height(44.dp),
+                modifier = Modifier.weight(1.4f).height(44.dp),
                 enabled = !isCompleted,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F), contentColor = Color.White),
                 shape = RoundedCornerShape(8.dp),
                 contentPadding = PaddingValues(0.dp)
             ) {
-                Text("🏏 WICKET", fontWeight = FontWeight.Black, fontSize = 11.sp, maxLines = 1)
+                Text("🏏 WICKET", fontWeight = FontWeight.Black, fontSize = 12.sp, maxLines = 1)
             }
             Button(
                 onClick = { viewModel.handleDroppedCatch() },
@@ -469,37 +477,27 @@ fun ControlsSection(
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
             ) {
-                Text("🤲 DROP", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1, fontSize = 11.sp)
-            }
-            Button(
-                onClick = onShowOtherRuns,
-                enabled = !isCompleted,
-                modifier = Modifier.weight(1.2f).height(44.dp),
-                contentPadding = PaddingValues(0.dp),
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer, contentColor = MaterialTheme.colorScheme.onTertiaryContainer)
-            ) {
-                Text("⚾ OTH", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1, fontSize = 11.sp)
+                Text("🤲 DROP", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1, fontSize = 12.sp)
             }
             Button(
                 onClick = onShowRetireHurt,
-                modifier = Modifier.weight(1f).height(44.dp),
+                modifier = Modifier.weight(1.1f).height(44.dp),
                 enabled = !isCompleted,
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
                 shape = RoundedCornerShape(8.dp),
                 contentPadding = PaddingValues(0.dp)
             ) {
-                Text("🤕 RETIRE", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, maxLines = 1, fontSize = 11.sp)
+                Text("🤕 RETIRE", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, maxLines = 1, fontSize = 12.sp)
             }
             Button(
                 onClick = { viewModel.undo(androidContext) },
-                modifier = Modifier.weight(1f).height(44.dp),
+                modifier = Modifier.weight(1.1f).height(44.dp),
                 enabled = !isCompleted,
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer),
                 shape = RoundedCornerShape(8.dp),
                 contentPadding = PaddingValues(0.dp)
             ) {
-                Text("⏪ UNDO", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, maxLines = 1, fontSize = 11.sp)
+                Text("⏪ UNDO", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, maxLines = 1, fontSize = 12.sp)
             }
         }
     }
