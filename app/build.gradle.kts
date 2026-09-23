@@ -83,6 +83,15 @@ android {
         compose = true
         buildConfig = true
     }
+    sourceSets {
+        getByName("androidTest") {
+            assets.directories.add("$projectDir/schemas")
+        }
+    }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -101,10 +110,12 @@ dependencies {
     implementation("com.google.code.gson:gson:2.14.0")
     implementation("com.google.android.gms:play-services-nearby:19.0.0")
     
-    val room_version = "2.8.5"
+    val room_version = "2.7.0-alpha12"
     implementation("androidx.room:room-runtime:$room_version")
     implementation("androidx.room:room-ktx:$room_version")
     ksp("androidx.room:room-compiler:$room_version")
+    androidTestImplementation("androidx.room:room-testing:$room_version")
+    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
@@ -114,6 +125,8 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
+
+
 
 tasks.register("incrementVersionCode") {
     doLast {

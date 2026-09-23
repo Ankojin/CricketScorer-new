@@ -1,0 +1,837 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 3,
+    "identityHash": "71a51e5280a60d081d849feb02d9b58f",
+    "entities": [
+      {
+        "tableName": "tournaments",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `overs` INTEGER NOT NULL, `ballType` TEXT NOT NULL, `powerplayOvers` INTEGER NOT NULL, `maxOversPerBowler` INTEGER, `quotaBowlersCount` INTEGER, `quotaMaxOvers` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "settings.overs",
+            "columnName": "overs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "settings.ballType",
+            "columnName": "ballType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "settings.powerplayOvers",
+            "columnName": "powerplayOvers",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "settings.maxOversPerBowler",
+            "columnName": "maxOversPerBowler",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "settings.quotaBowlersCount",
+            "columnName": "quotaBowlersCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "settings.quotaMaxOvers",
+            "columnName": "quotaMaxOvers",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "teams",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `tournamentId` TEXT NOT NULL, `name` TEXT NOT NULL, `matchesPlayed` INTEGER NOT NULL, `wins` INTEGER NOT NULL, `losses` INTEGER NOT NULL, `points` INTEGER NOT NULL, `nrr` REAL NOT NULL, `colorHex` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`tournamentId`) REFERENCES `tournaments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tournamentId",
+            "columnName": "tournamentId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matchesPlayed",
+            "columnName": "matchesPlayed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "wins",
+            "columnName": "wins",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "losses",
+            "columnName": "losses",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "points",
+            "columnName": "points",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nrr",
+            "columnName": "nrr",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "colorHex",
+            "columnName": "colorHex",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_teams_tournamentId",
+            "unique": false,
+            "columnNames": [
+              "tournamentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_teams_tournamentId` ON `${TABLE_NAME}` (`tournamentId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "tournaments",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "tournamentId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "players",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `tournamentId` TEXT NOT NULL, `teamId` TEXT, `name` TEXT NOT NULL, `isJoker` INTEGER NOT NULL, `isCaptain` INTEGER NOT NULL, `isViceCaptain` INTEGER NOT NULL, `battingStyle` TEXT, `battingRuns` INTEGER NOT NULL, `battingBalls` INTEGER NOT NULL, `battingFours` INTEGER NOT NULL, `battingSixes` INTEGER NOT NULL, `battingIsOut` INTEGER NOT NULL, `battingIsRetiredHurt` INTEGER NOT NULL, `battingWicketType` TEXT NOT NULL, `battingDismissalBowlerId` TEXT, `battingDismissalFielderId` TEXT, `bowlingOvers` INTEGER NOT NULL, `bowlingBalls` INTEGER NOT NULL, `bowlingMaidens` INTEGER NOT NULL, `bowlingRunsConceded` INTEGER NOT NULL, `bowlingWickets` INTEGER NOT NULL, `bowlingDotBalls` INTEGER NOT NULL, `bowlingWides` INTEGER NOT NULL, `bowlingNoBalls` INTEGER NOT NULL, `fieldingCatches` INTEGER NOT NULL, `fieldingRunOuts` INTEGER NOT NULL, `fieldingStumpings` INTEGER NOT NULL, `fieldingDroppedCatches` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`tournamentId`) REFERENCES `tournaments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`teamId`) REFERENCES `teams`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tournamentId",
+            "columnName": "tournamentId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "teamId",
+            "columnName": "teamId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isJoker",
+            "columnName": "isJoker",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isCaptain",
+            "columnName": "isCaptain",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isViceCaptain",
+            "columnName": "isViceCaptain",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "battingStyle",
+            "columnName": "battingStyle",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "battingRuns",
+            "columnName": "battingRuns",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "battingBalls",
+            "columnName": "battingBalls",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "battingFours",
+            "columnName": "battingFours",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "battingSixes",
+            "columnName": "battingSixes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "battingIsOut",
+            "columnName": "battingIsOut",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "battingIsRetiredHurt",
+            "columnName": "battingIsRetiredHurt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "battingWicketType",
+            "columnName": "battingWicketType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "battingDismissalBowlerId",
+            "columnName": "battingDismissalBowlerId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "battingDismissalFielderId",
+            "columnName": "battingDismissalFielderId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "bowlingOvers",
+            "columnName": "bowlingOvers",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bowlingBalls",
+            "columnName": "bowlingBalls",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bowlingMaidens",
+            "columnName": "bowlingMaidens",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bowlingRunsConceded",
+            "columnName": "bowlingRunsConceded",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bowlingWickets",
+            "columnName": "bowlingWickets",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bowlingDotBalls",
+            "columnName": "bowlingDotBalls",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bowlingWides",
+            "columnName": "bowlingWides",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bowlingNoBalls",
+            "columnName": "bowlingNoBalls",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fieldingCatches",
+            "columnName": "fieldingCatches",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fieldingRunOuts",
+            "columnName": "fieldingRunOuts",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fieldingStumpings",
+            "columnName": "fieldingStumpings",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fieldingDroppedCatches",
+            "columnName": "fieldingDroppedCatches",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_players_tournamentId",
+            "unique": false,
+            "columnNames": [
+              "tournamentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_players_tournamentId` ON `${TABLE_NAME}` (`tournamentId`)"
+          },
+          {
+            "name": "index_players_teamId",
+            "unique": false,
+            "columnNames": [
+              "teamId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_players_teamId` ON `${TABLE_NAME}` (`teamId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "tournaments",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "tournamentId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "teams",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "teamId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "matches",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `tournamentId` TEXT NOT NULL, `tournamentName` TEXT, `teamAId` TEXT NOT NULL, `teamBId` TEXT NOT NULL, `teamAPlayerIds` TEXT NOT NULL, `teamBPlayerIds` TEXT NOT NULL, `tossWinnerId` TEXT, `tossDecision` TEXT, `initialBattingTeamId` TEXT, `initialBowlingTeamId` TEXT, `teamACaptainId` TEXT, `teamBCaptainId` TEXT, `teamAWicketKeeperId` TEXT, `teamBWicketKeeperId` TEXT, `target` INTEGER, `status` TEXT NOT NULL, `currentInnings` INTEGER NOT NULL, `battingTeamId` TEXT NOT NULL, `bowlingTeamId` TEXT NOT NULL, `totalRuns` INTEGER NOT NULL, `totalWickets` INTEGER NOT NULL, `totalBalls` INTEGER NOT NULL, `wideCount` INTEGER NOT NULL, `noBallCount` INTEGER NOT NULL, `byeCount` INTEGER NOT NULL, `legByeCount` INTEGER NOT NULL, `wicketHistory` TEXT NOT NULL, `strikerId` TEXT, `nonStrikerId` TEXT, `currentBowlerId` TEXT, `lastBowlerId` TEXT, `winnerId` TEXT, `manOfTheMatchId` TEXT, `oversPerInnings` INTEGER NOT NULL, `maxOversPerBowler` INTEGER, `quotaBowlersCount` INTEGER, `quotaMaxOvers` INTEGER, `gullyRules` TEXT NOT NULL, `pendingAction` TEXT, `innings1Data` TEXT, `isSecondInningsStarted` INTEGER NOT NULL, `innings1EndTimeMillis` INTEGER, `innings2StartTimeMillis` INTEGER, `lastNotifiedBowlerId` TEXT, `battingOrder` TEXT NOT NULL, `startTimeMillis` INTEGER, `endTimeMillis` INTEGER, `dateMillis` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`tournamentId`) REFERENCES `tournaments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tournamentId",
+            "columnName": "tournamentId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tournamentName",
+            "columnName": "tournamentName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "teamAId",
+            "columnName": "teamAId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "teamBId",
+            "columnName": "teamBId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "teamAPlayerIds",
+            "columnName": "teamAPlayerIds",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "teamBPlayerIds",
+            "columnName": "teamBPlayerIds",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tossWinnerId",
+            "columnName": "tossWinnerId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tossDecision",
+            "columnName": "tossDecision",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "initialBattingTeamId",
+            "columnName": "initialBattingTeamId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "initialBowlingTeamId",
+            "columnName": "initialBowlingTeamId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "teamACaptainId",
+            "columnName": "teamACaptainId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "teamBCaptainId",
+            "columnName": "teamBCaptainId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "teamAWicketKeeperId",
+            "columnName": "teamAWicketKeeperId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "teamBWicketKeeperId",
+            "columnName": "teamBWicketKeeperId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "target",
+            "columnName": "target",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentInnings",
+            "columnName": "currentInnings",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "battingTeamId",
+            "columnName": "battingTeamId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bowlingTeamId",
+            "columnName": "bowlingTeamId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalRuns",
+            "columnName": "totalRuns",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalWickets",
+            "columnName": "totalWickets",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalBalls",
+            "columnName": "totalBalls",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "wideCount",
+            "columnName": "wideCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "noBallCount",
+            "columnName": "noBallCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "byeCount",
+            "columnName": "byeCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "legByeCount",
+            "columnName": "legByeCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "wicketHistory",
+            "columnName": "wicketHistory",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "strikerId",
+            "columnName": "strikerId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "nonStrikerId",
+            "columnName": "nonStrikerId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "currentBowlerId",
+            "columnName": "currentBowlerId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastBowlerId",
+            "columnName": "lastBowlerId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "winnerId",
+            "columnName": "winnerId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "manOfTheMatchId",
+            "columnName": "manOfTheMatchId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "oversPerInnings",
+            "columnName": "oversPerInnings",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxOversPerBowler",
+            "columnName": "maxOversPerBowler",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "quotaBowlersCount",
+            "columnName": "quotaBowlersCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "quotaMaxOvers",
+            "columnName": "quotaMaxOvers",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "gullyRules",
+            "columnName": "gullyRules",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pendingAction",
+            "columnName": "pendingAction",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "innings1Data",
+            "columnName": "innings1Data",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isSecondInningsStarted",
+            "columnName": "isSecondInningsStarted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "innings1EndTimeMillis",
+            "columnName": "innings1EndTimeMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "innings2StartTimeMillis",
+            "columnName": "innings2StartTimeMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastNotifiedBowlerId",
+            "columnName": "lastNotifiedBowlerId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "battingOrder",
+            "columnName": "battingOrder",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startTimeMillis",
+            "columnName": "startTimeMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "endTimeMillis",
+            "columnName": "endTimeMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "dateMillis",
+            "columnName": "dateMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_matches_tournamentId",
+            "unique": false,
+            "columnNames": [
+              "tournamentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_matches_tournamentId` ON `${TABLE_NAME}` (`tournamentId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "tournaments",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "tournamentId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "balls",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ballId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `matchId` TEXT NOT NULL, `runs` INTEGER NOT NULL, `extrasType` TEXT NOT NULL, `extraRuns` INTEGER NOT NULL, `wicketType` TEXT NOT NULL, `strikerId` TEXT, `nonStrikerId` TEXT, `bowlerId` TEXT, `fielderId` TEXT, `isLegalBall` INTEGER NOT NULL, `outPlayerId` TEXT, `rotateStrike` INTEGER NOT NULL, `hadCrossed` INTEGER NOT NULL, `isDroppedCatch` INTEGER NOT NULL, `dismissalReason` TEXT, `isAdjustment` INTEGER NOT NULL, `adjustmentSlot` TEXT, `adjustmentPlayerId` TEXT, `isReplacement` INTEGER NOT NULL, FOREIGN KEY(`matchId`) REFERENCES `matches`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "ballId",
+            "columnName": "ballId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matchId",
+            "columnName": "matchId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "runs",
+            "columnName": "runs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "extrasType",
+            "columnName": "extrasType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "extraRuns",
+            "columnName": "extraRuns",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "wicketType",
+            "columnName": "wicketType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "strikerId",
+            "columnName": "strikerId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "nonStrikerId",
+            "columnName": "nonStrikerId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "bowlerId",
+            "columnName": "bowlerId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "fielderId",
+            "columnName": "fielderId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isLegalBall",
+            "columnName": "isLegalBall",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "outPlayerId",
+            "columnName": "outPlayerId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "rotateStrike",
+            "columnName": "rotateStrike",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hadCrossed",
+            "columnName": "hadCrossed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isDroppedCatch",
+            "columnName": "isDroppedCatch",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dismissalReason",
+            "columnName": "dismissalReason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isAdjustment",
+            "columnName": "isAdjustment",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "adjustmentSlot",
+            "columnName": "adjustmentSlot",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "adjustmentPlayerId",
+            "columnName": "adjustmentPlayerId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isReplacement",
+            "columnName": "isReplacement",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "ballId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_balls_matchId",
+            "unique": false,
+            "columnNames": [
+              "matchId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_balls_matchId` ON `${TABLE_NAME}` (`matchId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "matches",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "matchId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '71a51e5280a60d081d849feb02d9b58f')"
+    ]
+  }
+}
