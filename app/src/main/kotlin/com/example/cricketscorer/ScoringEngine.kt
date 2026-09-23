@@ -155,9 +155,11 @@ object ScoringEngine {
                 continue
             }
 
-            val physicalRuns = if (healedBall.extrasType == ExtrasType.WIDE) (healedBall.extraRuns - 1).coerceAtLeast(0) 
-                               else if (healedBall.extrasType == ExtrasType.BYE || healedBall.extrasType == ExtrasType.LEG_BYE) healedBall.extraRuns 
-                               else healedBall.runs + (if (healedBall.extrasType == ExtrasType.GRANTED) healedBall.extraRuns else 0)
+            val physicalRuns = if (healedBall.extrasType == ExtrasType.WIDE) {
+                if (current.gullyRules.noExtraRunsForWidesNoBalls) healedBall.extraRuns
+                else (healedBall.extraRuns - 1).coerceAtLeast(0)
+            } else if (healedBall.extrasType == ExtrasType.BYE || healedBall.extrasType == ExtrasType.LEG_BYE) healedBall.extraRuns 
+            else healedBall.runs + (if (healedBall.extrasType == ExtrasType.GRANTED) healedBall.extraRuns else 0)
             
             val shouldRotate = (physicalRuns % 2 != 0 != healedBall.hadCrossed) && healedBall.rotateStrike && healedBall.extrasType != ExtrasType.GRANTED
             if (shouldRotate) { val t = sId; sId = nsId; nsId = t }
@@ -173,10 +175,19 @@ object ScoringEngine {
                 lbId = activeBId; ballsInOver = 0
                 overJustFinished = true
             }
+
+            val squadSize = if (current.gullyRules.unequalTeams) battingTeam.players.size else minOf(current.teamA.players.size, current.teamB.players.size).coerceAtLeast(1)
+            val maxWickets = if (current.gullyRules.lastManStanding) squadSize else (squadSize - 1).coerceAtLeast(1)
+            val needsNonStriker = if (current.gullyRules.lastManStanding) current.totalWickets < squadSize - 1 else true
+
+            if (sId == null && nsId != null && !needsNonStriker) {
+                sId = nsId
+                nsId = null
+            }
             
             current = current.copy(strikerId = sId, nonStrikerId = nsId, currentBowlerId = if (overJustFinished) null else activeBId, lastBowlerId = lbId)
 
-            val inningsEnded = current.totalWickets >= (battingTeam.players.size - 1).coerceAtLeast(1) || current.totalBalls >= current.oversPerInnings * 6
+            val inningsEnded = current.totalWickets >= maxWickets || current.totalBalls >= current.oversPerInnings * 6
             
             if (current.currentInnings == 1 && inningsEnded) {
                 val i1EndTime = match.innings1EndTimeMillis ?: System.currentTimeMillis()
@@ -214,7 +225,10 @@ object ScoringEngine {
         // 4. Final Targeted Pending Action Selection (UI logic)
         if (current.status == MatchStatus.LIVE) {
             val batTeam = if (isTeamA(current.battingTeamId, current)) current.teamA else current.teamB
-            val inningsEnded = current.totalWickets >= (batTeam.players.size - 1).coerceAtLeast(1) || current.totalBalls >= current.oversPerInnings * 6
+            val squadSize = if (current.gullyRules.unequalTeams) batTeam.players.size else minOf(current.teamA.players.size, current.teamB.players.size).coerceAtLeast(1)
+            val maxWickets = if (current.gullyRules.lastManStanding) squadSize else (squadSize - 1).coerceAtLeast(1)
+            val needsNonStriker = if (current.gullyRules.lastManStanding) current.totalWickets < squadSize - 1 else true
+            val inningsEnded = current.totalWickets >= maxWickets || current.totalBalls >= current.oversPerInnings * 6
 
             if (current.currentInnings == 1 && inningsEnded) {
                 // v2.33.19: Fix Innings Transition Stall - Handle boundary state outside processing loop 🏏🚀⚖️🏅
@@ -239,7 +253,7 @@ object ScoringEngine {
                 if (!inningsEnded || current.currentInnings == 2) {
                     current = when {
                         current.strikerId == null -> current.copy(pendingAction = PendingAction.SELECT_STRIKER)
-                        current.nonStrikerId == null -> current.copy(pendingAction = PendingAction.SELECT_NON_STRIKER)
+                        needsNonStriker && current.nonStrikerId == null -> current.copy(pendingAction = PendingAction.SELECT_NON_STRIKER)
                         current.currentBowlerId == null -> current.copy(pendingAction = PendingAction.SELECT_BOWLER)
                         else -> current
                     }

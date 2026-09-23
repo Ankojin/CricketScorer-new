@@ -228,7 +228,7 @@ class ScoringViewModel : ViewModel() {
         val ball = Ball(
             runs = runs,
             strikerId = currentMatch.strikerId ?: return,
-            nonStrikerId = currentMatch.nonStrikerId ?: return,
+            nonStrikerId = currentMatch.nonStrikerId,
             bowlerId = currentMatch.currentBowlerId,
             rotateStrike = rotateStrike
         )
@@ -238,16 +238,18 @@ class ScoringViewModel : ViewModel() {
     fun handleExtra(type: ExtrasType, extraRuns: Int) {
         val currentMatch = _matchState.value ?: return
         val strikerId = currentMatch.strikerId ?: return
-        val nonStrikerId = currentMatch.nonStrikerId ?: return
-        
+        val nonStrikerId = currentMatch.nonStrikerId
+
+        val noPenalty = currentMatch.gullyRules.noExtraRunsForWidesNoBalls
+        val extraPenalty = if (noPenalty) 0 else 1
         
         val ball = when (type) {
             ExtrasType.NO_BALL -> {
-                // ICC: Bat runs on No-ball are credited to striker, +1 penalty is extra
+                // Bat runs on No-ball are credited to striker, penalty is 1 (or 0 if noExtraRunsForWidesNoBalls)
                 Ball(
                     runs = extraRuns,
                     extrasType = type,
-                    extraRuns = 1,
+                    extraRuns = extraPenalty,
                     strikerId = strikerId,
                     nonStrikerId = nonStrikerId,
                     bowlerId = currentMatch.currentBowlerId,
@@ -255,11 +257,11 @@ class ScoringViewModel : ViewModel() {
                 )
             }
             ExtrasType.WIDE -> {
-                // ICC: All runs on Wide (penalty + runs) are extras
+                // Wide extras = additional runs + penalty (or 0 penalty if noExtraRunsForWidesNoBalls)
                 Ball(
                     runs = 0,
                     extrasType = type,
-                    extraRuns = extraRuns + 1,
+                    extraRuns = extraRuns + extraPenalty,
                     strikerId = strikerId,
                     nonStrikerId = nonStrikerId,
                     bowlerId = currentMatch.currentBowlerId,
@@ -295,13 +297,13 @@ class ScoringViewModel : ViewModel() {
     fun handleWicket(type: WicketType, victimId: String?) {
         val currentMatch = _matchState.value ?: return
         val strikerId = currentMatch.strikerId ?: return
-        val nonStrikerId = currentMatch.nonStrikerId ?: return
+        val nonStrikerId = currentMatch.nonStrikerId
         
         if (type == WicketType.RUN_OUT) {
             _activeWicketContext.value = ActiveWicketContext(
                 type = type,
                 initialStrikerId = strikerId,
-                initialNonStrikerId = nonStrikerId,
+                initialNonStrikerId = nonStrikerId ?: "",
                 initialBowlerId = currentMatch.currentBowlerId ?: "",
                 completedRuns = 0,
                 brokenEnd = "STRIKER",
@@ -315,7 +317,7 @@ class ScoringViewModel : ViewModel() {
             _activeWicketContext.value = ActiveWicketContext(
                 type = type,
                 initialStrikerId = strikerId,
-                initialNonStrikerId = nonStrikerId,
+                initialNonStrikerId = nonStrikerId ?: "",
                 initialBowlerId = currentMatch.currentBowlerId ?: "",
                 completedRuns = 0,
                 brokenEnd = "STRIKER",
