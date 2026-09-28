@@ -15,7 +15,7 @@ import `in`.nrkmart.cricscore.BuildConfig
         MatchEntity::class,
         BallEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

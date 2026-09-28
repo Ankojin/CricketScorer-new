@@ -38,12 +38,17 @@ object GlobalPlayerRepository {
         prefs.edit().putString(PLAYERS_KEY, json).apply()
     }
 
-    fun addPlayer(name: String, style: BattingStyle): Player {
+    fun addPlayer(
+        name: String,
+        style: BattingStyle,
+        bowlingStyle: BowlingStyle = BowlingStyle.RIGHT_ARM,
+        role: PlayerRole = PlayerRole.BATTER
+    ): Player {
         val trimmed = name.trim()
         val existing = _players.value.find { it.name.equals(trimmed, ignoreCase = true) }
         if (existing != null) return existing
 
-        val newPlayer = Player(id = UUID.randomUUID().toString(), name = trimmed, battingStyle = style)
+        val newPlayer = Player(id = UUID.randomUUID().toString(), name = trimmed, battingStyle = style, bowlingStyle = bowlingStyle, role = role)
         _players.update { (it + newPlayer).sortedBy { p -> p.name } }
         saveToDisk(_players.value)
         return newPlayer
@@ -54,9 +59,9 @@ object GlobalPlayerRepository {
         saveToDisk(_players.value)
     }
 
-    fun updatePlayer(id: String, newName: String, style: BattingStyle) {
+    fun updatePlayer(id: String, newName: String, style: BattingStyle, bowlingStyle: BowlingStyle, role: PlayerRole) {
         _players.update { list ->
-            list.map { if (it.id == id) it.copy(name = newName.trim(), battingStyle = style) else it }
+            list.map { if (it.id == id) it.copy(name = newName.trim(), battingStyle = style, bowlingStyle = bowlingStyle, role = role) else it }
         }
         saveToDisk(_players.value)
     }

@@ -13,11 +13,21 @@ data class Player(
     val isJoker: Boolean = false,
     val isCaptain: Boolean = false,
     val isViceCaptain: Boolean = false,
-    val battingStyle: BattingStyle? = BattingStyle.RHB
+    val battingStyle: BattingStyle? = BattingStyle.RHB,
+    val bowlingStyle: BowlingStyle? = BowlingStyle.RIGHT_ARM,
+    val role: PlayerRole = PlayerRole.BATTER
 )
 
 enum class BattingStyle {
     RHB, LHB
+}
+
+enum class BowlingStyle {
+    RIGHT_ARM, LEFT_ARM
+}
+
+enum class PlayerRole {
+    BATTER, BOWLER, ALL_ROUNDER, WICKET_KEEPER
 }
 
 @Immutable
@@ -309,7 +319,9 @@ fun Player.safeCopy(): Player {
         isJoker = this.isJoker,
         isCaptain = this.isCaptain,
         isViceCaptain = this.isViceCaptain,
-        battingStyle = this.battingStyle ?: BattingStyle.RHB
+        battingStyle = this.battingStyle ?: BattingStyle.RHB,
+        bowlingStyle = this.bowlingStyle ?: BowlingStyle.RIGHT_ARM,
+        role = this.role ?: PlayerRole.BATTER
     )
 }
 

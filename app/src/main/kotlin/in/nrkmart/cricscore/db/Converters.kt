@@ -15,6 +15,18 @@ class Converters {
     fun toBattingStyle(value: String?): BattingStyle? = value?.let { BattingStyle.valueOf(it) }
 
     @TypeConverter
+    fun fromBowlingStyle(value: BowlingStyle?): String? = value?.name
+
+    @TypeConverter
+    fun toBowlingStyle(value: String?): BowlingStyle? = value?.let { BowlingStyle.valueOf(it) }
+
+    @TypeConverter
+    fun fromPlayerRole(value: PlayerRole?): String? = value?.name
+
+    @TypeConverter
+    fun toPlayerRole(value: String?): PlayerRole? = value?.let { PlayerRole.valueOf(it) }
+
+    @TypeConverter
     fun fromExtrasType(value: ExtrasType): String = value.name
 
     @TypeConverter

@@ -78,6 +78,8 @@ class ScoringViewModel : ViewModel() {
                                     if (masterP != null) p.copy(
                                         name = masterP.name,
                                         battingStyle = masterP.battingStyle,
+                                        bowlingStyle = masterP.bowlingStyle,
+                                        role = masterP.role,
                                         isCaptain = masterP.isCaptain,
                                         isViceCaptain = masterP.isViceCaptain
                                     ) else p
@@ -94,6 +96,8 @@ class ScoringViewModel : ViewModel() {
                                     if (masterP != null) p.copy(
                                         name = masterP.name,
                                         battingStyle = masterP.battingStyle,
+                                        bowlingStyle = masterP.bowlingStyle,
+                                        role = masterP.role,
                                         isCaptain = masterP.isCaptain,
                                         isViceCaptain = masterP.isViceCaptain
                                     ) else p

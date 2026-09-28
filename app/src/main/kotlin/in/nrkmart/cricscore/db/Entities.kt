@@ -61,6 +61,8 @@ data class PlayerEntity(
     val isCaptain: Boolean,
     val isViceCaptain: Boolean,
     val battingStyle: BattingStyle?,
+    val bowlingStyle: BowlingStyle?,
+    val role: PlayerRole?,
     
     // Flattened BattingStats
     val battingRuns: Int,
@@ -243,7 +245,9 @@ fun PlayerEntity.toDomain(): Player = Player(
     isJoker = isJoker,
     isCaptain = isCaptain,
     isViceCaptain = isViceCaptain,
-    battingStyle = battingStyle
+    battingStyle = battingStyle,
+    bowlingStyle = bowlingStyle ?: BowlingStyle.RIGHT_ARM,
+    role = role ?: PlayerRole.BATTER
 )
 
 fun Player.toEntity(tournamentId: String, teamId: String?): PlayerEntity {
@@ -260,6 +264,8 @@ fun Player.toEntity(tournamentId: String, teamId: String?): PlayerEntity {
         isCaptain = p.isCaptain,
         isViceCaptain = p.isViceCaptain,
         battingStyle = p.battingStyle ?: BattingStyle.RHB,
+        bowlingStyle = p.bowlingStyle ?: BowlingStyle.RIGHT_ARM,
+        role = p.role ?: PlayerRole.BATTER,
         battingRuns = bStats.runs,
         battingBalls = bStats.balls,
         battingFours = bStats.fours,

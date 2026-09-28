@@ -35,6 +35,18 @@ import `in`.nrkmart.cricscore.ui.findTeamNameForPlayer
 import `in`.nrkmart.cricscore.ui.parseTeamColor
 import `in`.nrkmart.cricscore.ui.TEAM_PALETTE
 
+private fun PlayerRole.displayName(): String = when (this) {
+    PlayerRole.BATTER -> "Batter"
+    PlayerRole.BOWLER -> "Bowler"
+    PlayerRole.ALL_ROUNDER -> "All-rounder"
+    PlayerRole.WICKET_KEEPER -> "Wicket-keeper"
+}
+
+private fun BowlingStyle?.displayName(): String = when (this ?: BowlingStyle.RIGHT_ARM) {
+    BowlingStyle.RIGHT_ARM -> "Right arm"
+    BowlingStyle.LEFT_ARM -> "Left arm"
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AllTeamsScreen(
@@ -105,6 +117,8 @@ fun AllPlayersScreen(onBack: () -> Unit) {
     var showAddDialog by remember { mutableStateOf(false) }
     var playerName by remember { mutableStateOf("") }
     var battingStyle by remember { mutableStateOf(BattingStyle.RHB) }
+    var bowlingStyle by remember { mutableStateOf(BowlingStyle.RIGHT_ARM) }
+    var playerRole by remember { mutableStateOf(PlayerRole.BATTER) }
 
     Scaffold(
         topBar = {
@@ -145,7 +159,7 @@ fun AllPlayersScreen(onBack: () -> Unit) {
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(player.name, fontWeight = FontWeight.Bold)
-                                Text("Batting: ${player.battingStyle ?: "RHB"}", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                                Text("${player.role.displayName()} · Bat: ${player.battingStyle ?: "RHB"} · Bowl: ${player.bowlingStyle.displayName()}", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                             }
                             Row {
                                 var showEditPlayerDialog by remember { mutableStateOf<Player?>(null) }
@@ -160,6 +174,8 @@ fun AllPlayersScreen(onBack: () -> Unit) {
                                     val p = showEditPlayerDialog!!
                                     var editedName by remember(p.id) { mutableStateOf(p.name) }
                                     var editedStyle by remember(p.id) { mutableStateOf(p.battingStyle ?: BattingStyle.RHB) }
+                                    var editedBowlingStyle by remember(p.id) { mutableStateOf(p.bowlingStyle ?: BowlingStyle.RIGHT_ARM) }
+                                    var editedRole by remember(p.id) { mutableStateOf(p.role ?: PlayerRole.BATTER) }
 
                                     AlertDialog(
                                         onDismissRequest = { showEditPlayerDialog = null },
@@ -183,12 +199,22 @@ fun AllPlayersScreen(onBack: () -> Unit) {
                                                         )
                                                     }
                                                 }
+                                                Text("Bowling Style", fontWeight = FontWeight.Bold)
+                                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    BowlingStyle.entries.forEach { style ->
+                                                        FilterChip(selected = editedBowlingStyle == style, onClick = { editedBowlingStyle = style }, label = { Text(style.displayName()) }, modifier = Modifier.weight(1f))
+                                                    }
+                                                }
+                                                Text("Role", fontWeight = FontWeight.Bold)
+                                                PlayerRole.entries.forEach { role ->
+                                                    FilterChip(selected = editedRole == role, onClick = { editedRole = role }, label = { Text(role.displayName()) })
+                                                }
                                             }
                                         },
                                         confirmButton = {
                                             Button(onClick = {
                                                 if (editedName.isNotBlank()) {
-                                                    GlobalPlayerRepository.updatePlayer(p.id, editedName, editedStyle)
+                                                    GlobalPlayerRepository.updatePlayer(p.id, editedName, editedStyle, editedBowlingStyle, editedRole)
                                                     showEditPlayerDialog = null
                                                 }
                                             }) { Text("UPDATE") }
@@ -227,13 +253,26 @@ fun AllPlayersScreen(onBack: () -> Unit) {
                                 )
                             }
                         }
+                        Text("Bowling Style", fontWeight = FontWeight.Bold)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            BowlingStyle.entries.forEach { style ->
+                                FilterChip(selected = bowlingStyle == style, onClick = { bowlingStyle = style }, label = { Text(style.displayName()) }, modifier = Modifier.weight(1f))
+                            }
+                        }
+                        Text("Role", fontWeight = FontWeight.Bold)
+                        PlayerRole.entries.forEach { role ->
+                            FilterChip(selected = playerRole == role, onClick = { playerRole = role }, label = { Text(role.displayName()) })
+                        }
                     }
                 },
                 confirmButton = {
                     Button(onClick = {
                         if (playerName.isNotBlank()) {
-                            GlobalPlayerRepository.addPlayer(playerName, battingStyle)
+                            GlobalPlayerRepository.addPlayer(playerName, battingStyle, bowlingStyle, playerRole)
                             playerName = ""
+                            battingStyle = BattingStyle.RHB
+                            bowlingStyle = BowlingStyle.RIGHT_ARM
+                            playerRole = PlayerRole.BATTER
                             showAddDialog = false
                         }
                     }) { Text("SAVE TO PLAYLIST") }

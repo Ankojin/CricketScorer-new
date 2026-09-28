@@ -15,7 +15,15 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE players ADD COLUMN bowlingStyle TEXT DEFAULT 'RIGHT_ARM'")
+        db.execSQL("ALTER TABLE players ADD COLUMN role TEXT DEFAULT 'BATTER'")
+    }
+}
+
 val ALL_MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
-    MIGRATION_2_3
+    MIGRATION_2_3,
+    MIGRATION_3_4
 )
