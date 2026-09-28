@@ -262,7 +262,12 @@ object TournamentRepository {
         return addPlayersToTeam(tournamentId, teamId, listOf(playerToAdd))
     }
 
-    fun addPlayersToTeam(tournamentId: String, teamId: String, players: List<Player>): Boolean {
+    fun addPlayersToTeam(
+        tournamentId: String,
+        teamId: String,
+        players: List<Player>,
+        allowCommonPlayer: Boolean = false
+    ): Boolean {
         val tournament = _tournaments.value.find { it.id == tournamentId } ?: return false
         
         // v2.33.17: Filter out players already in the target team 🏏🚀⚖️🏅
@@ -274,9 +279,9 @@ object TournamentRepository {
         updateTournament(tournamentId) { t ->
             val playerIdsToMove = playersToProcess.map { it.id }.toSet()
 
-            // 1. Remove moving players from any other teams in this tournament
+            // A common player remains in both squads. Otherwise, adding them moves them.
             val teamsWithRemovals = t.teams.map { team ->
-                if (team.id != teamId) {
+                if (!allowCommonPlayer && team.id != teamId) {
                     team.copy(players = team.players.filter { it.id !in playerIdsToMove })
                 } else team
             }
@@ -322,8 +327,8 @@ object TournamentRepository {
             val updatedMatches = t.matches.map { match ->
                 if (match.status == MatchStatus.LIVE || match.status == MatchStatus.UPCOMING) {
                     match.copy(
-                        teamA = match.teamA.copy(players = match.teamA.players.filter { it.id != playerId }),
-                        teamB = match.teamB.copy(players = match.teamB.players.filter { it.id != playerId })
+                        teamA = if (match.teamA.id == teamId) match.teamA.copy(players = match.teamA.players.filter { it.id != playerId }) else match.teamA,
+                        teamB = if (match.teamB.id == teamId) match.teamB.copy(players = match.teamB.players.filter { it.id != playerId }) else match.teamB
                     )
                 } else match
             }

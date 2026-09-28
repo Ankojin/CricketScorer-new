@@ -718,7 +718,9 @@ fun SquadList(uiState: MatchUiState, team: Team, title: String, viewModel: Scori
     Column {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-            if (match.status != MatchStatus.COMPLETED) {
+            if (match.status != MatchStatus.COMPLETED &&
+                (match.status != MatchStatus.LIVE || match.gullyRules.playersJoinMidMatch ||
+                    match.gullyRules.playersSwitchMidMatch || match.gullyRules.commonPlayer)) {
                 IconButton(onClick = { showAddDialog = true }) { Icon(Icons.Default.Add, contentDescription = null) }
             }
         }
@@ -741,7 +743,7 @@ fun SquadList(uiState: MatchUiState, team: Team, title: String, viewModel: Scori
                             IconButton(onClick = { showEditDialog = player }, modifier = Modifier.size(24.dp)) {
                                 Icon(Icons.Default.Edit, contentDescription = "Edit", tint = Color.Gray, modifier = Modifier.size(16.dp))
                             }
-                            IconButton(onClick = { viewModel.deletePlayerFromMatch(context, player.id) }, modifier = Modifier.size(24.dp)) {
+                            IconButton(onClick = { viewModel.deletePlayerFromMatch(context, team.id, player.id) }, modifier = Modifier.size(24.dp)) {
                                 Icon(Icons.Default.Delete, contentDescription = "Remove", tint = Color.Red, modifier = Modifier.size(16.dp))
                             }
                         }

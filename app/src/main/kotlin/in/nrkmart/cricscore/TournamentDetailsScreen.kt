@@ -703,7 +703,7 @@ fun MatchRow(match: Match, onStartMatch: (Match) -> Unit, onDelete: () -> Unit) 
     Card(
         modifier = Modifier.fillMaxWidth(),
         onClick = { onStartMatch(match) },
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -717,12 +717,12 @@ fun MatchRow(match: Match, onStartMatch: (Match) -> Unit, onDelete: () -> Unit) 
                         text = if (match.status == MatchStatus.COMPLETED) "COMPLETED" else if (match.status == MatchStatus.LIVE) "LIVE" else "UPCOMING",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = if (match.status == MatchStatus.LIVE) Color.Red else Color.Gray
+                        color = if (match.status == MatchStatus.LIVE) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = dateText,
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.LightGray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {

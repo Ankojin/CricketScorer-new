@@ -170,6 +170,7 @@ class ScoringViewModel : ViewModel() {
 
     fun swapStrike() {
         val current = _matchState.value ?: return
+        if (current.gullyRules.singleSideBatting) return
         if (current.strikerId == null || current.nonStrikerId == null) return
         
         val adjustment = Ball(runs = 0, isLegalBall = false, isAdjustment = true, adjustmentSlot = "SWAP")
@@ -465,6 +466,7 @@ class ScoringViewModel : ViewModel() {
     }
 
     fun replaceNonStriker() {
+        if (_matchState.value?.gullyRules?.singleSideBatting == true) return
         _matchState.update { it?.copy(pendingAction = PendingAction.REPLACE_NON_STRIKER) }
     }
 
@@ -616,7 +618,10 @@ class ScoringViewModel : ViewModel() {
 
     fun updateMatchGullyRules(newRules: GullyRules) {
         val updated = _matchState.updateAndGet { current ->
-            current?.copy(gullyRules = newRules)
+            current?.let { match ->
+                ScoringEngine.clearCache(match.id)
+                ScoringEngine.recalculateMatchFromHistory(match.copy(gullyRules = newRules))
+            }
         }
         updated?.let {
             TournamentRepository.updateMatch(it.tournamentId ?: "", it)
@@ -683,21 +688,37 @@ class ScoringViewModel : ViewModel() {
         
         // 1. Upsert into Global Master List first 🏏🚀⚖️🏅
         val masterPlayer = GlobalPlayerRepository.addPlayer(playerName, battingStyle)
+        val otherTeam = if (current.teamA.id == teamId) current.teamB else current.teamA
+        val existingOnOtherTeam = otherTeam.players.find { it.id == masterPlayer.id }
+        if (existingOnOtherTeam == null && current.status == MatchStatus.LIVE && !current.gullyRules.playersJoinMidMatch) {
+            Toast.makeText(context, "Enable ‘Players can join mid-match’ in match settings first.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (existingOnOtherTeam != null && !current.gullyRules.commonPlayer) {
+            val hasPlayed = existingOnOtherTeam.battingStats.balls > 0 || existingOnOtherTeam.battingStats.runs > 0 ||
+                existingOnOtherTeam.battingStats.isOut || existingOnOtherTeam.bowlingStats.overs > 0 || existingOnOtherTeam.bowlingStats.balls > 0
+            if (!current.gullyRules.playersSwitchMidMatch || hasPlayed) {
+                Toast.makeText(context, "This player cannot switch teams during the match.", Toast.LENGTH_SHORT).show()
+                return
+            }
+        }
 
         // 2. Add to Tournament Team (Uses the MASTER ID)
-        TournamentRepository.addPlayersToTeam(current.tournamentId ?: "", teamId, listOf(masterPlayer))
+        TournamentRepository.addPlayersToTeam(current.tournamentId ?: "", teamId, listOf(masterPlayer), current.gullyRules.commonPlayer)
         
         // 3. Update Local Match State
         _matchState.update { state ->
             if (state == null) return@update null
-            
-            val updatedTeamA = if (state.teamA.id == teamId) {
-                state.teamA.copy(players = (state.teamA.players + masterPlayer).distinctBy { it.id })
-            } else state.teamA
 
-            val updatedTeamB = if (state.teamB.id == teamId) {
-                state.teamB.copy(players = (state.teamB.players + masterPlayer).distinctBy { it.id })
-            } else state.teamB
+            val movedIds = if (state.gullyRules.commonPlayer) emptySet() else setOf(masterPlayer.id)
+            val updatedTeamA = when (state.teamA.id) {
+                teamId -> state.teamA.copy(players = (state.teamA.players + masterPlayer).distinctBy { it.id })
+                else -> state.teamA.copy(players = state.teamA.players.filter { it.id !in movedIds })
+            }
+            val updatedTeamB = when (state.teamB.id) {
+                teamId -> state.teamB.copy(players = (state.teamB.players + masterPlayer).distinctBy { it.id })
+                else -> state.teamB.copy(players = state.teamB.players.filter { it.id !in movedIds })
+            }
 
             val updatedMatch = state.copy(teamA = updatedTeamA, teamB = updatedTeamB)
             ScoringEngine.clearCache(state.id)
@@ -711,21 +732,44 @@ class ScoringViewModel : ViewModel() {
 
     fun addGlobalPlayersToMatch(context: Context, players: List<Player>, teamId: String) {
         val current = _matchState.value ?: return
+        val otherTeam = if (current.teamA.id == teamId) current.teamB else current.teamA
+        val playersToMove = players.filter { player -> otherTeam.players.any { it.id == player.id } }
+        if (playersToMove.size != players.size && current.status == MatchStatus.LIVE && !current.gullyRules.playersJoinMidMatch) {
+            Toast.makeText(context, "Enable ‘Players can join mid-match’ in match settings first.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (playersToMove.isNotEmpty() && !current.gullyRules.commonPlayer) {
+            if (!current.gullyRules.playersSwitchMidMatch) {
+                Toast.makeText(context, "Enable ‘Players can switch mid-match’ to move a player between teams.", Toast.LENGTH_SHORT).show()
+                return
+            }
+            val usedPlayer = playersToMove.firstOrNull { player ->
+                val stats = otherTeam.players.first { it.id == player.id }
+                stats.battingStats.balls > 0 || stats.battingStats.runs > 0 || stats.battingStats.isOut ||
+                    stats.bowlingStats.overs > 0 || stats.bowlingStats.balls > 0
+            }
+            if (usedPlayer != null) {
+                Toast.makeText(context, "${usedPlayer.name} has already batted or bowled and cannot switch teams.", Toast.LENGTH_SHORT).show()
+                return
+            }
+        }
         
         // 1. Add to Tournament Repository
-        TournamentRepository.addPlayersToTeam(current.tournamentId ?: "", teamId, players)
+        TournamentRepository.addPlayersToTeam(current.tournamentId ?: "", teamId, players, current.gullyRules.commonPlayer)
         
         // 2. Update Local Match State (Preserving Global IDs)
         _matchState.update { state ->
             if (state == null) return@update null
             
-            val updatedTeamA = if (state.teamA.id == teamId) {
-                state.teamA.copy(players = (state.teamA.players + players).distinctBy { it.id })
-            } else state.teamA
-
-            val updatedTeamB = if (state.teamB.id == teamId) {
-                state.teamB.copy(players = (state.teamB.players + players).distinctBy { it.id })
-            } else state.teamB
+            val movedIds = if (state.gullyRules.commonPlayer) emptySet() else playersToMove.map { it.id }.toSet()
+            val updatedTeamA = when (state.teamA.id) {
+                teamId -> state.teamA.copy(players = (state.teamA.players + players).distinctBy { it.id })
+                else -> state.teamA.copy(players = state.teamA.players.filter { it.id !in movedIds })
+            }
+            val updatedTeamB = when (state.teamB.id) {
+                teamId -> state.teamB.copy(players = (state.teamB.players + players).distinctBy { it.id })
+                else -> state.teamB.copy(players = state.teamB.players.filter { it.id !in movedIds })
+            }
 
             val updatedMatch = state.copy(teamA = updatedTeamA, teamB = updatedTeamB)
             ScoringEngine.clearCache(state.id)
@@ -737,7 +781,7 @@ class ScoringViewModel : ViewModel() {
         }
     }
 
-    fun deletePlayerFromMatch(context: Context, playerId: String) {
+    fun deletePlayerFromMatch(context: Context, teamId: String, playerId: String) {
         val currentMatch = _matchState.value ?: return
         
         // 1. Safety Guard: Block removal of active players
@@ -746,8 +790,6 @@ class ScoringViewModel : ViewModel() {
             return
         }
 
-        val teamId = if (currentMatch.teamA.players.any { it.id == playerId }) currentMatch.teamA.id else currentMatch.teamB.id
-        
         // 2. Remove from Tournament Team (Does not affect Global Master List)
         TournamentRepository.deletePlayer(currentMatch.tournamentId.orEmpty(), teamId, playerId)
 
@@ -756,12 +798,12 @@ class ScoringViewModel : ViewModel() {
             if (current == null) return@update null
             
             val updatedMatch = current.safeCopy().copy(
-                teamA = current.teamA.safeCopy().copy(players = current.teamA.players.filter { it.id != playerId }),
-                teamB = current.teamB.safeCopy().copy(players = current.teamB.players.filter { it.id != playerId }),
-                teamACaptainId = if (current.teamACaptainId == playerId) null else current.teamACaptainId,
-                teamBCaptainId = if (current.teamBCaptainId == playerId) null else current.teamBCaptainId,
-                teamAWicketKeeperId = if (current.teamAWicketKeeperId == playerId) null else current.teamAWicketKeeperId,
-                teamBWicketKeeperId = if (current.teamBWicketKeeperId == playerId) null else current.teamBWicketKeeperId
+                teamA = if (current.teamA.id == teamId) current.teamA.safeCopy().copy(players = current.teamA.players.filter { it.id != playerId }) else current.teamA,
+                teamB = if (current.teamB.id == teamId) current.teamB.safeCopy().copy(players = current.teamB.players.filter { it.id != playerId }) else current.teamB,
+                teamACaptainId = if (current.teamA.id == teamId && current.teamACaptainId == playerId) null else current.teamACaptainId,
+                teamBCaptainId = if (current.teamB.id == teamId && current.teamBCaptainId == playerId) null else current.teamBCaptainId,
+                teamAWicketKeeperId = if (current.teamA.id == teamId && current.teamAWicketKeeperId == playerId) null else current.teamAWicketKeeperId,
+                teamBWicketKeeperId = if (current.teamB.id == teamId && current.teamBWicketKeeperId == playerId) null else current.teamBWicketKeeperId
             )
 
             ScoringEngine.clearCache(current.id)

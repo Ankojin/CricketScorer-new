@@ -164,7 +164,8 @@ object ScoringEngine {
             } else if (healedBall.extrasType == ExtrasType.BYE || healedBall.extrasType == ExtrasType.LEG_BYE) healedBall.extraRuns 
             else healedBall.runs + (if (healedBall.extrasType == ExtrasType.GRANTED) healedBall.extraRuns else 0)
             
-            val shouldRotate = (physicalRuns % 2 != 0 != healedBall.hadCrossed) && healedBall.rotateStrike && healedBall.extrasType != ExtrasType.GRANTED
+            val shouldRotate = !current.gullyRules.singleSideBatting &&
+                (physicalRuns % 2 != 0 != healedBall.hadCrossed) && healedBall.rotateStrike && healedBall.extrasType != ExtrasType.GRANTED
             if (shouldRotate) { val t = sId; sId = nsId; nsId = t }
 
             if (healedBall.wicketType != WicketType.NONE) {
@@ -174,14 +175,17 @@ object ScoringEngine {
 
             var overJustFinished = false
             if (ballsInOver == 6) {
-                val t = sId; sId = nsId; nsId = t
+                if (!current.gullyRules.singleSideBatting) {
+                    val t = sId; sId = nsId; nsId = t
+                }
                 lbId = activeBId; ballsInOver = 0
                 overJustFinished = true
             }
 
             val squadSize = if (current.gullyRules.unequalTeams) battingTeam.players.size else minOf(current.teamA.players.size, current.teamB.players.size).coerceAtLeast(1)
             val maxWickets = if (current.gullyRules.lastManStanding) squadSize else (squadSize - 1).coerceAtLeast(1)
-            val needsNonStriker = if (current.gullyRules.lastManStanding) current.totalWickets < squadSize - 1 else true
+            val needsNonStriker = !current.gullyRules.singleSideBatting &&
+                if (current.gullyRules.lastManStanding) current.totalWickets < squadSize - 1 else true
 
             if (sId == null && nsId != null && !needsNonStriker) {
                 sId = nsId
@@ -230,7 +234,8 @@ object ScoringEngine {
             val batTeam = if (isTeamA(current.battingTeamId, current)) current.teamA else current.teamB
             val squadSize = if (current.gullyRules.unequalTeams) batTeam.players.size else minOf(current.teamA.players.size, current.teamB.players.size).coerceAtLeast(1)
             val maxWickets = if (current.gullyRules.lastManStanding) squadSize else (squadSize - 1).coerceAtLeast(1)
-            val needsNonStriker = if (current.gullyRules.lastManStanding) current.totalWickets < squadSize - 1 else true
+            val needsNonStriker = !current.gullyRules.singleSideBatting &&
+                if (current.gullyRules.lastManStanding) current.totalWickets < squadSize - 1 else true
             val inningsEnded = current.totalWickets >= maxWickets || current.totalBalls >= current.oversPerInnings * 6
 
             if (current.currentInnings == 1 && inningsEnded) {
@@ -264,7 +269,7 @@ object ScoringEngine {
             }
         }
 
-        return current
+        return if (current.gullyRules.singleSideBatting) current.copy(nonStrikerId = null) else current
     }
 
     fun isPlayerOut(pId: String?, m: Match): Boolean {

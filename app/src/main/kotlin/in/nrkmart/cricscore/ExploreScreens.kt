@@ -276,13 +276,13 @@ fun AllMatchesScreen(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { onMatchClick(match) },
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         Column(Modifier.padding(16.dp)) {
-                            Text("${tournament?.name ?: "Series"}", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                            Text("${match.teamA.name} vs ${match.teamB.name}", fontWeight = FontWeight.Bold)
-                            Text("Score: ${match.totalRuns}/${match.totalWickets} (${match.totalBalls/6}.${match.totalBalls%6} Ov)", style = MaterialTheme.typography.bodySmall)
+                            Text("${tournament?.name ?: "Series"}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("${match.teamA.name} vs ${match.teamB.name}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            Text("Score: ${match.totalRuns}/${match.totalWickets} (${match.totalBalls/6}.${match.totalBalls%6} Ov)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
