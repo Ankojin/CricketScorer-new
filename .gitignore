@@ -1,28 +1,57 @@
-# Project exclude paths
-/.gradle/
-/app/build/
-/build/
-.idea/caches/deviceStreaming.xml
-.idea/workspace.xml
-.idea/shelf/
-.idea/modules/
-.idea/httpRequests/
+# Gradle
+.gradle/
+build/
+*/build/
 
-# Kotlin compiler session and error logs
+# Kotlin
 .kotlin/
 
-# Keystore & secrets
-*.jks
-*.keystore
+# Local config & secrets
 local.properties
 keystore.properties
+*.jks
+*.keystore
 *.pem
 *.p12
 keystore/
-
-# Optional but recommended
 secrets/
 *.env
 .env*
+
+# Android build outputs
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+captures/
+.externalNativeBuild/
+.cxx/
+output-metadata.json
+
+# Android Studio / IntelliJ
+*.iml
+.idea/caches/
+.idea/libraries/
+.idea/modules/
+.idea/workspace.xml
+.idea/shelf/
+.idea/httpRequests/
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/deploymentTargetDropDown.xml
+.idea/misc.xml
+.idea/gradle.xml
+.idea/runConfigurations.xml
+
+# Logs & OS
+*.log
+*.hprof
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Web (if any)
 /web/dist
 /web/node_modules

@@ -14,7 +14,7 @@ data class Player(
     val isCaptain: Boolean = false,
     val isViceCaptain: Boolean = false,
     val battingStyle: BattingStyle? = BattingStyle.RHB,
-    val bowlingStyle: BowlingStyle? = BowlingStyle.RIGHT_ARM,
+    val bowlingStyle: BowlingStyle? = BowlingStyle.NONE,
     val role: PlayerRole = PlayerRole.BATTER
 )
 
@@ -23,7 +23,7 @@ enum class BattingStyle {
 }
 
 enum class BowlingStyle {
-    RIGHT_ARM, LEFT_ARM
+    RIGHT_ARM, LEFT_ARM, NONE
 }
 
 enum class PlayerRole {

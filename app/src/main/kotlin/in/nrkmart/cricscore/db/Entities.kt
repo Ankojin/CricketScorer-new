@@ -246,7 +246,7 @@ fun PlayerEntity.toDomain(): Player = Player(
     isCaptain = isCaptain,
     isViceCaptain = isViceCaptain,
     battingStyle = battingStyle,
-    bowlingStyle = bowlingStyle ?: BowlingStyle.RIGHT_ARM,
+    bowlingStyle = bowlingStyle ?: BowlingStyle.NONE,
     role = role ?: PlayerRole.BATTER
 )
 
@@ -264,7 +264,7 @@ fun Player.toEntity(tournamentId: String, teamId: String?): PlayerEntity {
         isCaptain = p.isCaptain,
         isViceCaptain = p.isViceCaptain,
         battingStyle = p.battingStyle ?: BattingStyle.RHB,
-        bowlingStyle = p.bowlingStyle ?: BowlingStyle.RIGHT_ARM,
+        bowlingStyle = p.bowlingStyle ?: BowlingStyle.NONE,
         role = p.role ?: PlayerRole.BATTER,
         battingRuns = bStats.runs,
         battingBalls = bStats.balls,

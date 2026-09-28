@@ -14,10 +14,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PersonSearch
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +29,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import `in`.nrkmart.cricscore.ui.CardBranding
 import `in`.nrkmart.cricscore.ui.TeamColorPicker
@@ -42,9 +45,10 @@ private fun PlayerRole.displayName(): String = when (this) {
     PlayerRole.WICKET_KEEPER -> "Wicket-keeper"
 }
 
-private fun BowlingStyle?.displayName(): String = when (this ?: BowlingStyle.RIGHT_ARM) {
+private fun BowlingStyle?.displayName(): String = when (this ?: BowlingStyle.NONE) {
     BowlingStyle.RIGHT_ARM -> "Right arm"
     BowlingStyle.LEFT_ARM -> "Left arm"
+    BowlingStyle.NONE -> "None"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -114,11 +118,25 @@ fun AllTeamsScreen(
 @Composable
 fun AllPlayersScreen(onBack: () -> Unit) {
     val globalPlayers by GlobalPlayerRepository.players.collectAsState()
+    var searchQuery by remember { mutableStateOf("") }
     var showAddDialog by remember { mutableStateOf(false) }
     var playerName by remember { mutableStateOf("") }
     var battingStyle by remember { mutableStateOf(BattingStyle.RHB) }
-    var bowlingStyle by remember { mutableStateOf(BowlingStyle.RIGHT_ARM) }
+    var bowlingStyle by remember { mutableStateOf(BowlingStyle.NONE) }
     var playerRole by remember { mutableStateOf(PlayerRole.BATTER) }
+
+    val filteredPlayers = remember(globalPlayers, searchQuery) {
+        if (searchQuery.isBlank()) globalPlayers
+        else {
+            val q = searchQuery.trim().lowercase()
+            globalPlayers.filter { p ->
+                p.name.lowercase().contains(q) ||
+                p.role.displayName().lowercase().contains(q) ||
+                (p.battingStyle?.name ?: "").lowercase().contains(q) ||
+                p.bowlingStyle.displayName().lowercase().contains(q)
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -145,12 +163,34 @@ fun AllPlayersScreen(onBack: () -> Unit) {
     ) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).background(Color(0xFFF5F7FA)), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
-                Text("Saved players that can be reused across any series or team. 🌎🏏", style = MaterialTheme.typography.bodySmall, color = Color.Gray, modifier = Modifier.padding(bottom = 8.dp))
+                Text("Saved players that can be reused across any series or team. 🌎🏏", style = MaterialTheme.typography.bodySmall, color = Color.Gray, modifier = Modifier.padding(bottom = 4.dp))
+            }
+            if (globalPlayers.isNotEmpty()) {
+                item {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Search player by name, style, or role...") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.Gray) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                    )
+                }
             }
             if (globalPlayers.isEmpty()) {
-                item { Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) { Text("Your global playlist is empty. Add players to reuse them!", color = Color.Gray, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(32.dp)) } }
+                item { Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) { Text("Your global playlist is empty. Add players to reuse them!", color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(32.dp)) } }
+            } else if (filteredPlayers.isEmpty()) {
+                item { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text("No players found matching \"$searchQuery\"", color = Color.Gray, textAlign = TextAlign.Center) } }
             } else {
-                items(globalPlayers) { player ->
+                items(filteredPlayers) { player ->
                     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Surface(modifier = Modifier.size(32.dp), shape = androidx.compose.foundation.shape.CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {
@@ -174,8 +214,13 @@ fun AllPlayersScreen(onBack: () -> Unit) {
                                     val p = showEditPlayerDialog!!
                                     var editedName by remember(p.id) { mutableStateOf(p.name) }
                                     var editedStyle by remember(p.id) { mutableStateOf(p.battingStyle ?: BattingStyle.RHB) }
-                                    var editedBowlingStyle by remember(p.id) { mutableStateOf(p.bowlingStyle ?: BowlingStyle.RIGHT_ARM) }
-                                    var editedRole by remember(p.id) { mutableStateOf(p.role ?: PlayerRole.BATTER) }
+                                    var editedBowlingStyle by remember(p.id) { mutableStateOf(p.bowlingStyle ?: BowlingStyle.NONE) }
+                                    var editedRole by remember(p.id) { mutableStateOf(p.role) }
+
+                                    val isDuplicateName = remember(editedName) {
+                                        val trimmed = editedName.trim()
+                                        globalPlayers.any { it.id != p.id && it.name.equals(trimmed, ignoreCase = true) }
+                                    }
 
                                     AlertDialog(
                                         onDismissRequest = { showEditPlayerDialog = null },
@@ -186,6 +231,12 @@ fun AllPlayersScreen(onBack: () -> Unit) {
                                                     value = editedName,
                                                     onValueChange = { editedName = it },
                                                     label = { Text("Name") },
+                                                    isError = isDuplicateName,
+                                                    supportingText = {
+                                                        if (isDuplicateName) {
+                                                            Text("A player with this name already exists in playlist.", color = MaterialTheme.colorScheme.error)
+                                                        }
+                                                    },
                                                     modifier = Modifier.fillMaxWidth()
                                                 )
                                                 Text("Batting Style", fontWeight = FontWeight.Bold)
@@ -199,25 +250,72 @@ fun AllPlayersScreen(onBack: () -> Unit) {
                                                         )
                                                     }
                                                 }
+                                                Text("Role", fontWeight = FontWeight.Bold)
+                                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                        FilterChip(
+                                                            selected = editedRole == PlayerRole.BATTER,
+                                                            onClick = {
+                                                                editedRole = PlayerRole.BATTER
+                                                                editedBowlingStyle = BowlingStyle.NONE
+                                                            },
+                                                            label = { Text(PlayerRole.BATTER.displayName()) },
+                                                            modifier = Modifier.weight(1f)
+                                                        )
+                                                        FilterChip(
+                                                            selected = editedRole == PlayerRole.BOWLER,
+                                                            onClick = {
+                                                                editedRole = PlayerRole.BOWLER
+                                                                if (editedBowlingStyle == BowlingStyle.NONE) editedBowlingStyle = BowlingStyle.RIGHT_ARM
+                                                            },
+                                                            label = { Text(PlayerRole.BOWLER.displayName()) },
+                                                            modifier = Modifier.weight(1f)
+                                                        )
+                                                    }
+                                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                        FilterChip(
+                                                            selected = editedRole == PlayerRole.ALL_ROUNDER,
+                                                            onClick = {
+                                                                editedRole = PlayerRole.ALL_ROUNDER
+                                                                if (editedBowlingStyle == BowlingStyle.NONE) editedBowlingStyle = BowlingStyle.RIGHT_ARM
+                                                            },
+                                                            label = { Text(PlayerRole.ALL_ROUNDER.displayName()) },
+                                                            modifier = Modifier.weight(1f)
+                                                        )
+                                                        FilterChip(
+                                                            selected = editedRole == PlayerRole.WICKET_KEEPER,
+                                                            onClick = {
+                                                                editedRole = PlayerRole.WICKET_KEEPER
+                                                                editedBowlingStyle = BowlingStyle.NONE
+                                                            },
+                                                            label = { Text(PlayerRole.WICKET_KEEPER.displayName()) },
+                                                            modifier = Modifier.weight(1f)
+                                                        )
+                                                    }
+                                                }
                                                 Text("Bowling Style", fontWeight = FontWeight.Bold)
                                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                     BowlingStyle.entries.forEach { style ->
-                                                        FilterChip(selected = editedBowlingStyle == style, onClick = { editedBowlingStyle = style }, label = { Text(style.displayName()) }, modifier = Modifier.weight(1f))
+                                                        FilterChip(
+                                                            selected = editedBowlingStyle == style,
+                                                            onClick = { editedBowlingStyle = style },
+                                                            label = { Text(style.displayName()) },
+                                                            modifier = Modifier.weight(1f)
+                                                        )
                                                     }
-                                                }
-                                                Text("Role", fontWeight = FontWeight.Bold)
-                                                PlayerRole.entries.forEach { role ->
-                                                    FilterChip(selected = editedRole == role, onClick = { editedRole = role }, label = { Text(role.displayName()) })
                                                 }
                                             }
                                         },
                                         confirmButton = {
-                                            Button(onClick = {
-                                                if (editedName.isNotBlank()) {
-                                                    GlobalPlayerRepository.updatePlayer(p.id, editedName, editedStyle, editedBowlingStyle, editedRole)
-                                                    showEditPlayerDialog = null
-                                                }
-                                            }) { Text("UPDATE") }
+                                            Button(
+                                                onClick = {
+                                                    if (editedName.isNotBlank() && !isDuplicateName) {
+                                                        GlobalPlayerRepository.updatePlayer(p.id, editedName, editedStyle, editedBowlingStyle, editedRole)
+                                                        showEditPlayerDialog = null
+                                                    }
+                                                },
+                                                enabled = editedName.isNotBlank() && !isDuplicateName
+                                            ) { Text("UPDATE") }
                                         },
                                         dismissButton = { TextButton(onClick = { showEditPlayerDialog = null }) { Text("CANCEL") } }
                                     )
@@ -231,6 +329,11 @@ fun AllPlayersScreen(onBack: () -> Unit) {
         }
 
         if (showAddDialog) {
+            val isDuplicateName = remember(playerName) {
+                val trimmed = playerName.trim()
+                globalPlayers.any { it.name.equals(trimmed, ignoreCase = true) }
+            }
+
             AlertDialog(
                 onDismissRequest = { showAddDialog = false },
                 title = { Text("Add Global Player") },
@@ -240,6 +343,11 @@ fun AllPlayersScreen(onBack: () -> Unit) {
                             value = playerName,
                             onValueChange = { playerName = it },
                             label = { Text("Player Name") },
+                            supportingText = {
+                                if (isDuplicateName) {
+                                    Text("Player already in playlist. Saving will update their details.", color = MaterialTheme.colorScheme.primary)
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth()
                         )
                         Text("Batting Style", fontWeight = FontWeight.Bold)
@@ -253,15 +361,59 @@ fun AllPlayersScreen(onBack: () -> Unit) {
                                 )
                             }
                         }
+                        Text("Role", fontWeight = FontWeight.Bold)
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(
+                                    selected = playerRole == PlayerRole.BATTER,
+                                    onClick = {
+                                        playerRole = PlayerRole.BATTER
+                                        bowlingStyle = BowlingStyle.NONE
+                                    },
+                                    label = { Text(PlayerRole.BATTER.displayName()) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                FilterChip(
+                                    selected = playerRole == PlayerRole.BOWLER,
+                                    onClick = {
+                                        playerRole = PlayerRole.BOWLER
+                                        if (bowlingStyle == BowlingStyle.NONE) bowlingStyle = BowlingStyle.RIGHT_ARM
+                                    },
+                                    label = { Text(PlayerRole.BOWLER.displayName()) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(
+                                    selected = playerRole == PlayerRole.ALL_ROUNDER,
+                                    onClick = {
+                                        playerRole = PlayerRole.ALL_ROUNDER
+                                        if (bowlingStyle == BowlingStyle.NONE) bowlingStyle = BowlingStyle.RIGHT_ARM
+                                    },
+                                    label = { Text(PlayerRole.ALL_ROUNDER.displayName()) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                FilterChip(
+                                    selected = playerRole == PlayerRole.WICKET_KEEPER,
+                                    onClick = {
+                                        playerRole = PlayerRole.WICKET_KEEPER
+                                        bowlingStyle = BowlingStyle.NONE
+                                    },
+                                    label = { Text(PlayerRole.WICKET_KEEPER.displayName()) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
                         Text("Bowling Style", fontWeight = FontWeight.Bold)
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             BowlingStyle.entries.forEach { style ->
-                                FilterChip(selected = bowlingStyle == style, onClick = { bowlingStyle = style }, label = { Text(style.displayName()) }, modifier = Modifier.weight(1f))
+                                FilterChip(
+                                    selected = bowlingStyle == style,
+                                    onClick = { bowlingStyle = style },
+                                    label = { Text(style.displayName()) },
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
-                        }
-                        Text("Role", fontWeight = FontWeight.Bold)
-                        PlayerRole.entries.forEach { role ->
-                            FilterChip(selected = playerRole == role, onClick = { playerRole = role }, label = { Text(role.displayName()) })
                         }
                     }
                 },
@@ -271,11 +423,11 @@ fun AllPlayersScreen(onBack: () -> Unit) {
                             GlobalPlayerRepository.addPlayer(playerName, battingStyle, bowlingStyle, playerRole)
                             playerName = ""
                             battingStyle = BattingStyle.RHB
-                            bowlingStyle = BowlingStyle.RIGHT_ARM
+                            bowlingStyle = BowlingStyle.NONE
                             playerRole = PlayerRole.BATTER
                             showAddDialog = false
                         }
-                    }) { Text("SAVE TO PLAYLIST") }
+                    }, enabled = playerName.isNotBlank()) { Text(if (isDuplicateName) "UPDATE DETAILS" else "SAVE TO PLAYLIST") }
                 },
                 dismissButton = { TextButton(onClick = { showAddDialog = false }) { Text("CANCEL") } }
             )

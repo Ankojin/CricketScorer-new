@@ -13,13 +13,13 @@ android {
     val versionPropsFile = rootProject.file("version.properties")
     val versionProps = Properties()
     if (versionPropsFile.exists()) {
-        val stream = versionPropsFile.inputStream()
-        versionProps.load(stream)
-        stream.close()
+        versionPropsFile.inputStream().use { stream ->
+            versionProps.load(stream)
+        }
     }
     
-    val vCode = versionProps.getProperty("VERSION_CODE", "40").toInt()
-    val vName = versionProps.getProperty("VERSION_NAME", "2.28.0")
+    val vCode = versionProps.getProperty("VERSION_CODE", "273").toInt()
+    val vName = versionProps.getProperty("VERSION_NAME", "2.33.38")
 
     defaultConfig {
         applicationId = "in.nrkmart.cricscore"
@@ -129,28 +129,20 @@ dependencies {
 
 
 
-tasks.register("incrementVersionCode") {
-    doLast {
-        // v2.33.18: Only rotate version after a successful RELEASE build. 🏏🚀⚖️🏅
-        // This ensures the current APK version matches the properties file exactly.
+tasks.register("verifyVersionProperties") {
+    doFirst {
         val versionPropsFile = rootProject.file("version.properties")
         if (versionPropsFile.exists()) {
-            val versionProps = Properties()
-            versionPropsFile.inputStream().use { versionProps.load(it) }
-            
-            val currentVCode = versionProps.getProperty("VERSION_CODE", "100").toInt()
-            versionProps.setProperty("VERSION_CODE", (currentVCode + 1).toString())
-            
-            val currentVName = versionProps.getProperty("VERSION_NAME", "2.33.0")
-            val parts = currentVName.split(".").toMutableList()
-            if (parts.size >= 3) {
-                val patch = parts.last().toInt()
-                parts[parts.size - 1] = (patch + 1).toString()
-                versionProps.setProperty("VERSION_NAME", parts.joinToString("."))
-            }
-            
-            versionPropsFile.outputStream().use { versionProps.store(it, null) }
-            println("Version rotated to prepare for NEXT release.")
+            val props = Properties()
+            versionPropsFile.inputStream().use { props.load(it) }
+            val code = props.getProperty("VERSION_CODE", "Unknown")
+            val name = props.getProperty("VERSION_NAME", "Unknown")
+            println("\n=======================================================")
+            println("🚀 [Gradle Pre-Build Version Check]")
+            println("   Reading fresh version.properties before build:")
+            println("   ➜ VERSION_CODE = $code")
+            println("   ➜ VERSION_NAME = $name")
+            println("=======================================================\n")
         }
     }
 }
@@ -158,10 +150,7 @@ tasks.register("incrementVersionCode") {
 tasks.configureEach {
     val isBuildTask = name.startsWith("assemble") || name.startsWith("bundle")
     if (isBuildTask && !name.contains("Test")) {
-        // v2.33.18: Rotate ONLY on Release. finalizedBy ensures rotation happens AFTER APK is generated. 🏏🚀⚖️🏅
-        if (name.contains("Release", ignoreCase = true)) {
-            finalizedBy("incrementVersionCode")
-        }
+        dependsOn("verifyVersionProperties")
         finalizedBy("copyApkToRoot")
     }
 }
