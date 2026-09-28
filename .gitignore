@@ -2,6 +2,7 @@
 /.gradle/
 /app/build/
 /build/
+.idea/caches/deviceStreaming.xml
 .idea/workspace.xml
 .idea/shelf/
 .idea/httpRequests/
@@ -19,3 +20,5 @@ keystore/
 secrets/
 *.env
 .env*
+/web/dist
+/web/node_modules

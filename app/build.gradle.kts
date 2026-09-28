@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "in.mart.cricscore"
+    namespace = "in.nrkmart.cricscore"
     compileSdk = 37
 
     val versionPropsFile = rootProject.file("version.properties")
@@ -22,7 +22,7 @@ android {
     val vName = versionProps.getProperty("VERSION_NAME", "2.28.0")
 
     defaultConfig {
-        applicationId = "in.mart.cricscore"
+        applicationId = "in.nrkmart.cricscore"
         minSdk = 24
         targetSdk = 35
         versionCode = vCode
