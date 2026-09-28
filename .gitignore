@@ -5,7 +5,11 @@
 .idea/caches/deviceStreaming.xml
 .idea/workspace.xml
 .idea/shelf/
+.idea/modules/
 .idea/httpRequests/
+
+# Kotlin compiler session and error logs
+.kotlin/
 
 # Keystore & secrets
 *.jks
