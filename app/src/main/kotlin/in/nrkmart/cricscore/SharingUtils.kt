@@ -3,6 +3,9 @@ package `in`.nrkmart.cricscore
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Matrix
+import android.graphics.Paint
 import android.widget.Toast
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.core.content.FileProvider
@@ -11,24 +14,47 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 
-suspend fun shareComposableScreenshot(context: Context, graphicsLayer: GraphicsLayer, fileName: String) {
+suspend fun shareComposableScreenshot(
+    context: Context,
+    graphicsLayer: GraphicsLayer,
+    fileName: String,
+    subject: String = "Cricket League Update",
+    shareMessage: String = "Check out this update from Cricket League app! 🏏"
+) {
     withContext(Dispatchers.Main) {
         Toast.makeText(context, "Generating High-Quality Image...", Toast.LENGTH_SHORT).show()
     }
     try {
         val imageBitmap = graphicsLayer.toImageBitmap()
-        val width = imageBitmap.width
-        val height = imageBitmap.height
+        val origWidth = imageBitmap.width
+        val origHeight = imageBitmap.height
         
-        if (width <= 0 || height <= 0) {
-            throw IllegalStateException("Generated bitmap has invalid dimensions: ${width}x${height}")
+        if (origWidth <= 0 || origHeight <= 0) {
+            throw IllegalStateException("Generated bitmap has invalid dimensions: ${origWidth}x${origHeight}")
         }
 
         // 100% SOFTWARE-BASED extraction to avoid Hardware Bitmap exceptions
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val buffer = IntArray(width * height)
+        val srcBitmap = Bitmap.createBitmap(origWidth, origHeight, Bitmap.Config.ARGB_8888)
+        val buffer = IntArray(origWidth * origHeight)
         imageBitmap.readPixels(buffer)
-        bitmap.setPixels(buffer, 0, width, 0, 0, width, height)
+        srcBitmap.setPixels(buffer, 0, origWidth, 0, 0, origWidth, origHeight)
+
+        // Ultra-HD 2x Supersampling with anti-aliasing for pin-sharp text quality
+        val scaleFactor = if (origWidth < 1800) 2.0f else 1.0f
+        val targetWidth = (origWidth * scaleFactor).toInt()
+        val targetHeight = (origHeight * scaleFactor).toInt()
+
+        val bitmap = if (scaleFactor > 1.0f) {
+            val scaled = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(scaled)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+            val matrix = Matrix().apply { postScale(scaleFactor, scaleFactor) }
+            canvas.drawBitmap(srcBitmap, matrix, paint)
+            srcBitmap.recycle()
+            scaled
+        } else {
+            srcBitmap
+        }
 
         withContext(Dispatchers.IO) {
             val cachePath = File(context.cacheDir, "shared_images")
@@ -54,8 +80,8 @@ suspend fun shareComposableScreenshot(context: Context, graphicsLayer: GraphicsL
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 type = "image/png"
                 putExtra(Intent.EXTRA_STREAM, contentUri)
-                putExtra(Intent.EXTRA_SUBJECT, "Cricket Match Statistics")
-                putExtra(Intent.EXTRA_TEXT, "Check out these match stats from Cricket Scorer app!")
+                putExtra(Intent.EXTRA_SUBJECT, subject)
+                putExtra(Intent.EXTRA_TEXT, shareMessage)
             }
             
             withContext(Dispatchers.Main) {

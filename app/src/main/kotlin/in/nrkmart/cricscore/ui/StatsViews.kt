@@ -1,5 +1,6 @@
 package `in`.nrkmart.cricscore.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -45,13 +46,19 @@ fun StatsTab(uiState: MatchUiState, graphicsLayer: GraphicsLayer) {
     val i1Stats = calculateInningsStats(i1Balls)
     val i2Stats = calculateInningsStats(i2Balls)
 
-    Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Button(
             onClick = {
                 scope.launch {
                     shareTrigger++
                     delay(300.milliseconds)
-                    shareComposableScreenshot(context, graphicsLayer, "full_match_stats")
+                    shareComposableScreenshot(
+                        context,
+                        graphicsLayer,
+                        "full_match_stats",
+                        subject = "Match Statistics - Cricket League",
+                        shareMessage = "Check out the full match stats and breakdown from Cricket League app! 🏏"
+                    )
                 }
             },
             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -83,7 +90,7 @@ fun StatsTab(uiState: MatchUiState, graphicsLayer: GraphicsLayer) {
                     }
             ) {
                 CaptureArea {
-                    Column(modifier = Modifier.fillMaxWidth().background(Color.White).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         MatchSummaryCard(uiState)
                         MotmSection(uiState)
                         
@@ -130,8 +137,10 @@ fun PartnershipsSection(match: Match, team1: Team, team2: Team) {
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("PARTNERSHIPS 🏏🤝", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
@@ -222,9 +231,10 @@ fun ScoringBreakdownCard(match: Match, i1Stats: InningsStats, i2Stats: InningsSt
 
     Card(
         modifier = Modifier.fillMaxWidth(), 
-        colors = CardDefaults.cardColors(containerColor = Color.White), 
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface), 
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), 
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("SCORING BREAKDOWN", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
@@ -346,9 +356,10 @@ fun BestPerformancesBatters(teamA: Team, teamB: Team) {
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("TOP BATTERS", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
@@ -357,12 +368,12 @@ fun BestPerformancesBatters(teamA: Team, teamB: Team) {
                 val teamName = if (teamA.players.any { it.id == player.id }) teamA.name else teamB.name
                 Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(player.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
-                        Text(teamName, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Text(player.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                        Text(teamName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${player.battingStats.runs}", fontWeight = FontWeight.Black, style = MaterialTheme.typography.bodyLarge)
-                        Text(" (${player.battingStats.balls})", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Text("${player.battingStats.runs}", fontWeight = FontWeight.Black, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                        Text(" (${player.battingStats.balls})", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.width(12.dp))
                         if (player.battingStats.fours > 0) {
                             Text("4s: ${player.battingStats.fours}", style = MaterialTheme.typography.labelSmall, color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold)
@@ -390,9 +401,10 @@ fun BestPerformancesBowlers(teamA: Team, teamB: Team) {
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("TOP BOWLERS", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
@@ -401,11 +413,11 @@ fun BestPerformancesBowlers(teamA: Team, teamB: Team) {
                 val teamName = if (teamA.players.any { it.id == player.id }) teamA.name else teamB.name
                 Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(player.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
-                        Text(teamName, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Text(player.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                        Text(teamName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${player.bowlingStats.wickets}/${player.bowlingStats.runsConceded}", fontWeight = FontWeight.Black, style = MaterialTheme.typography.bodyLarge)
+                        Text("${player.bowlingStats.wickets}/${player.bowlingStats.runsConceded}", fontWeight = FontWeight.Black, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
                         Spacer(Modifier.width(12.dp))
                         Text("${player.bowlingStats.overs}.${player.bowlingStats.balls} ov", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
                         if (player.bowlingStats.dotBalls > 0) {

@@ -42,6 +42,7 @@ import `in`.nrkmart.cricscore.ui.DEFAULT_TEAM_B_COLOR
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 import `in`.nrkmart.cricscore.ui.CaptureArea
+import `in`.nrkmart.cricscore.ui.PlayerProfileDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -153,7 +154,7 @@ fun TournamentDetailsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(Color(0xFFF5F7FA))
+                .background(MaterialTheme.colorScheme.background)
         ) {
             if (tournament == null) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -234,6 +235,8 @@ fun TournamentDetailsScreen(
 fun TeamsTab(tournament: Tournament, tournamentId: String, viewModel: TournamentViewModel, graphicsLayer: GraphicsLayer) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val tournaments by viewModel.tournaments.collectAsState()
+    var selectedPlayerIdForProfile by remember { mutableStateOf<String?>(null) }
     var shareTrigger by remember { mutableIntStateOf(0) }
 
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -242,11 +245,17 @@ fun TeamsTab(tournament: Tournament, tournamentId: String, viewModel: Tournament
                 scope.launch {
                     shareTrigger++
                     kotlinx.coroutines.delay(300.milliseconds)
-                    shareComposableScreenshot(context, graphicsLayer, "full_teams_squad")
+                    shareComposableScreenshot(
+                        context,
+                        graphicsLayer,
+                        "full_teams_squad",
+                        subject = "Team Squads - Cricket League",
+                        shareMessage = "Check out the team squad list from Cricket League app! 🏏"
+                    )
                 }
             },
             modifier = Modifier.fillMaxWidth().padding(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF003366), contentColor = Color.White),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
             shape = RoundedCornerShape(12.dp)
         ) {
             Icon(Icons.Default.Share, contentDescription = null)
@@ -257,7 +266,7 @@ fun TeamsTab(tournament: Tournament, tournamentId: String, viewModel: Tournament
         Column(
             modifier = Modifier
                 .padding(horizontal = 16.dp)
-                .background(Color.White)
+                .background(MaterialTheme.colorScheme.background)
                 .drawWithContent {
                     this@drawWithContent.drawContent()
                     if (shareTrigger > 0) {
@@ -279,13 +288,22 @@ fun TeamsTab(tournament: Tournament, tournamentId: String, viewModel: Tournament
                             tournament = tournament!!,
                             team = team,
                             viewModel = viewModel,
-                            onDeleteTeam = { viewModel.deleteTeam(tournamentId, team.id) }
+                            onDeleteTeam = { viewModel.deleteTeam(tournamentId, team.id) },
+                            onProfileClick = { selectedPlayerIdForProfile = it }
                         )
                     }
                     CardBranding()
                     Spacer(modifier = Modifier.height(32.dp))
                 }
             }
+        }
+
+        if (selectedPlayerIdForProfile != null) {
+            PlayerProfileDialog(
+                playerId = selectedPlayerIdForProfile!!,
+                tournaments = tournaments,
+                onDismiss = { selectedPlayerIdForProfile = null }
+            )
         }
     }
 }
@@ -328,11 +346,17 @@ fun PointsTableTab(tournament: Tournament) {
                 scope.launch {
                     shareTrigger++
                     kotlinx.coroutines.delay(300.milliseconds)
-                    shareComposableScreenshot(context, graphicsLayer, "points_table")
+                    shareComposableScreenshot(
+                        context,
+                        graphicsLayer,
+                        "points_table",
+                        subject = "Points Table - Cricket League",
+                        shareMessage = "Check out the series points table and standings from Cricket League app! 🏆"
+                    )
                 }
             },
             modifier = Modifier.fillMaxWidth().padding(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF003366), contentColor = Color.White),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
             shape = RoundedCornerShape(12.dp)
         ) {
             Icon(Icons.Default.Share, contentDescription = null)
@@ -344,7 +368,7 @@ fun PointsTableTab(tournament: Tournament) {
             modifier = Modifier
                 .padding(horizontal = 16.dp)
                 .fillMaxWidth()
-                .background(Color.White)
+                .background(MaterialTheme.colorScheme.background)
                 .drawWithContent {
                     this@drawWithContent.drawContent()
                     if (shareTrigger > 0) {
@@ -359,28 +383,28 @@ fun PointsTableTab(tournament: Tournament) {
             CaptureArea {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                     shape = RoundedCornerShape(12.dp),
                     border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().background(Color(0xFFF5F5F5)).padding(horizontal = 12.dp, vertical = 8.dp),
+                            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("STANDINGS", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black, color = Color.Gray, modifier = Modifier.weight(1f))
+                            Text("STANDINGS", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                         }
                         Row(
-                            modifier = Modifier.fillMaxWidth().background(Color(0xFFF8F9FA)).padding(12.dp),
+                            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)).padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("TEAM", modifier = Modifier.weight(3f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            Text("P", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                            Text("W", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                            Text("L", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                            Text("PTS", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                            Text("NRR", modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
+                            Text("TEAM", modifier = Modifier.weight(3f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("P", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("W", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("L", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("PTS", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("NRR", modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         sortedTeams.forEachIndexed { index, team ->
                             Row(
@@ -388,18 +412,18 @@ fun PointsTableTab(tournament: Tournament) {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Row(modifier = Modifier.weight(3f), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("${index + 1}. ", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                    Text("${index + 1}. ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Surface(modifier = Modifier.size(6.dp), shape = CircleShape, color = team.colorOrDefault(Color.Gray)) {}
                                     Spacer(Modifier.width(6.dp))
-                                    Text(team.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                                    Text(team.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
                                 }
-                                Text(team.matchesPlayed.toString(), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                                Text(team.wins.toString(), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                                Text(team.losses.toString(), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                                Text(team.points.toString(), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
-                                Text(String.format(java.util.Locale.US, "%.3f", team.nrr), modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End)
+                                Text(team.matchesPlayed.toString(), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
+                                Text(team.wins.toString(), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
+                                Text(team.losses.toString(), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
+                                Text(team.points.toString(), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
+                                Text(String.format(Locale.US, "%.3f", team.nrr), modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.End)
                             }
-                            if (index < sortedTeams.size - 1) HorizontalDivider(thickness = 0.5.dp, color = Color(0xFFEEEEEE))
+                            if (index < sortedTeams.size - 1) HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
                         }
                         CardBranding()
                     }
@@ -450,11 +474,17 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
                 scope.launch {
                     shareTrigger++
                     kotlinx.coroutines.delay(300.milliseconds)
-                    shareComposableScreenshot(context, graphicsLayer, "full_series_leaders")
+                    shareComposableScreenshot(
+                        context,
+                        graphicsLayer,
+                        "full_series_leaders",
+                        subject = "Series Leaderboard - Cricket League",
+                        shareMessage = "Check out the top performers and leaderboard from Cricket League app! 🏆"
+                    )
                 }
             },
             modifier = Modifier.fillMaxWidth().padding(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF003366), contentColor = Color.White),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
             shape = RoundedCornerShape(12.dp)
         ) {
             Icon(Icons.Default.Share, contentDescription = null)
@@ -462,11 +492,10 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
             Text("SHARE FULL SERIES LEADERS", fontWeight = FontWeight.Black)
         }
 
-        Surface(
-            color = Color.White,
-            contentColor = Color.Black,
+        Column(
             modifier = Modifier
                 .padding(horizontal = 16.dp)
+                .background(MaterialTheme.colorScheme.background)
                 .drawWithContent {
                     this@drawWithContent.drawContent()
                     if (shareTrigger > 0) {
@@ -480,7 +509,7 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
         ) {
             CaptureArea {
                 Column(
-                    modifier = Modifier.fillMaxWidth().background(Color.White).padding(16.dp),
+                    modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
                     Text(
@@ -588,7 +617,7 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
 fun <T> LeaderboardCard(title: String, headers: List<String>, items: List<T>, content: @Composable (T) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
@@ -596,7 +625,7 @@ fun <T> LeaderboardCard(title: String, headers: List<String>, items: List<T>, co
         Column(modifier = Modifier.padding(16.dp)) {
             Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(16.dp))
-            Row(modifier = Modifier.fillMaxWidth().background(Color(0xFFF8F9FA), RoundedCornerShape(4.dp)).padding(8.dp)) {
+            Row(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp)).padding(8.dp)) {
                 headers.forEachIndexed { index, header ->
                     val colWeight = when (index) {
                         0 -> 3f
@@ -608,14 +637,14 @@ fun <T> LeaderboardCard(title: String, headers: List<String>, items: List<T>, co
                         modifier = Modifier.weight(colWeight), 
                         style = MaterialTheme.typography.labelSmall, 
                         fontWeight = FontWeight.Bold, 
-                        color = Color.Gray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = if (index == 0) TextAlign.Start else if (index == 1) TextAlign.Center else TextAlign.End
                     )
                 }
             }
             items.forEachIndexed { index, item ->
                 content(item)
-                if (index < items.size - 1) HorizontalDivider(thickness = 0.5.dp, color = Color(0xFFEEEEEE))
+                if (index < items.size - 1) HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
     }
@@ -625,17 +654,17 @@ fun <T> LeaderboardCard(title: String, headers: List<String>, items: List<T>, co
 fun BoundaryBox(title: String, players: List<Pair<Player, Team>>, modifier: Modifier = Modifier, statSelector: (Pair<Player, Team>) -> Int) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         shape = RoundedCornerShape(12.dp),
         border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(title, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.Gray)
+            Text(title, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(8.dp))
             players.forEach { p ->
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(p.first.name + " (${(p.first.battingStyle ?: BattingStyle.RHB).name})", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
+                    Text(p.first.name + " (${(p.first.battingStyle ?: BattingStyle.RHB).name})", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, modifier = Modifier.weight(1f))
                     Text("${statSelector(p)}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.secondary)
                 }
                 Spacer(modifier = Modifier.height(4.dp))
@@ -889,7 +918,8 @@ fun TeamCard(
     tournament: Tournament,
     team: Team,
     viewModel: TournamentViewModel,
-    onDeleteTeam: () -> Unit
+    onDeleteTeam: () -> Unit,
+    onProfileClick: ((String) -> Unit)? = null
 ) {
     val tournamentId = tournament.id
     var showAddPlayerDialog by remember { mutableStateOf(false) }
@@ -908,7 +938,7 @@ fun TeamCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         shape = RoundedCornerShape(12.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, parseTeamColor(team.colorHex, Color.Transparent))
@@ -930,10 +960,10 @@ fun TeamCard(
                         text = team.name,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1A1A1A)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(onClick = { showEditTeamDialog = true }, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit Team", tint = Color.Gray, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Edit, contentDescription = "Edit Team", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -988,6 +1018,7 @@ fun TeamCard(
                                         showEditPlayerDialog = true
                                     },
                                     onDelete = { viewModel.deletePlayer(tournamentId, team.id, player.id) },
+                                    onProfileClick = { if (onProfileClick != null) onProfileClick(player.id) },
                                     modifier = Modifier.weight(1f).padding(4.dp)
                                 )
                             }
@@ -1273,13 +1304,20 @@ fun TeamCard(
 }
 
 @Composable
-fun PlayerChip(player: Player, onEdit: () -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
+fun PlayerChip(
+    player: Player,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onProfileClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
     val bStyle = (player.battingStyle ?: BattingStyle.RHB).name
     val roleSuffix = if (player.isCaptain) " (c)" else if (player.isViceCaptain) " (vc)" else ""
 
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = if (player.isJoker) Color(0xFFFFE082) else Color(0xFFF0F2F5),
+        color = if (player.isJoker) Color(0xFFFFE082) else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (player.isJoker) Color.Black else MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier
     ) {
         Row(
@@ -1290,20 +1328,24 @@ fun PlayerChip(player: Player, onEdit: () -> Unit, onDelete: () -> Unit, modifie
                 if (player.isJoker) Icons.Default.Star else Icons.Default.Person,
                 contentDescription = null,
                 modifier = Modifier.size(12.dp),
-                tint = if (player.isJoker) Color(0xFFF57F17) else Color.Gray
+                tint = if (player.isJoker) Color(0xFFF57F17) else MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = (if (player.isJoker) "${player.name} 🃏" else player.name) + "$roleSuffix ($bStyle)",
                 modifier = Modifier
                     .weight(1f)
-                    .clickable { onEdit() },
+                    .clickable { if (onProfileClick != null) onProfileClick() else onEdit() },
                 style = MaterialTheme.typography.bodySmall,
+                color = if (player.isJoker) Color.Black else MaterialTheme.colorScheme.onSurface,
                 fontWeight = if (player.isJoker || player.isCaptain) FontWeight.Black else FontWeight.Medium,
                 maxLines = 1
             )
+            IconButton(onClick = onEdit, modifier = Modifier.size(16.dp)) {
+                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(12.dp))
+            }
             IconButton(onClick = onDelete, modifier = Modifier.size(16.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Delete", tint = Color.Gray, modifier = Modifier.size(12.dp))
+                Icon(Icons.Default.Close, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(12.dp))
             }
         }
     }

@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import `in`.nrkmart.cricscore.ui.CardBranding
+import `in`.nrkmart.cricscore.ui.PlayerProfileDialog
 import `in`.nrkmart.cricscore.ui.TeamColorPicker
 import `in`.nrkmart.cricscore.ui.colorOrDefault
 import `in`.nrkmart.cricscore.ui.findTeamNameForPlayer
@@ -73,9 +74,9 @@ fun AllTeamsScreen(
             )
         }
     ) { padding ->
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).background(Color(0xFFF5F7FA)), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (allTeams.isEmpty()) {
-                item { Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) { Text("No teams found. Create a series first.", color = Color.Gray) } }
+                item { Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) { Text("No teams found. Create a series first.", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
             } else {
                 items(allTeams) { team ->
                     val tournamentId = tournaments.find { t -> t.teams.any { it.id == team.id } }?.id
@@ -83,7 +84,7 @@ fun AllTeamsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { onTeamClick(team.id, tournamentId) },
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -102,8 +103,8 @@ fun AllTeamsScreen(
                             }
                             Spacer(Modifier.width(16.dp))
                             Column {
-                                Text(team.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                                Text("${team.players.size} Players", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                Text(team.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                                Text("${team.players.size} Players", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
@@ -118,6 +119,8 @@ fun AllTeamsScreen(
 @Composable
 fun AllPlayersScreen(onBack: () -> Unit) {
     val globalPlayers by GlobalPlayerRepository.players.collectAsState()
+    val tournaments by TournamentRepository.tournaments.collectAsState()
+    var selectedPlayerIdForProfile by remember { mutableStateOf<String?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var showAddDialog by remember { mutableStateOf(false) }
     var playerName by remember { mutableStateOf("") }
@@ -161,9 +164,9 @@ fun AllPlayersScreen(onBack: () -> Unit) {
             }
         }
     ) { padding ->
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).background(Color(0xFFF5F7FA)), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
-                Text("Saved players that can be reused across any series or team. 🌎🏏", style = MaterialTheme.typography.bodySmall, color = Color.Gray, modifier = Modifier.padding(bottom = 4.dp))
+                Text("Saved players that can be reused across any series or team. 🌎🏏", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
             }
             if (globalPlayers.isNotEmpty()) {
                 item {
@@ -171,14 +174,20 @@ fun AllPlayersScreen(onBack: () -> Unit) {
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
                         placeholder = { Text("Search player by name, style, or role...") },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.Gray) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                         trailingIcon = {
                             if (searchQuery.isNotEmpty()) {
                                 IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
+                                    Icon(Icons.Default.Close, contentDescription = "Clear", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                        ),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
@@ -186,20 +195,25 @@ fun AllPlayersScreen(onBack: () -> Unit) {
                 }
             }
             if (globalPlayers.isEmpty()) {
-                item { Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) { Text("Your global playlist is empty. Add players to reuse them!", color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(32.dp)) } }
+                item { Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) { Text("Your global playlist is empty. Add players to reuse them!", color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(32.dp)) } }
             } else if (filteredPlayers.isEmpty()) {
-                item { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text("No players found matching \"$searchQuery\"", color = Color.Gray, textAlign = TextAlign.Center) } }
+                item { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text("No players found matching \"$searchQuery\"", color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center) } }
             } else {
                 items(filteredPlayers) { player ->
-                    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { selectedPlayerIdForProfile = player.id },
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    ) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Surface(modifier = Modifier.size(32.dp), shape = androidx.compose.foundation.shape.CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {
+                            Surface(modifier = Modifier.size(32.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer) {
                                 Box(contentAlignment = Alignment.Center) { Text(player.name.take(1).uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black) }
                             }
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(player.name, fontWeight = FontWeight.Bold)
-                                Text("${player.role.displayName()} · Bat: ${player.battingStyle ?: "RHB"} · Bowl: ${player.bowlingStyle.displayName()}", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                                Text(player.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                                Text("${player.role.displayName()} · Bat: ${player.battingStyle ?: "RHB"} · Bowl: ${player.bowlingStyle.displayName()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Row {
                                 var showEditPlayerDialog by remember { mutableStateOf<Player?>(null) }
@@ -432,6 +446,16 @@ fun AllPlayersScreen(onBack: () -> Unit) {
                 dismissButton = { TextButton(onClick = { showAddDialog = false }) { Text("CANCEL") } }
             )
         }
+
+        if (selectedPlayerIdForProfile != null) {
+            val p = globalPlayers.find { it.id == selectedPlayerIdForProfile }
+            PlayerProfileDialog(
+                playerId = selectedPlayerIdForProfile!!,
+                tournaments = tournaments,
+                globalPlayer = p,
+                onDismiss = { selectedPlayerIdForProfile = null }
+            )
+        }
     }
 }
 
@@ -493,6 +517,7 @@ fun TeamDetailScreen(
 ) {
     val context = LocalContext.current
     val tournaments by viewModel.tournaments.collectAsState()
+    var selectedPlayerIdForProfile by remember { mutableStateOf<String?>(null) }
     
     // Resolve tournament and team
     val tournament = if (tournamentId != null) {
@@ -550,35 +575,36 @@ fun TeamDetailScreen(
     ) { padding ->
         if (team == null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("Team not found.", color = Color.Gray)
+                Text("Team not found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding).background(Color(0xFFF5F7FA)),
+                modifier = Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 item {
-                    Text("SQUAD LIST", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.Gray, modifier = Modifier.padding(bottom = 8.dp))
+                    Text("SQUAD LIST", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
                 }
                 
                 if (team.players.isEmpty()) {
-                    item { Text("No players in this team yet.", color = Color.Gray, style = MaterialTheme.typography.bodyMedium) }
+                    item { Text("No players in this team yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium) }
                 } else {
                     items(team.players) { player ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            onClick = { selectedPlayerIdForProfile = player.id },
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface),
                             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                         ) {
                             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Surface(modifier = Modifier.size(32.dp), shape = androidx.compose.foundation.shape.CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {
+                                Surface(modifier = Modifier.size(32.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer) {
                                     Box(contentAlignment = Alignment.Center) { Text(player.name.take(1).uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black) }
                                 }
                                 Spacer(Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(player.name, fontWeight = FontWeight.Bold)
-                                    Text("Batting: ${player.battingStyle ?: "RHB"}", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                                    Text(player.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                                    Text("Batting: ${player.battingStyle ?: "RHB"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 IconButton(onClick = { 
                                     if (tournament != null) viewModel.deletePlayer(tournament.id, team.id, player.id) 
@@ -637,6 +663,16 @@ fun TeamDetailScreen(
                         Text("Cancel")
                     }
                 }
+            )
+        }
+
+        if (selectedPlayerIdForProfile != null && team != null) {
+            val p = team.players.find { it.id == selectedPlayerIdForProfile }
+            PlayerProfileDialog(
+                playerId = selectedPlayerIdForProfile!!,
+                tournaments = tournaments,
+                globalPlayer = p,
+                onDismiss = { selectedPlayerIdForProfile = null }
             )
         }
 

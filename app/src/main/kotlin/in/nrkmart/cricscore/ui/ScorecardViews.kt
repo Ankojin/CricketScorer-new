@@ -1,6 +1,8 @@
 package `in`.nrkmart.cricscore.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -28,6 +30,7 @@ import `in`.nrkmart.cricscore.*
 import `in`.nrkmart.cricscore.ui.colorOrDefault
 import `in`.nrkmart.cricscore.ui.CaptureArea
 import `in`.nrkmart.cricscore.ui.CardBranding
+import `in`.nrkmart.cricscore.ui.PlayerProfileDialog
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -43,6 +46,8 @@ fun ScorecardTab(
     val teamB = match.teamB
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val tournaments by TournamentRepository.tournaments.collectAsState()
+    var selectedPlayerIdForProfile by remember { mutableStateOf<String?>(null) }
     var shareTrigger by remember { mutableIntStateOf(0) }
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -52,7 +57,13 @@ fun ScorecardTab(
                     shareTrigger++
                     delay(300.milliseconds)
                     val fileName = if (viewedInnings == 1) "innings_1_scorecard" else "innings_2_scorecard"
-                    shareComposableScreenshot(context, graphicsLayer, fileName)
+                    shareComposableScreenshot(
+                        context,
+                        graphicsLayer,
+                        fileName,
+                        subject = "Match Scorecard - Cricket League",
+                        shareMessage = "Check out the match scorecard from Cricket League app! 🏏"
+                    )
                 }
             },
             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -109,7 +120,7 @@ fun ScorecardTab(
                     }
             ) {
                 CaptureArea {
-                    Column(modifier = Modifier.fillMaxWidth().background(Color.White)) {
+                    Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(16.dp)) {
                         if (viewedInnings == 1) {
                             val i1Team = if (match.initialBattingTeamId == teamA.id) teamA else teamB
                             InningsScorecard(
@@ -157,7 +168,8 @@ fun ScorecardTab(
                                 numericRuns = if (match.currentInnings == 2) match.totalRuns else 0,
                                 numericBalls = if (match.currentInnings == 2) match.totalBalls else 0,
                                 durationMinutes = i2Duration,
-                                battingOrder = (if (match.currentInnings == 2) match.battingOrder else emptyList()) ?: emptyList()
+                                battingOrder = (if (match.currentInnings == 2) match.battingOrder else emptyList()) ?: emptyList(),
+                                onPlayerClick = { selectedPlayerIdForProfile = it }
                             )
                         }
                         CardBranding()
@@ -165,6 +177,14 @@ fun ScorecardTab(
                     }
                 }
             }
+        }
+
+        if (selectedPlayerIdForProfile != null) {
+            PlayerProfileDialog(
+                playerId = selectedPlayerIdForProfile!!,
+                tournaments = tournaments,
+                onDismiss = { selectedPlayerIdForProfile = null }
+            )
         }
     }
 }
@@ -187,27 +207,34 @@ fun InningsScorecard(
     numericRuns: Int,
     numericBalls: Int,
     durationMinutes: Int,
-    battingOrder: List<String>?
+    battingOrder: List<String>?,
+    onPlayerClick: ((String) -> Unit)? = null
 ) {
     val safeBattingOrder = battingOrder ?: emptyList()
     val safeWicketHistory = wicketHistory ?: emptyList()
     val safeBowlingPlayers = bowlingTeamPlayers ?: emptyList()
 
-    Column(modifier = Modifier.fillMaxWidth().background(Color.White)) {
-        val teamColor = team.colorOrDefault(MaterialTheme.colorScheme.primary)
-        val isLight = teamColor.luminance() > 0.5f
-        val contentColor = if (isLight) Color.Black else Color.White
-        
-        Box(
-            modifier = Modifier.fillMaxWidth().background(teamColor).padding(16.dp)
-        ) {
-            Column {
-                Text(text = "🏏 ${team.name} 🏆", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = contentColor)
-                Text(text = "($maxBalls balls maximum)", style = MaterialTheme.typography.bodySmall, color = contentColor.copy(alpha = 0.7f))
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            val teamColor = team.colorOrDefault(MaterialTheme.colorScheme.primary)
+            val isLight = teamColor.luminance() > 0.5f
+            val contentColor = if (isLight) Color.Black else Color.White
+            
+            Box(
+                modifier = Modifier.fillMaxWidth().background(teamColor).padding(16.dp)
+            ) {
+                Column {
+                    Text(text = "🏏 ${team.name} 🏆", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = contentColor)
+                    Text(text = "($maxBalls balls maximum)", style = MaterialTheme.typography.bodySmall, color = contentColor.copy(alpha = 0.7f))
+                }
             }
-        }
         
-        BattingTable(match, team.players, strikerId, nonStrikerId, safeBowlingPlayers, safeBattingOrder)
+        BattingTable(match, team.players, strikerId, nonStrikerId, safeBowlingPlayers, safeBattingOrder, onPlayerClick)
         
         val totalExtras = wideCount + noBallCount + byeCount + legByeCount
         Row(
@@ -272,13 +299,14 @@ fun InningsScorecard(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        BowlingTable(match, safeBowlingPlayers)
+        BowlingTable(match, safeBowlingPlayers, onPlayerClick)
         Spacer(modifier = Modifier.height(16.dp))
+        }
     }
 }
 
 @Composable
-fun BattingTable(match: Match, players: List<Player>, strikerId: String?, nonStrikerId: String?, bowlers: List<Player>, battingOrder: List<String>?) {
+fun BattingTable(match: Match, players: List<Player>, strikerId: String?, nonStrikerId: String?, bowlers: List<Player>, battingOrder: List<String>?, onPlayerClick: ((String) -> Unit)? = null) {
     val safeOrder = battingOrder ?: emptyList()
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -309,7 +337,7 @@ fun BattingTable(match: Match, players: List<Player>, strikerId: String?, nonStr
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(4f)) {
+                    Column(modifier = Modifier.weight(4f).clickable { if (onPlayerClick != null) onPlayerClick(player.id) }) {
                         val isCaptain = player.isCaptain
                         val isViceCaptain = player.isViceCaptain
                         val isWK = player.id == match.teamAWicketKeeperId || player.id == match.teamBWicketKeeperId
@@ -359,7 +387,7 @@ fun BattingTable(match: Match, players: List<Player>, strikerId: String?, nonStr
 }
 
 @Composable
-fun BowlingTable(match: Match, players: List<Player>) {
+fun BowlingTable(match: Match, players: List<Player>, onPlayerClick: ((String) -> Unit)? = null) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -382,7 +410,7 @@ fun BowlingTable(match: Match, players: List<Player>) {
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(modifier = Modifier.weight(3f), verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.weight(3f).clickable { if (onPlayerClick != null) onPlayerClick(player.id) }, verticalAlignment = Alignment.CenterVertically) {
                         val isCaptain = player.isCaptain
                         val isViceCaptain = player.isViceCaptain
                         val roleSuffix = if (isCaptain) " (c)" else if (isViceCaptain) " (vc)" else ""

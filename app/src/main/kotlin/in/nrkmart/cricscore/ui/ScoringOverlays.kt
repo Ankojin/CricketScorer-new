@@ -618,7 +618,8 @@ fun PlayerSelectionOverlay(uiState: MatchUiState, viewModel: ScoringViewModel) {
                                         Text(
                                             text = player.name + roleSuffix + (if (isWK) " 🧤" else ""), 
                                             fontWeight = FontWeight.Bold,
-                                            style = MaterialTheme.typography.bodyLarge
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                         
                                         if (isBowlerAction) {
@@ -631,7 +632,7 @@ fun PlayerSelectionOverlay(uiState: MatchUiState, viewModel: ScoringViewModel) {
                                                     text = "$oversLabel • ${stats.wickets}W • ER: ${String.format(
                                                         Locale.US, "%.2f", stats.economy)}",
                                                     style = MaterialTheme.typography.labelSmall,
-                                                    color = if (isMaxedOut) Color.Red else Color.Gray,
+                                                    color = if (isMaxedOut) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                                                     fontWeight = FontWeight.Medium
                                                 )
                                             }
@@ -643,7 +644,7 @@ fun PlayerSelectionOverlay(uiState: MatchUiState, viewModel: ScoringViewModel) {
                                                 text = if (isFielderAction) "Fielder" else "Batting: $bStyle", 
                                                 style = MaterialTheme.typography.bodyMedium, 
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (isFielderAction) MaterialTheme.colorScheme.primary else Color.Gray
+                                                color = if (isFielderAction) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
                                     }
@@ -735,6 +736,7 @@ fun SquadList(uiState: MatchUiState, team: Team, title: String, viewModel: Scori
                     Text(
                         text = player.name + " ($bStyle)" + (if (player.isJoker) " 🃏" else "") + roleSuffix + (if (isWK) " 🧤" else ""),
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f)
                     )
                     

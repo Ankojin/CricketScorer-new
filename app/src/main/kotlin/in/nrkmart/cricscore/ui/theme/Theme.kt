@@ -51,6 +51,23 @@ val DarkColorScheme = darkColorScheme(
 
 val LightColorScheme = DarkColorScheme // Unified Navy + Electric Green look across light and dark mode
 
+val ExportLightColorScheme = lightColorScheme(
+    primary = WebPrimaryGreen,
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFE8F5E9),
+    onPrimaryContainer = Color(0xFF1B5E20),
+    secondary = WebPrimaryGreen,
+    onSecondary = Color.White,
+    surface = Color.White,
+    onSurface = Color(0xFF1A1A1A),
+    surfaceVariant = Color(0xFFF4F6F9),
+    onSurfaceVariant = Color(0xFF555555),
+    background = Color(0xFFF4F6F9),
+    onBackground = Color(0xFF1A1A1A),
+    outline = Color(0xFFD0D7DE),
+    outlineVariant = Color(0xFFE1E4E8)
+)
+
 @Composable
 fun CricketScorerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -60,6 +77,7 @@ fun CricketScorerTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
+        typography = AppTypography,
         content = {
             Surface(
                 modifier = Modifier.fillMaxSize(),

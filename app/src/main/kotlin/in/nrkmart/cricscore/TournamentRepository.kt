@@ -128,29 +128,61 @@ object TournamentRepository {
 
     fun importTournament(json: String): Boolean {
         return try {
-            val jsonObject = gson.fromJson(json, JsonObject::class.java)
+            val jsonObject = gson.fromJson(json, JsonObject::class.java) ?: return false
             
-            val rawTournament: Tournament? = if (jsonObject.has("type") && jsonObject.get("type")?.asString == "UNIFIED_BACKUP") {
-                val tJson = jsonObject.get("tournament")
+            // 1. Process Global Playlist if present
+            if (jsonObject.has("globalPlaylist")) {
                 val pJson = jsonObject.get("globalPlaylist")
-                
                 if (pJson != null && !pJson.isJsonNull) {
                     try {
                         val playersType = object : TypeToken<List<Player>>() {}.type
                         val importedPlayers: List<Player>? = gson.fromJson(pJson, playersType)
-                        importedPlayers.orEmpty().filterNotNull().forEach { 
-                            GlobalPlayerRepository.addPlayer(it.name ?: "Player", it.battingStyle ?: BattingStyle.RHB) 
+                        importedPlayers.orEmpty().filterNotNull().forEach { p ->
+                            GlobalPlayerRepository.addPlayer(
+                                name = p.name ?: "Player",
+                                style = p.battingStyle ?: BattingStyle.RHB,
+                                bowlingStyle = p.bowlingStyle ?: BowlingStyle.NONE,
+                                role = p.role
+                            )
                         }
                     } catch (e: Exception) {
                         Log.w("TournamentRepository", "Skipped playlist import due to error", e)
                     }
                 }
-                
-                if (tJson != null && !tJson.isJsonNull) {
-                    gson.fromJson(tJson, Tournament::class.java)
-                } else null
-            } else {
-                gson.fromJson(json, Tournament::class.java)
+            }
+
+            // 2. Resolve Tournament / Series object
+            val rawTournament: Tournament? = when {
+                jsonObject.has("type") && jsonObject.get("type")?.asString == "UNIFIED_BACKUP" -> {
+                    val tJson = jsonObject.get("tournament")
+                    if (tJson != null && !tJson.isJsonNull) {
+                        gson.fromJson(tJson, Tournament::class.java)
+                    } else null
+                }
+                jsonObject.has("type") && jsonObject.get("type")?.asString == "MATCH_BACKUP" || jsonObject.has("match") -> {
+                    val mJson = if (jsonObject.has("match")) jsonObject.get("match") else jsonObject
+                    val importedMatch: Match? = gson.fromJson(mJson, Match::class.java)
+                    if (importedMatch != null) {
+                        val seriesName = importedMatch.tournamentName?.takeIf { it.isNotBlank() } ?: "Imported Matches"
+                        val existingSeries = _tournaments.value.find { it.name.equals(seriesName, ignoreCase = true) }
+                        val series = existingSeries ?: Tournament(
+                            id = importedMatch.tournamentId ?: UUID.randomUUID().toString(),
+                            name = seriesName,
+                            teams = listOf(importedMatch.teamA, importedMatch.teamB).filterNotNull().distinctBy { it.id },
+                            settings = TournamentSettings(overs = importedMatch.oversPerInnings)
+                        )
+                        val updatedTeams = (series.teams.orEmpty() + listOf(importedMatch.teamA, importedMatch.teamB)).distinctBy { it.id }
+                        val updatedMatches = (series.matches.orEmpty().filter { it.id != importedMatch.id } + importedMatch)
+                        series.copy(teams = updatedTeams, matches = updatedMatches)
+                    } else null
+                }
+                else -> {
+                    try {
+                        gson.fromJson(json, Tournament::class.java)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
             }
             
             if (rawTournament == null) {
@@ -170,7 +202,7 @@ object TournamentRepository {
             }
             true
         } catch (e: Exception) {
-            Log.e("TournamentRepository", "Failed to import tournament JSON", e)
+            Log.e("TournamentRepository", "Failed to import tournament/match JSON", e)
             false
         }
     }

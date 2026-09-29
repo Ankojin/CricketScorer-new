@@ -1,5 +1,6 @@
 package `in`.nrkmart.cricscore.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -48,7 +49,13 @@ fun OversTab(uiState: MatchUiState, viewModel: ScoringViewModel, graphicsLayer: 
                     shareTrigger++
                     delay(300.milliseconds)
                     val fileName = if (selectedInnings == 1) "innings_1_overs" else "innings_2_overs"
-                    shareComposableScreenshot(context, graphicsLayer, fileName)
+                    shareComposableScreenshot(
+                        context,
+                        graphicsLayer,
+                        fileName,
+                        subject = "Over-by-Over History - Cricket League",
+                        shareMessage = "Check out the over-by-over ball history from Cricket League app! 🏏"
+                    )
                 }
             },
             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -127,15 +134,17 @@ fun OversTab(uiState: MatchUiState, viewModel: ScoringViewModel, graphicsLayer: 
             ) {
                 item {
                     CaptureArea {
-                        Column(modifier = Modifier.fillMaxWidth().background(Color.White)) {
+                        Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)) {
                             val reversedOvers = overs.reversed()
                             reversedOvers.forEachIndexed { index, overBalls ->
                                 val overNum = overs.size - index
                                 key(overNum) {
                                     Card(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface),
+                                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                                     ) {
                                         Column(modifier = Modifier.padding(16.dp)) {
                                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
