@@ -34,6 +34,9 @@ class ScoringViewModel : ViewModel() {
     private val _finishedOverSummary = MutableStateFlow<OverSummary?>(null)
     val finishedOverSummary: StateFlow<OverSummary?> = _finishedOverSummary.asStateFlow()
 
+    var isReceivingRemoteUpdate = false
+        private set
+
     val uiState: StateFlow<MatchUiState> = combine(
         _matchState,
         _isDarkMode,
@@ -119,8 +122,10 @@ class ScoringViewModel : ViewModel() {
         }
 
         NearbyManager.setMatchUpdateCallback { receivedMatch ->
+            isReceivingRemoteUpdate = true
             _matchState.value = receivedMatch
             TournamentRepository.updateMatch(receivedMatch.tournamentId ?: "", receivedMatch)
+            isReceivingRemoteUpdate = false
         }
 
         NearbyManager.setTournamentUpdateCallback { json ->

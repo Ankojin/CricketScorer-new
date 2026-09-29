@@ -33,6 +33,15 @@ suspend fun shareComposableScreenshot(context: Context, graphicsLayer: GraphicsL
         withContext(Dispatchers.IO) {
             val cachePath = File(context.cacheDir, "shared_images")
             cachePath.mkdirs()
+            
+            // Purge cached images older than 24 hours to prevent cache bloat
+            val dayAgo = System.currentTimeMillis() - 24 * 60 * 60 * 1000
+            cachePath.listFiles()?.forEach { oldFile ->
+                if (oldFile.lastModified() < dayAgo) {
+                    oldFile.delete()
+                }
+            }
+
             val file = File(cachePath, "${fileName.replace(" ", "_").lowercase()}_${System.currentTimeMillis()}.png")
             val stream = FileOutputStream(file)
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)

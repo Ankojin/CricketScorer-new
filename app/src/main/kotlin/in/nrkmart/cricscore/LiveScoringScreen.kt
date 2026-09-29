@@ -64,7 +64,7 @@ fun LiveScoringScreen(
     }
 
     LaunchedEffect(match, connectedDevicesCount) {
-        if (isSyncEnabled && match != null && connectedDevicesCount > 0) {
+        if (isSyncEnabled && match != null && connectedDevicesCount > 0 && !viewModel.isReceivingRemoteUpdate) {
             NearbyManager.broadcastMatch(context, match)
         }
     }

@@ -19,8 +19,6 @@ secrets/
 .env*
 
 # Android build outputs
-*.apk
-*.aab
 *.ap_
 *.dex
 *.class

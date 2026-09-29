@@ -47,7 +47,7 @@ private fun handleToggleNearbySync(context: Context, viewModel: ScoringViewModel
         }
         
         viewModel.toggleSync(true)
-        NearbyManager.startSync(context, "CricScore: " + Build.MODEL)
+        NearbyManager.startSync(context, "CricLeague: " + Build.MODEL)
         if (match != null) {
             val tournament = TournamentRepository.getTournament(match.tournamentId ?: "") ?: Tournament(id = UUID.randomUUID().toString(), name = "Match", matches = listOf(match))
             NearbyManager.broadcastTournament(context, tournament)
@@ -88,7 +88,7 @@ fun HomeScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "CricScore Pro",
+                        "Cric League",
                         fontWeight = FontWeight.Black,
                         letterSpacing = (-1).sp
                     )
@@ -125,7 +125,7 @@ fun HomeScreen(
                     IconButton(onClick = { showAboutDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.Info,
-                            contentDescription = "About CricScore Pro",
+                            contentDescription = "About Cric League",
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -437,7 +437,7 @@ fun HomeScreen(
                                             }
                                             
                                             viewModel.toggleSync(true)
-                                            NearbyManager.startSync(context, "CricScore: " + android.os.Build.MODEL)
+                                            NearbyManager.startSync(context, "CricLeague: " + Build.MODEL)
                                         } else {
                                             viewModel.toggleSync(false)
                                             NearbyManager.stopAll(context)
@@ -518,7 +518,7 @@ fun HomeScreen(
                                 Box(contentAlignment = Alignment.Center) {
                                     Image(
                                         painter = painterResource(id = R.mipmap.ic_launcher_foreground),
-                                        contentDescription = "CricScore Pro Icon",
+                                        contentDescription = "Cric League Icon",
                                         modifier = Modifier.size(64.dp)
                                     )
                                 }
@@ -526,7 +526,7 @@ fun HomeScreen(
 
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "CricScore Pro",
+                                    text = "Cric League",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Black
                                 )
@@ -601,6 +601,121 @@ fun HomeScreen(
                         }
                     }
                 )
+            }
+
+            if (showSyncSheet) {
+                ModalBottomSheet(
+                    onDismissRequest = { showSyncSheet = false },
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Nearby Live Sync 📡", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+                                Text("Share scores & matches with devices nearby", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            }
+                            Surface(
+                                color = if (isSyncEnabled) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                shape = CircleShape
+                            ) {
+                                Row(Modifier.padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        modifier = Modifier.size(8.dp),
+                                        shape = CircleShape,
+                                        color = if (isSyncEnabled) MaterialTheme.colorScheme.secondary else Color.Gray
+                                    ) {}
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isSyncEnabled) "ACTIVE" else "OFF",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isSyncEnabled) MaterialTheme.colorScheme.secondary else Color.Gray
+                                    )
+                                }
+                            }
+                        }
+
+                        HorizontalDivider()
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Enable Local Sync", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                                Text("Discover and connect to nearby scorers", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            }
+                            Switch(
+                                checked = isSyncEnabled,
+                                onCheckedChange = { enabled ->
+                                    handleToggleNearbySync(context, viewModel, enabled, liveMatch)
+                                }
+                            )
+                        }
+
+                        if (isSyncEnabled) {
+                            HorizontalDivider()
+                            Text("CONNECTED DEVICES", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+                            
+                            if (connectedEndpoints.isEmpty()) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                    Spacer(Modifier.width(12.dp))
+                                    Text("Searching for nearby devices...", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                                }
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    connectedEndpoints.forEach { endpointId ->
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Surface(modifier = Modifier.size(8.dp), shape = CircleShape, color = Color(0xFF4CAF50)) {}
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Text(NearbyManager.getEndpointName(endpointId), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                                }
+                                                Text("CONNECTED", style = MaterialTheme.typography.labelSmall, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (liveMatch != null) {
+                                Spacer(Modifier.height(8.dp))
+                                Button(
+                                    onClick = {
+                                        NearbyManager.broadcastMatch(context, liveMatch)
+                                        Toast.makeText(context, "Broadcasting Live Match to connected devices! 📡⚡", Toast.LENGTH_SHORT).show()
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("BROADCAST LIVE MATCH NOW 📡", fontWeight = FontWeight.Black)
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+                    }
+                }
             }
         }
     }

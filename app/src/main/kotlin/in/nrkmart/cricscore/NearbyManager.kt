@@ -1,6 +1,7 @@
 package `in`.nrkmart.cricscore
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import android.widget.Toast
 import com.google.android.gms.nearby.Nearby
@@ -8,9 +9,14 @@ import com.google.android.gms.nearby.connection.*
 import com.google.gson.Gson
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.util.concurrent.ConcurrentHashMap
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 
 object NearbyManager {
-    private const val SERVICE_ID = "in.nrkmart.cricscore.SYNC.v1.20" // Bumped to 1.20
+    private const val SERVICE_ID = "in.nrkmart.cricscore.SYNC.v1.20"
     private val STRATEGY_TYPE = Strategy.P2P_STAR
     
     private val _connectedEndpoints = MutableStateFlow<Set<String>>(emptySet())
@@ -20,7 +26,7 @@ object NearbyManager {
     private var matchUpdateCallback: ((Match) -> Unit)? = null
     private var tournamentUpdateCallback: ((String) -> Unit)? = null
     private var onConnectedCallback: (() -> Unit)? = null
-    private val endpointNames = mutableMapOf<String, String>()
+    private val endpointNames = ConcurrentHashMap<String, String>()
 
     fun setMatchUpdateCallback(callback: (Match) -> Unit) {
         matchUpdateCallback = callback
@@ -32,6 +38,10 @@ object NearbyManager {
 
     fun setOnConnectedCallback(callback: () -> Unit) {
         onConnectedCallback = callback
+    }
+
+    fun getEndpointName(endpointId: String): String {
+        return endpointNames[endpointId] ?: "Device (${endpointId.take(4)})"
     }
 
     fun startSync(context: Context, name: String) {
@@ -90,14 +100,25 @@ object NearbyManager {
         }
     }
 
+    private fun compress(data: String): ByteArray {
+        val bos = ByteArrayOutputStream()
+        GZIPOutputStream(bos).bufferedWriter(Charsets.UTF_8).use { it.write(data) }
+        return bos.toByteArray()
+    }
+
+    private fun decompress(bytes: ByteArray): String {
+        val bis = ByteArrayInputStream(bytes)
+        return GZIPInputStream(bis).bufferedReader(Charsets.UTF_8).use { it.readText() }
+    }
+
     private fun sendWrapper(context: Context, payloadObj: NearbyPayload) {
         val endpoints = _connectedEndpoints.value
         if (endpoints.isEmpty()) return
         
         try {
             val wrapperJson = gson.toJson(payloadObj)
-            val bytes = wrapperJson.toByteArray(Charsets.UTF_8)
-            val payload = Payload.fromBytes(bytes)
+            val compressedBytes = compress(wrapperJson)
+            val payload = Payload.fromBytes(compressedBytes)
             Nearby.getConnectionsClient(context.applicationContext)
                 .sendPayload(endpoints.toList(), payload)
                 .addOnFailureListener { e -> Log.e("Nearby", "Failed to send payload", e) }
@@ -138,7 +159,7 @@ object NearbyManager {
             Log.d("Nearby", "Found scorer: ${info.endpointName}, requesting connection...")
             Toast.makeText(context.applicationContext, "Found Scorer: ${info.endpointName}. Connecting...", Toast.LENGTH_SHORT).show()
             Nearby.getConnectionsClient(context.applicationContext).requestConnection(
-                android.os.Build.MODEL, // Use device name as identification
+                Build.MODEL,
                 endpointId,
                 createConnectionLifecycleCallback(context)
             ).addOnFailureListener { Log.e("Nearby", "Failed to request connection to $endpointId", it) }
@@ -152,7 +173,14 @@ object NearbyManager {
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
             if (payload.type == Payload.Type.BYTES) {
-                val wrapperJson = String(payload.asBytes()!!)
+                val bytes = payload.asBytes() ?: return
+                val wrapperJson = try {
+                    decompress(bytes)
+                } catch (e: Exception) {
+                    // Fallback to raw string if not GZIP compressed (for legacy payloads)
+                    String(bytes, Charsets.UTF_8)
+                }
+                
                 try {
                     val wrapper = gson.fromJson(wrapperJson, NearbyPayload::class.java)
                     when (wrapper.type) {

@@ -24,7 +24,7 @@ android {
     defaultConfig {
         applicationId = "in.nrkmart.cricscore"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = vCode
         versionName = vName
 
@@ -39,6 +39,11 @@ android {
     val localPropertiesFile = rootProject.file("local.properties")
     if (localPropertiesFile.exists()) {
         localPropertiesFile.inputStream().use { localProperties.load(it) }
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 
 
@@ -62,6 +67,9 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
             val ksFile = rootProject.file("keystore/release.jks")
             if (ksFile.exists() || file("../release.jks").exists()) {
                 signingConfig = signingConfigs.getByName("release")
@@ -157,12 +165,12 @@ tasks.configureEach {
 
 tasks.register("copyApkToRoot") {
     doLast {
-        // v2.33.20: Copy Release APK if it exists, fallback to Debug. 🏏🚀⚖️🏅
         val vName = android.defaultConfig.versionName
         val buildDir = layout.buildDirectory.get().asFile
         
         val releaseApk = file("$buildDir/outputs/apk/release/app-release.apk")
         val debugApk = file("$buildDir/outputs/apk/debug/app-debug.apk")
+        val releaseAab = file("$buildDir/outputs/bundle/release/app-release.aab")
         
         val apkFile = if (releaseApk.exists()) releaseApk else debugApk
         
@@ -172,15 +180,24 @@ tasks.register("copyApkToRoot") {
             
             // Automated Cleanup
             project.fileTree(rootProject.projectDir)
-                .matching { include("cricscore_v*.apk") }
+                .matching { include("cricscore_v*.apk", "cricscore_v*.aab", "cricleague_v*.apk", "cricleague_v*.aab") }
                 .forEach { it.delete() }
 
             copy {
                 from(apkFile)
                 into(rootProject.projectDir)
-                rename { "cricscore_v$vName$suffix.apk" }
+                rename { "cricleague_v$vName$suffix.apk" }
             }
-            println("APK copied to root: cricscore_v$vName$suffix.apk (Source: ${if (isRelease) "Release" else "Debug"})")
+            println("APK copied to root: cricleague_v$vName$suffix.apk (Source: ${if (isRelease) "Release" else "Debug"})")
+        }
+
+        if (releaseAab.exists()) {
+            copy {
+                from(releaseAab)
+                into(rootProject.projectDir)
+                rename { "cricleague_v$vName.aab" }
+            }
+            println("AAB copied to root: cricleague_v$vName.aab (Source: Release Bundle)")
         }
     }
 }

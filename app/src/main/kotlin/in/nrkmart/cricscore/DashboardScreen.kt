@@ -337,7 +337,7 @@ fun TournamentCard(
                                     putExtra(Intent.EXTRA_STREAM, uri)
                                     type = "application/json"
                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    putExtra(Intent.EXTRA_SUBJECT, "CricScore Pro Series Backup")
+                                    putExtra(Intent.EXTRA_SUBJECT, "Cric League Series Backup")
                                     putExtra(Intent.EXTRA_TEXT, "Here is the backup for ${tournament.name}")
                                 }
                                 val shareIntent = Intent.createChooser(sendIntent, "Export Series Data")
