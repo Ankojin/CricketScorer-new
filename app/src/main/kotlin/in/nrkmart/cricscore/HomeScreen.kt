@@ -2,8 +2,10 @@ package `in`.nrkmart.cricscore
 
 import android.content.Context
 import android.location.LocationManager
+import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
@@ -24,10 +27,41 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import `in`.nrkmart.cricscore.ui.CardBranding
+import java.util.UUID
+
+private fun handleToggleNearbySync(context: Context, viewModel: ScoringViewModel, enable: Boolean, match: Match? = null) {
+    if (enable) {
+        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+        val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        
+        if (!isGpsEnabled && !isNetworkEnabled) {
+            Toast.makeText(context, "Please turn on GPS/Location to use Nearby Sync 📍", Toast.LENGTH_LONG).show()
+            return
+        }
+        
+        viewModel.toggleSync(true)
+        NearbyManager.startSync(context, "CricScore: " + Build.MODEL)
+        if (match != null) {
+            val tournament = TournamentRepository.getTournament(match.tournamentId ?: "") ?: Tournament(id = UUID.randomUUID().toString(), name = "Match", matches = listOf(match))
+            NearbyManager.broadcastTournament(context, tournament)
+            NearbyManager.broadcastMatch(context, match)
+            Toast.makeText(context, "Nearby Live Match Sync Active! 📡⚡", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "Nearby Sync Active! 📡⚡", Toast.LENGTH_SHORT).show()
+        }
+    } else {
+        viewModel.toggleSync(false)
+        NearbyManager.stopAll(context)
+        Toast.makeText(context, "Nearby Sync Stopped 🛑", Toast.LENGTH_SHORT).show()
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,7 +76,11 @@ fun HomeScreen(
 ) {
     val tournaments by TournamentRepository.tournaments.collectAsState()
     val liveMatch = tournaments.flatMap { it.matches }.find { it.status == MatchStatus.LIVE }
+    val isSyncEnabled by viewModel.isSyncEnabled.collectAsState()
+    val connectedEndpoints by NearbyManager.connectedEndpoints.collectAsState()
     var showSettings by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
+    var showSyncSheet by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     Scaffold(
@@ -56,6 +94,41 @@ fun HomeScreen(
                     )
                 },
                 actions = {
+                    Surface(
+                        onClick = { showSyncSheet = true },
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isSyncEnabled) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(0.5.dp, if (isSyncEnabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(8.dp),
+                                shape = CircleShape,
+                                color = if (isSyncEnabled) MaterialTheme.colorScheme.secondary else Color.Gray
+                            ) {}
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = if (isSyncEnabled) {
+                                    if (connectedEndpoints.isNotEmpty()) "SYNC (${connectedEndpoints.size})" else "SYNC ON"
+                                } else "SYNC OFF",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSyncEnabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    IconButton(onClick = { showAboutDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "About CricScore Pro",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     IconButton(onClick = { showSettings = true }) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
@@ -147,14 +220,81 @@ fun HomeScreen(
                                 
                                 Spacer(modifier = Modifier.height(20.dp))
                                 
-                                Button(
-                                    onClick = { onNavigateToLiveScoring(liveMatch) },
-                                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                                    shape = RoundedCornerShape(12.dp)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Text("CONTINUE SCORING", fontWeight = FontWeight.Black)
+                                    Button(
+                                        onClick = { onNavigateToLiveScoring(liveMatch) },
+                                        modifier = Modifier.weight(1f).height(48.dp),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text("CONTINUE SCORING", fontWeight = FontWeight.Black)
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            handleToggleNearbySync(context, viewModel, !isSyncEnabled, liveMatch)
+                                        },
+                                        modifier = Modifier.height(48.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            contentColor = if (isSyncEnabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+                                        ),
+                                        border = BorderStroke(1.dp, if (isSyncEnabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Surface(
+                                                modifier = Modifier.size(8.dp),
+                                                shape = CircleShape,
+                                                color = if (isSyncEnabled) MaterialTheme.colorScheme.secondary else Color.Gray
+                                            ) {}
+                                            Spacer(Modifier.width(6.dp))
+                                            Text(
+                                                text = if (isSyncEnabled) "BROADCASTING" else "BROADCAST LIVE",
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
                                 }
                             }
+                        }
+                    }
+                }
+
+                // Highlighted Motto / Brand Banner
+                item {
+                    Card(
+                        modifier = Modifier
+                            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
+                            .fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "TRACK EVERY BALL.\nOWN EVERY OVER.\nSHARE EVERY MOMENT.",
+                                style = MaterialTheme.typography.titleMedium.copy(lineHeight = 22.sp),
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                letterSpacing = 0.5.sp,
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "The best cricket scoring app for your matches. Score every ball, track your gully cricket score, relive every moment, and share the glory.",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }
@@ -162,7 +302,7 @@ fun HomeScreen(
                 item {
                     Text(
                         "QUICK START",
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.primary
@@ -342,6 +482,122 @@ fun HomeScreen(
                     confirmButton = {
                         TextButton(onClick = { showSettings = false }) {
                             Text("DONE", fontWeight = FontWeight.Black)
+                        }
+                    }
+                )
+            }
+
+            if (showAboutDialog) {
+                AlertDialog(
+                    onDismissRequest = { showAboutDialog = false },
+                    confirmButton = {
+                        Button(
+                            onClick = { showAboutDialog = false },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("DISMISS", fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    title = null,
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState()),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Spacer(Modifier.height(4.dp))
+                            Surface(
+                                modifier = Modifier.size(72.dp),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shadowElevation = 4.dp
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Image(
+                                        painter = painterResource(id = R.mipmap.ic_launcher_foreground),
+                                        contentDescription = "CricScore Pro Icon",
+                                        modifier = Modifier.size(64.dp)
+                                    )
+                                }
+                            }
+
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "CricScore Pro",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Black
+                                )
+                                Surface(
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.padding(top = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "v${BuildConfig.VERSION_NAME}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = "Track every ball. Own every over. Share every moment.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.Gray,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+
+                            HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "TRACK EVERY BALL.\nOWN EVERY OVER.\nSHARE EVERY MOMENT.",
+                                        style = MaterialTheme.typography.labelLarge.copy(lineHeight = 18.sp),
+                                        fontWeight = FontWeight.Black,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        letterSpacing = 0.5.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "The best cricket scoring app for your matches. Score every ball, track your gully cricket score, relive every moment, and share the glory.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 20.sp,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                SuggestionChip(
+                                    onClick = {},
+                                    label = { Text("⚡ Ball-by-Ball") }
+                                )
+                                SuggestionChip(
+                                    onClick = {},
+                                    label = { Text("📲 Nearby Sync") }
+                                )
+                            }
                         }
                     }
                 )
