@@ -286,7 +286,7 @@ fun LiveTab(
             CardBranding()
         }
 
-        // BOTTOM — controls always visible
+        // BOTTOM — controls or Spectator Banner
         if (match.status != MatchStatus.COMPLETED) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -295,14 +295,40 @@ fun LiveTab(
                 tonalElevation = 2.dp
             ) {
                 Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
-                    ControlsSection(
-                        uiState = uiState,
-                        viewModel = viewModel,
-                        onShowWicket = onShowWicket,
-                        onShowExtraRuns = onShowExtraRuns,
-                        onShowOtherRuns = onShowOtherRuns,
-                        onShowRetireHurt = onShowRetireHurt
-                    )
+                    if (uiState.isSpectatorMode) {
+                        val context = LocalContext.current
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("👁️ SPECTATOR / LIVE VIEW MODE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.secondary)
+                                    Text("Receiving live ball updates from Primary Scorer", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                }
+                                Button(
+                                    onClick = { viewModel.takeOverScoring(context) },
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("TAKE OVER", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    } else {
+                        ControlsSection(
+                            uiState = uiState,
+                            viewModel = viewModel,
+                            onShowWicket = onShowWicket,
+                            onShowExtraRuns = onShowExtraRuns,
+                            onShowOtherRuns = onShowOtherRuns,
+                            onShowRetireHurt = onShowRetireHurt
+                        )
+                    }
                 }
             }
         }

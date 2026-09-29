@@ -44,16 +44,23 @@ class ScoringViewModel : ViewModel() {
         _activeWicketContext,
         _isSyncEnabled,
         NearbyManager.connectedEndpoints,
+        NearbyManager.isHost,
         _finishedOverSummary
     ) { args ->
+        val sync = args[4] as Boolean
+        val endpoints = args[5] as Set<*>
+        val isHost = args[6] as Boolean
+        val isSpectator = sync && !isHost && endpoints.isNotEmpty()
+
         MatchUiState(
             match = args[0] as Match?,
             isDarkMode = args[1] as Boolean?,
             bowlerNotification = args[2] as String?,
             activeWicketContext = args[3] as ActiveWicketContext?,
-            isSyncEnabled = args[4] as Boolean,
-            connectedDevicesCount = (args[5] as Set<*>).size,
-            finishedOverSummary = args[6] as OverSummary?
+            isSyncEnabled = sync,
+            connectedDevicesCount = endpoints.size,
+            isSpectatorMode = isSpectator,
+            finishedOverSummary = args[7] as OverSummary?
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MatchUiState())
 
@@ -130,6 +137,12 @@ class ScoringViewModel : ViewModel() {
 
         NearbyManager.setTournamentUpdateCallback { json ->
             TournamentRepository.importTournament(json)
+        }
+    }
+
+    fun takeOverScoring(context: Context) {
+        _matchState.value?.let { match ->
+            NearbyManager.startBroadcasting(context, "CricLeague: " + match.teamA.name + " vs " + match.teamB.name)
         }
     }
 

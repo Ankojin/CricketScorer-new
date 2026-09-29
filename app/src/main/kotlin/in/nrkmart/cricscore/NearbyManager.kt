@@ -22,6 +22,9 @@ object NearbyManager {
     private val _connectedEndpoints = MutableStateFlow<Set<String>>(emptySet())
     val connectedEndpoints = _connectedEndpoints.asStateFlow()
 
+    private val _isHost = MutableStateFlow(false)
+    val isHost = _isHost.asStateFlow()
+
     private val gson = Gson()
     private var matchUpdateCallback: ((Match) -> Unit)? = null
     private var tournamentUpdateCallback: ((String) -> Unit)? = null
@@ -51,6 +54,7 @@ object NearbyManager {
     }
 
     fun startBroadcasting(context: Context, matchName: String) {
+        _isHost.value = true
         val options = AdvertisingOptions.Builder().setStrategy(STRATEGY_TYPE).build()
         val appContext = context.applicationContext
         Toast.makeText(appContext, "Broadcasting Live Score...", Toast.LENGTH_SHORT).show()
@@ -77,6 +81,7 @@ object NearbyManager {
             stopAllEndpoints()
         }
         _connectedEndpoints.value = emptySet()
+        _isHost.value = false
         endpointNames.clear()
     }
 

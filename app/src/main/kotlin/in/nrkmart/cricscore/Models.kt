@@ -417,5 +417,6 @@ data class MatchUiState(
     val activeWicketContext: ActiveWicketContext? = null,
     val isSyncEnabled: Boolean = false,
     val connectedDevicesCount: Int = 0,
+    val isSpectatorMode: Boolean = false,
     val finishedOverSummary: OverSummary? = null
 )
