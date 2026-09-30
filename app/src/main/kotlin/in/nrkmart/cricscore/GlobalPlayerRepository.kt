@@ -86,6 +86,34 @@ object GlobalPlayerRepository {
         return newPlayer
     }
 
+    fun importPlayers(importedList: List<Player>) {
+        if (importedList.isEmpty()) return
+        _players.update { currentList ->
+            val currentMap = currentList.associateBy { it.name.trim().lowercase() }.toMutableMap()
+            importedList.forEach { p ->
+                val nameTrimmed = p.name.trim()
+                if (nameTrimmed.isNotBlank()) {
+                    val key = nameTrimmed.lowercase()
+                    val existing = currentMap[key]
+                    if (existing != null) {
+                        currentMap[key] = existing.copy(
+                            battingStyle = p.battingStyle ?: existing.battingStyle,
+                            bowlingStyle = p.bowlingStyle ?: existing.bowlingStyle,
+                            role = p.role,
+                            isCaptain = p.isCaptain || existing.isCaptain,
+                            isViceCaptain = p.isViceCaptain || existing.isViceCaptain,
+                            isJoker = p.isJoker || existing.isJoker
+                        )
+                    } else {
+                        currentMap[key] = p.safeCopy()
+                    }
+                }
+            }
+            currentMap.values.sortedBy { it.name.lowercase() }
+        }
+        saveToDisk(_players.value)
+    }
+
     fun removePlayer(id: String) {
         _players.update { list -> list.filter { it.id != id } }
         saveToDisk(_players.value)

@@ -129,22 +129,16 @@ object TournamentRepository {
     fun importTournament(json: String): Boolean {
         return try {
             val jsonObject = gson.fromJson(json, JsonObject::class.java) ?: return false
+            val allImportedGlobalPlayers = mutableListOf<Player>()
             
-            // 1. Process Global Playlist if present
+            // 1. Collect Global Playlist if present
             if (jsonObject.has("globalPlaylist")) {
                 val pJson = jsonObject.get("globalPlaylist")
                 if (pJson != null && !pJson.isJsonNull) {
                     try {
                         val playersType = object : TypeToken<List<Player>>() {}.type
                         val importedPlayers: List<Player>? = gson.fromJson(pJson, playersType)
-                        importedPlayers.orEmpty().filterNotNull().forEach { p ->
-                            GlobalPlayerRepository.addPlayer(
-                                name = p.name ?: "Player",
-                                style = p.battingStyle ?: BattingStyle.RHB,
-                                bowlingStyle = p.bowlingStyle ?: BowlingStyle.NONE,
-                                role = p.role
-                            )
-                        }
+                        allImportedGlobalPlayers.addAll(importedPlayers.orEmpty().filterNotNull())
                     } catch (e: Exception) {
                         Log.w("TournamentRepository", "Skipped playlist import due to error", e)
                     }
@@ -192,6 +186,17 @@ object TournamentRepository {
             val tournament = rawTournament.safeCopy()
             if (tournament.id.isBlank() || tournament.name.isBlank()) {
                 return false
+            }
+
+            // Collect team & participant players into global playlist as well
+            tournament.teams.orEmpty().forEach { team ->
+                allImportedGlobalPlayers.addAll(team.players.orEmpty().filterNotNull())
+            }
+            allImportedGlobalPlayers.addAll(tournament.participants.orEmpty().filterNotNull())
+
+            // Import all accumulated global players into GlobalPlayerRepository!
+            if (allImportedGlobalPlayers.isNotEmpty()) {
+                GlobalPlayerRepository.importPlayers(allImportedGlobalPlayers)
             }
 
             repositoryScope.launch {
