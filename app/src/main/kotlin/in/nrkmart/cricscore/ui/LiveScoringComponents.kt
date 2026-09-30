@@ -311,11 +311,13 @@ fun LiveTab(
                                     Text("👁️ SPECTATOR / LIVE VIEW MODE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.secondary)
                                     Text("Receiving live ball updates from Primary Scorer", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                                 }
-                                Button(
-                                    onClick = { viewModel.takeOverScoring(context) },
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text("TAKE OVER", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                if (uiState.isSyncEnabled) {
+                                    Button(
+                                        onClick = { viewModel.takeOverScoring(context) },
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("BECOME BROADCASTER", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    }
                                 }
                             }
                         }

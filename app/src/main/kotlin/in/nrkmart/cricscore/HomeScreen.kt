@@ -29,38 +29,65 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import `in`.nrkmart.cricscore.ui.CardBranding
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.foundation.text.KeyboardOptions
+import kotlinx.coroutines.launch
 import java.util.UUID
 
-private fun handleToggleNearbySync(context: Context, viewModel: ScoringViewModel, enable: Boolean, match: Match? = null) {
-    if (enable) {
-        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-        val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-        
-        if (!isGpsEnabled && !isNetworkEnabled) {
-            Toast.makeText(context, "Please turn on GPS/Location to use Nearby Sync 📍", Toast.LENGTH_LONG).show()
-            return
-        }
-        
-        viewModel.toggleSync(true)
-        NearbyManager.startSync(context, "CricLeague: " + Build.MODEL)
-        if (match != null) {
-            val tournament = TournamentRepository.getTournament(match.tournamentId ?: "") ?: Tournament(id = UUID.randomUUID().toString(), name = "Match", matches = listOf(match))
-            NearbyManager.broadcastTournament(context, tournament)
-            NearbyManager.broadcastMatch(context, match)
-            Toast.makeText(context, "Nearby Live Match Sync Active! 📡⚡", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(context, "Nearby Sync Active! 📡⚡", Toast.LENGTH_SHORT).show()
-        }
-    } else {
-        viewModel.toggleSync(false)
-        NearbyManager.stopAll(context)
-        Toast.makeText(context, "Nearby Sync Stopped 🛑", Toast.LENGTH_SHORT).show()
+private enum class NearbyStartMode {
+    BROADCASTER,
+    SPECTATOR
+}
+
+private fun isLocationEnabled(context: Context): Boolean {
+    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+    val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+    return isGpsEnabled || isNetworkEnabled
+}
+
+private fun startNearbyWithRole(
+    context: Context,
+    viewModel: ScoringViewModel,
+    mode: NearbyStartMode,
+    match: Match? = null
+) {
+    if (!isLocationEnabled(context)) {
+        Toast.makeText(context, "Please turn on GPS/Location to use Nearby Sync 📍", Toast.LENGTH_LONG).show()
+        return
     }
+
+    viewModel.toggleSync(true)
+    when (mode) {
+        NearbyStartMode.BROADCASTER -> {
+            NearbyManager.startAsBroadcaster(context, "CricLeague: " + Build.MODEL)
+            if (match != null) {
+                val tournament = TournamentRepository.getTournament(match.tournamentId ?: "")
+                    ?: Tournament(id = UUID.randomUUID().toString(), name = "Match", matches = listOf(match))
+                NearbyManager.broadcastTournament(context, tournament)
+                NearbyManager.broadcastMatch(context, match)
+            }
+            Toast.makeText(context, "Nearby role: Broadcaster (primary scorer)", Toast.LENGTH_SHORT).show()
+        }
+        NearbyStartMode.SPECTATOR -> {
+            NearbyManager.startAsSpectator(context, "CricLeague: " + Build.MODEL)
+            Toast.makeText(context, "Nearby role: Spectator (read-only)", Toast.LENGTH_SHORT).show()
+        }
+    }
+}
+
+private fun stopNearbySync(context: Context, viewModel: ScoringViewModel) {
+    viewModel.toggleSync(false)
+    NearbyManager.stopAll(context)
+    Toast.makeText(context, "Nearby Sync Stopped 🛑", Toast.LENGTH_SHORT).show()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,10 +105,66 @@ fun HomeScreen(
     val liveMatch = tournaments.flatMap { it.matches }.find { it.status == MatchStatus.LIVE }
     val isSyncEnabled by viewModel.isSyncEnabled.collectAsState()
     val connectedEndpoints by NearbyManager.connectedEndpoints.collectAsState()
+    val nearbyRole by NearbyManager.nearbyRole.collectAsState()
+    val cloudSession by CloudSyncManager.session.collectAsState()
     var showSettings by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var showSyncSheet by remember { mutableStateOf(false) }
+    var showWebShareDialog by remember { mutableStateOf(false) }
+    var showNearbyRoleDialog by remember { mutableStateOf(false) }
+    var showCloudAuthDialog by remember { mutableStateOf(false) }
+    var cloudAuthMode by remember { mutableStateOf("login") }
+    var cloudEmail by remember { mutableStateOf("") }
+    var cloudPassword by remember { mutableStateOf("") }
+    var cloudName by remember { mutableStateOf("") }
+    var cloudBusy by remember { mutableStateOf(false) }
+    var lastCloudAutoSyncAt by remember { mutableStateOf(0L) }
+    var webShareUrl by remember { mutableStateOf("") }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    fun requestCloudSync(showSuccessToast: Boolean) {
+        if (cloudBusy || cloudSession == null) return
+        scope.launch {
+            cloudBusy = true
+            try {
+                val matches = CloudSyncManager.pullCloudMatches()
+                val imported = CloudSyncManager.importCloudMatchesToLocal(matches)
+                lastCloudAutoSyncAt = System.currentTimeMillis()
+                if (showSuccessToast) {
+                    Toast.makeText(context, "Imported $imported cloud match(es)", Toast.LENGTH_LONG).show()
+                }
+            } catch (err: Exception) {
+                if (showSuccessToast) {
+                    Toast.makeText(context, err.message ?: "Cloud sync failed", Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                cloudBusy = false
+            }
+        }
+    }
+
+    LaunchedEffect(cloudSession?.userId) {
+        if (cloudSession != null) {
+            requestCloudSync(showSuccessToast = false)
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, cloudSession?.userId, cloudBusy) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && cloudSession != null && !cloudBusy) {
+                val now = System.currentTimeMillis()
+                if (now - lastCloudAutoSyncAt >= 60_000) {
+                    requestCloudSync(showSuccessToast = false)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -234,7 +317,11 @@ fun HomeScreen(
 
                                     OutlinedButton(
                                         onClick = {
-                                            handleToggleNearbySync(context, viewModel, !isSyncEnabled, liveMatch)
+                                            if (isSyncEnabled) {
+                                                stopNearbySync(context, viewModel)
+                                            } else {
+                                                showNearbyRoleDialog = true
+                                            }
                                         },
                                         modifier = Modifier.height(48.dp),
                                         shape = RoundedCornerShape(12.dp),
@@ -251,7 +338,9 @@ fun HomeScreen(
                                             ) {}
                                             Spacer(Modifier.width(6.dp))
                                             Text(
-                                                text = if (isSyncEnabled) "BROADCASTING" else "BROADCAST LIVE",
+                                                text = if (isSyncEnabled) {
+                                                    if (nearbyRole == NearbyManager.NearbyRole.BROADCASTER) "BROADCASTING" else "SPECTATOR"
+                                                } else "NEARBY SYNC",
                                                 fontWeight = FontWeight.Bold
                                             )
                                         }
@@ -321,11 +410,20 @@ fun HomeScreen(
                             Text("Create Series", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onPrimaryContainer)
                             Text("Setup teams and manage multiple matches with full leaderboards.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
                             Spacer(modifier = Modifier.height(16.dp))
-                            Button(
-                                onClick = onNavigateToDashboard,
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                            ) {
-                                Text("GET STARTED", fontWeight = FontWeight.Black)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = onNavigateToDashboard,
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                ) {
+                                    Text("GET STARTED", fontWeight = FontWeight.Black)
+                                }
+                                OutlinedButton(
+                                    onClick = { showWebShareDialog = true },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("WEB LIVE SHARE", fontWeight = FontWeight.Black)
+                                }
                             }
                         }
                     }
@@ -427,20 +525,9 @@ fun HomeScreen(
                                     checked = isSyncEnabled,
                                     onCheckedChange = { enabled ->
                                         if (enabled) {
-                                            val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-                                            val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-                                            val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-                                            
-                                            if (!isGpsEnabled && !isNetworkEnabled) {
-                                                Toast.makeText(context, "Please turn on GPS/Location to use Sync.", Toast.LENGTH_LONG).show()
-                                                return@Switch
-                                            }
-                                            
-                                            viewModel.toggleSync(true)
-                                            NearbyManager.startSync(context, "CricLeague: " + Build.MODEL)
+                                            showNearbyRoleDialog = true
                                         } else {
-                                            viewModel.toggleSync(false)
-                                            NearbyManager.stopAll(context)
+                                            stopNearbySync(context, viewModel)
                                         }
                                     }
                                 )
@@ -646,21 +733,128 @@ fun HomeScreen(
 
                         HorizontalDivider()
 
+                        Text("CLOUD SYNC", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = if (cloudSession == null) {
+                                        "Sign in to sync your private matches from CricLeague Web"
+                                    } else {
+                                        "Signed in as ${cloudSession?.name?.ifBlank { cloudSession?.email } ?: "User"}"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.Gray
+                                )
+
+                                if (cloudSession == null) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                        Button(
+                                            onClick = {
+                                                cloudAuthMode = "login"
+                                                showCloudAuthDialog = true
+                                            },
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("SIGN IN", fontWeight = FontWeight.Bold)
+                                        }
+                                        OutlinedButton(
+                                            onClick = {
+                                                cloudAuthMode = "register"
+                                                showCloudAuthDialog = true
+                                            },
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("REGISTER", fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                } else {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                        Button(
+                                            onClick = {
+                                                if (cloudBusy) return@Button
+                                                requestCloudSync(showSuccessToast = true)
+                                            },
+                                            enabled = !cloudBusy,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text(if (cloudBusy) "SYNCING..." else "SYNC NOW", fontWeight = FontWeight.Bold)
+                                        }
+                                        OutlinedButton(
+                                            onClick = {
+                                                CloudSyncManager.signOut()
+                                                Toast.makeText(context, "Signed out from cloud", Toast.LENGTH_SHORT).show()
+                                            },
+                                            enabled = !cloudBusy,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("SIGN OUT", fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        HorizontalDivider()
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column {
-                                Text("Enable Local Sync", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                                Text("Discover and connect to nearby scorers", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                Text("Nearby Role", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                                Text(
+                                    when {
+                                        !isSyncEnabled -> "Choose Broadcaster or Spectator"
+                                        nearbyRole == NearbyManager.NearbyRole.BROADCASTER -> "You are Broadcaster (primary scorer)"
+                                        else -> "You are Spectator (read-only)"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.Gray
+                                )
                             }
-                            Switch(
-                                checked = isSyncEnabled,
-                                onCheckedChange = { enabled ->
-                                    handleToggleNearbySync(context, viewModel, enabled, liveMatch)
+
+                            if (!isSyncEnabled) {
+                                Button(onClick = { showNearbyRoleDialog = true }, shape = RoundedCornerShape(10.dp)) {
+                                    Text("START", fontWeight = FontWeight.Bold)
                                 }
-                            )
+                            } else {
+                                OutlinedButton(onClick = { stopNearbySync(context, viewModel) }, shape = RoundedCornerShape(10.dp)) {
+                                    Text("STOP", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        if (isSyncEnabled) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { startNearbyWithRole(context, viewModel, NearbyStartMode.BROADCASTER, liveMatch) },
+                                    modifier = Modifier.weight(1f),
+                                    enabled = nearbyRole != NearbyManager.NearbyRole.BROADCASTER
+                                ) {
+                                    Text("BECOME BROADCASTER", fontWeight = FontWeight.Bold)
+                                }
+                                OutlinedButton(
+                                    onClick = { startNearbyWithRole(context, viewModel, NearbyStartMode.SPECTATOR, liveMatch) },
+                                    modifier = Modifier.weight(1f),
+                                    enabled = nearbyRole != NearbyManager.NearbyRole.SPECTATOR
+                                ) {
+                                    Text("JOIN AS SPECTATOR", fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
 
                         if (isSyncEnabled) {
@@ -706,7 +900,8 @@ fun HomeScreen(
                                         Toast.makeText(context, "Broadcasting Live Match to connected devices! 📡⚡", Toast.LENGTH_SHORT).show()
                                     },
                                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                                    shape = RoundedCornerShape(12.dp)
+                                    shape = RoundedCornerShape(12.dp),
+                                    enabled = nearbyRole == NearbyManager.NearbyRole.BROADCASTER
                                 ) {
                                     Text("BROADCAST LIVE MATCH NOW 📡", fontWeight = FontWeight.Black)
                                 }
@@ -716,6 +911,181 @@ fun HomeScreen(
                         Spacer(Modifier.height(12.dp))
                     }
                 }
+            }
+
+            if (showWebShareDialog) {
+                AlertDialog(
+                    onDismissRequest = { showWebShareDialog = false },
+                    title = { Text("Connect Web Live Share", fontWeight = FontWeight.Black) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                "Paste the LIVE share link from CricLeague Web. The match opens in read-only spectator mode.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            OutlinedTextField(
+                                value = webShareUrl,
+                                onValueChange = { webShareUrl = it },
+                                label = { Text("Share URL") },
+                                placeholder = { Text("https://cricleague.nrkmart.in/...matchId=...&st=...") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val url = webShareUrl.trim()
+                                if (url.isNotEmpty()) {
+                                    viewModel.connectToWebLiveShare(context, url) { match ->
+                                        onNavigateToLiveScoring(match)
+                                    }
+                                    showWebShareDialog = false
+                                } else {
+                                    Toast.makeText(context, "Enter a valid live share URL", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        ) {
+                            Text("CONNECT", fontWeight = FontWeight.Black)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showWebShareDialog = false }) {
+                            Text("CANCEL")
+                        }
+                    }
+                )
+            }
+
+            if (showNearbyRoleDialog) {
+                AlertDialog(
+                    onDismissRequest = { showNearbyRoleDialog = false },
+                    title = { Text("Choose Nearby Role", fontWeight = FontWeight.Black) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                "Broadcaster is the only scorer. Spectators receive live score, scorecard, overs, and stats in read-only mode.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = {
+                                startNearbyWithRole(context, viewModel, NearbyStartMode.BROADCASTER, liveMatch)
+                                showNearbyRoleDialog = false
+                            }) {
+                                Text("BROADCASTER", fontWeight = FontWeight.Black)
+                            }
+                            OutlinedButton(onClick = {
+                                startNearbyWithRole(context, viewModel, NearbyStartMode.SPECTATOR, liveMatch)
+                                showNearbyRoleDialog = false
+                            }) {
+                                Text("SPECTATOR", fontWeight = FontWeight.Black)
+                            }
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showNearbyRoleDialog = false }) {
+                            Text("CANCEL")
+                        }
+                    }
+                )
+            }
+
+            if (showCloudAuthDialog) {
+                AlertDialog(
+                    onDismissRequest = {
+                        if (!cloudBusy) showCloudAuthDialog = false
+                    },
+                    title = {
+                        Text(
+                            if (cloudAuthMode == "register") "Create Cloud Account" else "Cloud Sign In",
+                            fontWeight = FontWeight.Black
+                        )
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                "Use the same account as CricLeague Web to sync signed-user match data.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            OutlinedTextField(
+                                value = cloudEmail,
+                                onValueChange = { cloudEmail = it },
+                                label = { Text("Email") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !cloudBusy
+                            )
+                            OutlinedTextField(
+                                value = cloudPassword,
+                                onValueChange = { cloudPassword = it },
+                                label = { Text("Password") },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !cloudBusy
+                            )
+                            if (cloudAuthMode == "register") {
+                                OutlinedTextField(
+                                    value = cloudName,
+                                    onValueChange = { cloudName = it },
+                                    label = { Text("Name (optional)") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = !cloudBusy
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val email = cloudEmail.trim()
+                                val password = cloudPassword
+                                if (email.isBlank() || password.isBlank()) {
+                                    Toast.makeText(context, "Email and password are required", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+
+                                scope.launch {
+                                    cloudBusy = true
+                                    try {
+                                        if (cloudAuthMode == "register") {
+                                            CloudSyncManager.register(email, password, cloudName.trim().ifBlank { null })
+                                            Toast.makeText(context, "Cloud account created", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            CloudSyncManager.login(email, password)
+                                            Toast.makeText(context, "Signed in successfully", Toast.LENGTH_SHORT).show()
+                                        }
+                                        showCloudAuthDialog = false
+                                    } catch (err: Exception) {
+                                        Toast.makeText(context, err.message ?: "Cloud authentication failed", Toast.LENGTH_LONG).show()
+                                    } finally {
+                                        cloudBusy = false
+                                    }
+                                }
+                            },
+                            enabled = !cloudBusy
+                        ) {
+                            Text(if (cloudBusy) "PLEASE WAIT..." else if (cloudAuthMode == "register") "REGISTER" else "SIGN IN", fontWeight = FontWeight.Black)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { showCloudAuthDialog = false },
+                            enabled = !cloudBusy
+                        ) {
+                            Text("CANCEL")
+                        }
+                    }
+                )
             }
         }
     }

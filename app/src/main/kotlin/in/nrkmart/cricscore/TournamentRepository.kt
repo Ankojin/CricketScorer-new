@@ -483,11 +483,13 @@ object TournamentRepository {
                 dateMillis = scheduledDate ?: System.currentTimeMillis(),
                 gullyRules = GullyRulesRepository.gullyRules.value
             )
+            CloudSyncManager.enqueueMatchUpsert(match)
             t.safeCopy(matches = t.matches.orEmpty() + match)
         }
     }
 
     fun deleteMatch(tournamentId: String, matchId: String) {
+        CloudSyncManager.enqueueMatchDelete(matchId)
         updateTournament(tournamentId) { t ->
             val filteredMatches = t.matches.orEmpty().filter { it.id != matchId }
             t.safeCopy(matches = filteredMatches)
@@ -495,6 +497,7 @@ object TournamentRepository {
     }
 
     fun updateMatch(tournamentId: String, updatedMatch: Match) {
+        CloudSyncManager.enqueueMatchUpsert(updatedMatch)
         updateTournament(tournamentId) { t ->
             val updatedMatches = t.matches.orEmpty().map { if (it.id == updatedMatch.id) updatedMatch else it }
             t.safeCopy(matches = updatedMatches)

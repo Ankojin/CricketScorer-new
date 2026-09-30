@@ -8,5 +8,6 @@ class CricketScorerApp : Application() {
         TournamentRepository.init(this)
         GlobalPlayerRepository.init(this)
         GullyRulesRepository.init(this)
+        CloudSyncManager.init(this)
     }
 }

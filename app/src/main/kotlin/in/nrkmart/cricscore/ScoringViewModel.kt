@@ -4,6 +4,8 @@ import android.content.Context
 import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -12,6 +14,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.updateAndGet
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class ScoringViewModel : ViewModel() {
@@ -24,6 +27,9 @@ class ScoringViewModel : ViewModel() {
 
     private val _isSyncEnabled = MutableStateFlow(false)
     val isSyncEnabled: StateFlow<Boolean> = _isSyncEnabled.asStateFlow()
+
+    private val _isWebSpectatorMode = MutableStateFlow(false)
+    val isWebSpectatorMode: StateFlow<Boolean> = _isWebSpectatorMode.asStateFlow()
 
     private val _bowlerNotification = MutableStateFlow<String?>(null)
     val bowlerNotification: StateFlow<String?> = _bowlerNotification.asStateFlow()
@@ -43,14 +49,17 @@ class ScoringViewModel : ViewModel() {
         _bowlerNotification,
         _activeWicketContext,
         _isSyncEnabled,
+        _isWebSpectatorMode,
         NearbyManager.connectedEndpoints,
-        NearbyManager.isHost,
+        NearbyManager.nearbyRole,
         _finishedOverSummary
     ) { args ->
         val sync = args[4] as Boolean
-        val endpoints = args[5] as Set<*>
-        val isHost = args[6] as Boolean
-        val isSpectator = sync && !isHost && endpoints.isNotEmpty()
+        val webSpectator = args[5] as Boolean
+        val endpoints = args[6] as Set<*>
+        val nearbyRole = args[7] as NearbyManager.NearbyRole
+        val isNearbySpectator = sync && nearbyRole == NearbyManager.NearbyRole.SPECTATOR
+        val isSpectator = webSpectator || isNearbySpectator
 
         MatchUiState(
             match = args[0] as Match?,
@@ -60,7 +69,7 @@ class ScoringViewModel : ViewModel() {
             isSyncEnabled = sync,
             connectedDevicesCount = endpoints.size,
             isSpectatorMode = isSpectator,
-            finishedOverSummary = args[7] as OverSummary?
+            finishedOverSummary = args[8] as OverSummary?
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MatchUiState())
 
@@ -68,6 +77,7 @@ class ScoringViewModel : ViewModel() {
     private var pendingDroppedCatchBall: Ball? = null
     private var lastNotifiedBowlerId: String? = null
     private val notifiedBowlerIds = mutableSetOf<String>()
+    private var webSharePollJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -142,7 +152,7 @@ class ScoringViewModel : ViewModel() {
 
     fun takeOverScoring(context: Context) {
         _matchState.value?.let { match ->
-            NearbyManager.startBroadcasting(context, "CricLeague: " + match.teamA.name + " vs " + match.teamB.name)
+            NearbyManager.startAsBroadcaster(context, "CricLeague: " + match.teamA.name + " vs " + match.teamB.name)
         }
     }
 
@@ -210,6 +220,8 @@ class ScoringViewModel : ViewModel() {
     }
 
     fun loadMatch(match: Match) {
+        stopWebSharePolling()
+        _isWebSpectatorMode.value = false
         ScoringEngine.clearCache(match.id)
         val matchWithRules = if (match.status == MatchStatus.UPCOMING) {
             match.copy(gullyRules = GullyRulesRepository.gullyRules.value)
@@ -220,6 +232,61 @@ class ScoringViewModel : ViewModel() {
         if (recalculated.tossWinnerId == null && recalculated.status != MatchStatus.COMPLETED) {
             _matchState.update { it?.copy(pendingAction = PendingAction.TOSS_REQUIRED) }
         }
+    }
+
+    fun connectToWebLiveShare(
+        context: Context,
+        shareUrl: String,
+        onReady: (Match) -> Unit
+    ) {
+        viewModelScope.launch {
+            val parsed = WebShareApi.parseShareUrl(shareUrl)
+            if (parsed == null) {
+                Toast.makeText(context, "Invalid share link. Use full link copied from Web LIVE share.", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+
+            try {
+                val initial = WebShareApi.fetchSharedMatch(parsed)
+                loadWebSpectatorMatch(initial)
+                onReady(initial)
+                Toast.makeText(context, "Connected to live shared match", Toast.LENGTH_SHORT).show()
+                startWebSharePolling(context, parsed)
+            } catch (err: Exception) {
+                Toast.makeText(context, err.message ?: "Unable to open live share", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun loadWebSpectatorMatch(match: Match) {
+        ScoringEngine.clearCache(match.id)
+        val recalculated = ScoringEngine.recalculateMatchFromHistory(match.safeCopy())
+        _matchState.value = recalculated
+        _isWebSpectatorMode.value = true
+    }
+
+    private fun startWebSharePolling(context: Context, payload: WebShareApi.ShareLinkPayload) {
+        stopWebSharePolling()
+        webSharePollJob = viewModelScope.launch {
+            while (isActive) {
+                delay(5000)
+                try {
+                    val fresh = WebShareApi.fetchSharedMatch(payload)
+                    loadWebSpectatorMatch(fresh)
+                    if (fresh.status != MatchStatus.LIVE) {
+                        Toast.makeText(context, "Shared live match ended", Toast.LENGTH_SHORT).show()
+                        stopWebSharePolling()
+                    }
+                } catch (_: Exception) {
+                    // Silent retry to keep stream resilient to transient network failures.
+                }
+            }
+        }
+    }
+
+    fun stopWebSharePolling() {
+        webSharePollJob?.cancel()
+        webSharePollJob = null
     }
 
     fun handleToss(winnerId: String, decision: String) {
@@ -801,6 +868,11 @@ class ScoringViewModel : ViewModel() {
             TournamentRepository.updateMatch(finalMatch.tournamentId ?: "", finalMatch)
             finalMatch
         }
+    }
+
+    override fun onCleared() {
+        stopWebSharePolling()
+        super.onCleared()
     }
 
     fun deletePlayerFromMatch(context: Context, teamId: String, playerId: String) {

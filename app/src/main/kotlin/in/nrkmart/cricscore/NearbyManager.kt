@@ -18,6 +18,12 @@ import java.util.zip.GZIPOutputStream
 object NearbyManager {
     private const val SERVICE_ID = "in.nrkmart.cricscore.SYNC.v1.20"
     private val STRATEGY_TYPE = Strategy.P2P_STAR
+
+    enum class NearbyRole {
+        OFF,
+        BROADCASTER,
+        SPECTATOR
+    }
     
     private val _connectedEndpoints = MutableStateFlow<Set<String>>(emptySet())
     val connectedEndpoints = _connectedEndpoints.asStateFlow()
@@ -25,10 +31,14 @@ object NearbyManager {
     private val _isHost = MutableStateFlow(false)
     val isHost = _isHost.asStateFlow()
 
+    private val _nearbyRole = MutableStateFlow(NearbyRole.OFF)
+    val nearbyRole = _nearbyRole.asStateFlow()
+
     private val gson = Gson()
     private var matchUpdateCallback: ((Match) -> Unit)? = null
     private var tournamentUpdateCallback: ((String) -> Unit)? = null
     private var onConnectedCallback: (() -> Unit)? = null
+    private var discoveryDeviceName: String = Build.MODEL
     private val endpointNames = ConcurrentHashMap<String, String>()
 
     fun setMatchUpdateCallback(callback: (Match) -> Unit) {
@@ -48,13 +58,31 @@ object NearbyManager {
     }
 
     fun startSync(context: Context, name: String) {
+        // Legacy behavior maps to broadcaster mode to preserve one authoritative scorer.
+        startAsBroadcaster(context, name)
+    }
+
+    fun startAsBroadcaster(context: Context, matchName: String) {
         stopAll(context)
-        startBroadcasting(context, name)
+        _nearbyRole.value = NearbyRole.BROADCASTER
+        _isHost.value = true
+        startBroadcasting(context, matchName)
+    }
+
+    fun startAsSpectator(context: Context, name: String) {
+        stopAll(context)
+        _nearbyRole.value = NearbyRole.SPECTATOR
+        _isHost.value = false
+        discoveryDeviceName = name
         startDiscovering(context)
+        Toast.makeText(context.applicationContext, "Joined as Spectator: read-only live view", Toast.LENGTH_SHORT).show()
     }
 
     fun startBroadcasting(context: Context, matchName: String) {
         _isHost.value = true
+        if (_nearbyRole.value == NearbyRole.OFF) {
+            _nearbyRole.value = NearbyRole.BROADCASTER
+        }
         val options = AdvertisingOptions.Builder().setStrategy(STRATEGY_TYPE).build()
         val appContext = context.applicationContext
         Toast.makeText(appContext, "Broadcasting Live Score...", Toast.LENGTH_SHORT).show()
@@ -65,6 +93,9 @@ object NearbyManager {
     }
 
     fun startDiscovering(context: Context) {
+        if (_nearbyRole.value == NearbyRole.OFF) {
+            _nearbyRole.value = NearbyRole.SPECTATOR
+        }
         val options = DiscoveryOptions.Builder().setStrategy(STRATEGY_TYPE).build()
         val appContext = context.applicationContext
         Toast.makeText(appContext, "Searching for Nearby Scorer...", Toast.LENGTH_SHORT).show()
@@ -82,10 +113,12 @@ object NearbyManager {
         }
         _connectedEndpoints.value = emptySet()
         _isHost.value = false
+        _nearbyRole.value = NearbyRole.OFF
         endpointNames.clear()
     }
 
     fun broadcastTournament(context: Context, tournament: Tournament) {
+        if (_nearbyRole.value != NearbyRole.BROADCASTER) return
         try {
             val json = gson.toJson(tournament)
             val payloadObj = NearbyPayload("FULL_SYNC", json)
@@ -96,6 +129,7 @@ object NearbyManager {
     }
 
     fun broadcastMatch(context: Context, match: Match) {
+        if (_nearbyRole.value != NearbyRole.BROADCASTER) return
         try {
             val json = gson.toJson(match)
             val payloadObj = NearbyPayload("MATCH_UPDATE", json)
@@ -164,7 +198,7 @@ object NearbyManager {
             Log.d("Nearby", "Found scorer: ${info.endpointName}, requesting connection...")
             Toast.makeText(context.applicationContext, "Found Scorer: ${info.endpointName}. Connecting...", Toast.LENGTH_SHORT).show()
             Nearby.getConnectionsClient(context.applicationContext).requestConnection(
-                Build.MODEL,
+                discoveryDeviceName,
                 endpointId,
                 createConnectionLifecycleCallback(context)
             ).addOnFailureListener { Log.e("Nearby", "Failed to request connection to $endpointId", it) }
