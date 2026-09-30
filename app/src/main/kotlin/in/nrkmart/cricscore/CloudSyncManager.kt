@@ -46,6 +46,7 @@ object CloudSyncManager {
     data class ShareTokenResult(
         val matchId: String,
         val spectatorToken: String,
+        val tokenVersion: Int?,
         val expiresInSeconds: Int,
         val active: Boolean,
         val issuedAt: String?
@@ -162,6 +163,7 @@ object CloudSyncManager {
         ShareTokenResult(
             matchId = root.get("matchId")?.asString?.trim().orEmpty().ifBlank { matchId },
             spectatorToken = token,
+            tokenVersion = root.get("tokenVersion")?.asInt,
             expiresInSeconds = root.get("expiresInSeconds")?.asInt ?: ttlMinutes * 60,
             active = shareStatus?.get("active")?.asBoolean ?: true,
             issuedAt = shareStatus?.get("issuedAt")?.asString

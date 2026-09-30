@@ -277,6 +277,7 @@ class ScoringViewModel : ViewModel() {
         val shareUrl = "$base?matchId=${Uri.encode(current.id)}&st=${Uri.encode(result.spectatorToken)}&spectator=1"
 
         val updated = current.copy(
+            spectatorTokenVersion = result.tokenVersion ?: current.spectatorTokenVersion,
             spectatorShareActive = result.active,
             spectatorShareExpiresInSeconds = result.expiresInSeconds,
             spectatorShareIssuedAt = result.issuedAt,
