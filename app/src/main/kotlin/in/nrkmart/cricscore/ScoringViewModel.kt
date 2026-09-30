@@ -1,6 +1,7 @@
 package `in`.nrkmart.cricscore
 
 import android.content.Context
+import android.net.Uri
 import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -40,6 +41,9 @@ class ScoringViewModel : ViewModel() {
     private val _finishedOverSummary = MutableStateFlow<OverSummary?>(null)
     val finishedOverSummary: StateFlow<OverSummary?> = _finishedOverSummary.asStateFlow()
 
+    private val _liveShareState = MutableStateFlow(LiveShareState())
+    val liveShareState: StateFlow<LiveShareState> = _liveShareState.asStateFlow()
+
     var isReceivingRemoteUpdate = false
         private set
 
@@ -52,7 +56,8 @@ class ScoringViewModel : ViewModel() {
         _isWebSpectatorMode,
         NearbyManager.connectedEndpoints,
         NearbyManager.nearbyRole,
-        _finishedOverSummary
+        _finishedOverSummary,
+        _liveShareState
     ) { args ->
         val sync = args[4] as Boolean
         val webSpectator = args[5] as Boolean
@@ -69,7 +74,8 @@ class ScoringViewModel : ViewModel() {
             isSyncEnabled = sync,
             connectedDevicesCount = endpoints.size,
             isSpectatorMode = isSpectator,
-            finishedOverSummary = args[8] as OverSummary?
+            finishedOverSummary = args[8] as OverSummary?,
+            liveShareState = args[9] as LiveShareState
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MatchUiState())
 
@@ -228,10 +234,97 @@ class ScoringViewModel : ViewModel() {
         } else match
         val recalculated = ScoringEngine.recalculateMatchFromHistory(matchWithRules)
         _matchState.value = recalculated
+        updateLiveShareFromMatch(recalculated)
         notifiedBowlerIds.clear()
         if (recalculated.tossWinnerId == null && recalculated.status != MatchStatus.COMPLETED) {
             _matchState.update { it?.copy(pendingAction = PendingAction.TOSS_REQUIRED) }
         }
+    }
+
+    private fun updateLiveShareFromMatch(match: Match?) {
+        if (match == null) {
+            _liveShareState.value = LiveShareState()
+            return
+        }
+
+        _liveShareState.value = _liveShareState.value.copy(
+            isActive = match.spectatorShareActive,
+            expiresInSeconds = match.spectatorShareExpiresInSeconds,
+            issuedAt = match.spectatorShareIssuedAt,
+            revokedAt = match.spectatorShareRevokedAt
+        )
+    }
+
+    suspend fun createLiveShareLink(ttlMinutes: Int = 360): String {
+        val current = _matchState.value ?: throw IllegalStateException("No active match selected")
+        if (current.status != MatchStatus.LIVE) {
+            throw IllegalStateException("Live share is available only while match is LIVE")
+        }
+        if (!CloudSyncManager.isSignedIn()) {
+            throw IllegalStateException("Sign in to use live share")
+        }
+
+        val result = try {
+            CloudSyncManager.createSpectatorShareToken(current.id, ttlMinutes)
+        } catch (err: Exception) {
+            val msg = err.message.orEmpty()
+            if (msg.contains("HTTP 403") || msg.contains("HTTP 404")) {
+                throw IllegalStateException("Match is not synced to cloud yet. Tap Sync and Retry.")
+            }
+            throw err
+        }
+        val base = WebShareApi.appBaseUrl().trimEnd('/')
+        val shareUrl = "$base?matchId=${Uri.encode(current.id)}&st=${Uri.encode(result.spectatorToken)}&spectator=1"
+
+        val updated = current.copy(
+            spectatorShareActive = result.active,
+            spectatorShareExpiresInSeconds = result.expiresInSeconds,
+            spectatorShareIssuedAt = result.issuedAt,
+            spectatorShareRevokedAt = null
+        )
+        _matchState.value = updated
+        TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)
+        _liveShareState.value = LiveShareState(
+            isActive = result.active,
+            shareUrl = shareUrl,
+            expiresInSeconds = result.expiresInSeconds,
+            issuedAt = result.issuedAt,
+            revokedAt = null
+        )
+
+        return shareUrl
+    }
+
+    suspend fun syncMatchAndCreateLiveShareLink(ttlMinutes: Int = 360): String {
+        val current = _matchState.value ?: throw IllegalStateException("No active match selected")
+        if (!CloudSyncManager.isSignedIn()) {
+            throw IllegalStateException("Sign in to use live share")
+        }
+
+        val synced = CloudSyncManager.upsertMatchToCloud(current.safeCopy())
+        _matchState.value = synced
+        TournamentRepository.updateMatch(synced.tournamentId ?: "", synced)
+
+        return createLiveShareLink(ttlMinutes)
+    }
+
+    suspend fun revokeLiveShare() {
+        val current = _matchState.value ?: throw IllegalStateException("No active match selected")
+        if (!CloudSyncManager.isSignedIn()) {
+            throw IllegalStateException("Sign in to manage live share")
+        }
+
+        val result = CloudSyncManager.revokeSpectatorShareToken(current.id)
+        val updated = current.copy(
+            spectatorShareActive = result.active,
+            spectatorShareRevokedAt = result.revokedAt
+        )
+        _matchState.value = updated
+        TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)
+        _liveShareState.value = _liveShareState.value.copy(
+            isActive = false,
+            revokedAt = result.revokedAt
+        )
     }
 
     fun connectToWebLiveShare(

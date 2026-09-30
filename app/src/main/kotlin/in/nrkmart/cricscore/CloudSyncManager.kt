@@ -43,6 +43,21 @@ object CloudSyncManager {
         val apiBase: String
     )
 
+    data class ShareTokenResult(
+        val matchId: String,
+        val spectatorToken: String,
+        val expiresInSeconds: Int,
+        val active: Boolean,
+        val issuedAt: String?
+    )
+
+    data class RevokeShareResult(
+        val matchId: String,
+        val revoked: Boolean,
+        val active: Boolean,
+        val revokedAt: String?
+    )
+
     private data class PendingMatchOp(
         val matchId: String,
         val action: String, // UPSERT | DELETE
@@ -131,6 +146,41 @@ object CloudSyncManager {
     suspend fun deleteMatchFromCloud(matchId: String) = withContext(Dispatchers.IO) {
         val currentSession = _session.value ?: throw IllegalStateException("Please sign in first")
         deleteAuthorized("/matches/$matchId", currentSession)
+    }
+
+    suspend fun createSpectatorShareToken(matchId: String, ttlMinutes: Int = 360): ShareTokenResult = withContext(Dispatchers.IO) {
+        val currentSession = _session.value ?: throw IllegalStateException("Please sign in first")
+        val payload = JsonObject().apply { addProperty("ttlMinutes", ttlMinutes) }
+        val body = postAuthorized("/matches/$matchId/share-token", payload, currentSession)
+        val root = gson.fromJson(body, JsonObject::class.java)
+            ?: throw IllegalStateException("Invalid share token response")
+
+        val token = root.get("spectatorToken")?.asString?.trim().orEmpty()
+        if (token.isBlank()) throw IllegalStateException("Missing spectator token in response")
+
+        val shareStatus = root.getAsJsonObject("shareStatus")
+        ShareTokenResult(
+            matchId = root.get("matchId")?.asString?.trim().orEmpty().ifBlank { matchId },
+            spectatorToken = token,
+            expiresInSeconds = root.get("expiresInSeconds")?.asInt ?: ttlMinutes * 60,
+            active = shareStatus?.get("active")?.asBoolean ?: true,
+            issuedAt = shareStatus?.get("issuedAt")?.asString
+        )
+    }
+
+    suspend fun revokeSpectatorShareToken(matchId: String): RevokeShareResult = withContext(Dispatchers.IO) {
+        val currentSession = _session.value ?: throw IllegalStateException("Please sign in first")
+        val body = postAuthorized("/matches/$matchId/revoke-share", JsonObject(), currentSession)
+        val root = gson.fromJson(body, JsonObject::class.java)
+            ?: throw IllegalStateException("Invalid revoke response")
+
+        val shareStatus = root.getAsJsonObject("shareStatus")
+        RevokeShareResult(
+            matchId = root.get("matchId")?.asString?.trim().orEmpty().ifBlank { matchId },
+            revoked = root.get("revoked")?.asBoolean ?: true,
+            active = shareStatus?.get("active")?.asBoolean ?: false,
+            revokedAt = shareStatus?.get("revokedAt")?.asString
+        )
     }
 
     fun enqueueMatchUpsert(match: Match) {

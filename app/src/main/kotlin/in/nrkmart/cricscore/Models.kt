@@ -229,10 +229,24 @@ data class Match(
     val innings1EndTimeMillis: Long? = null,
     val innings2StartTimeMillis: Long? = null,
     val lastNotifiedBowlerId: String? = null,
+    val spectatorTokenVersion: Int? = null,
+    val spectatorShareActive: Boolean = false,
+    val spectatorShareExpiresInSeconds: Int? = null,
+    val spectatorShareIssuedAt: String? = null,
+    val spectatorShareRevokedAt: String? = null,
     val battingOrder: List<String> = emptyList(),
     val startTimeMillis: Long? = null,
     val endTimeMillis: Long? = null,
     val dateMillis: Long = System.currentTimeMillis()
+)
+
+@Immutable
+data class LiveShareState(
+    val isActive: Boolean = false,
+    val shareUrl: String? = null,
+    val expiresInSeconds: Int? = null,
+    val issuedAt: String? = null,
+    val revokedAt: String? = null
 )
 
 @Immutable
@@ -367,6 +381,11 @@ fun Match.safeCopy(): Match {
         innings1EndTimeMillis = this.innings1EndTimeMillis,
         innings2StartTimeMillis = this.innings2StartTimeMillis,
         lastNotifiedBowlerId = this.lastNotifiedBowlerId,
+        spectatorTokenVersion = this.spectatorTokenVersion,
+        spectatorShareActive = this.spectatorShareActive,
+        spectatorShareExpiresInSeconds = this.spectatorShareExpiresInSeconds,
+        spectatorShareIssuedAt = this.spectatorShareIssuedAt,
+        spectatorShareRevokedAt = this.spectatorShareRevokedAt,
         battingOrder = this.battingOrder.orEmpty().filterNotNull(),
         startTimeMillis = this.startTimeMillis,
         endTimeMillis = this.endTimeMillis,
@@ -418,5 +437,6 @@ data class MatchUiState(
     val isSyncEnabled: Boolean = false,
     val connectedDevicesCount: Int = 0,
     val isSpectatorMode: Boolean = false,
-    val finishedOverSummary: OverSummary? = null
+    val finishedOverSummary: OverSummary? = null,
+    val liveShareState: LiveShareState = LiveShareState()
 )
