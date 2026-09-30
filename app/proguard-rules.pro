@@ -1,25 +1,22 @@
-# Add project specific ProGuard rules here.
-# By default, the flags in this file are appended to flags specified
-# in C:\Users\AnkojiRaoNagisetty\AppData\Local\Android\Sdk/tools/proguard/proguard-android.txt
-# You can edit the include path and order by changing the proguardFiles
-# directive in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard/index.html
+# Preserve source line numbers for crash stack trace deobfuscation
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# Add any project specific keep rules here:
+# Keep Gson Serialized Data Models & Room Entities
+-keepclassmembers class * implements java.io.Serializable { *; }
+-keepclassmembers class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Keep Cric League Domain Models & Database Classes
+-keep class in.nrkmart.cricscore.Match { *; }
+-keep class in.nrkmart.cricscore.Tournament { *; }
+-keep class in.nrkmart.cricscore.Team { *; }
+-keep class in.nrkmart.cricscore.Player { *; }
+-keep class in.nrkmart.cricscore.Ball { *; }
+-keep class in.nrkmart.cricscore.NearbyPayload { *; }
+-keep class in.nrkmart.cricscore.db.** { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Room Database Keep Rules
+-keep class * extends androidx.room.RoomDatabase
+-dontwarn androidx.room.paging.**
