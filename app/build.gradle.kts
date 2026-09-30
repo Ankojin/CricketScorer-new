@@ -68,7 +68,7 @@ android {
         release {
             isMinifyEnabled = false
             ndk {
-                debugSymbolLevel = "SYMBOL_TABLE"
+                debugSymbolLevel = "FULL"
             }
             val ksFile = rootProject.file("keystore/release.jks")
             if (ksFile.exists() || file("../release.jks").exists()) {
