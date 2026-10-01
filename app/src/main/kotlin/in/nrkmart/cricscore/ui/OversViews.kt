@@ -189,7 +189,7 @@ fun OversTab(uiState: MatchUiState, viewModel: ScoringViewModel, graphicsLayer: 
                                                         BallBox(
                                                             ball = ball, 
                                                             onClick = { 
-                                                                if (match.status != MatchStatus.COMPLETED) {
+                                                                if (match.status != MatchStatus.COMPLETED && !uiState.isSpectatorMode) {
                                                                     editingBallIndex = idx 
                                                                 }
                                                             }
@@ -210,7 +210,7 @@ fun OversTab(uiState: MatchUiState, viewModel: ScoringViewModel, graphicsLayer: 
         }
     }
 
-    if (editingBallIndex != null) {
+    if (editingBallIndex != null && !uiState.isSpectatorMode) {
         val ball = match.ballHistory[editingBallIndex!!]
         var runs by remember { mutableIntStateOf(ball.runs) }
         var extraType by remember { mutableStateOf(ball.extrasType) }

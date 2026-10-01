@@ -122,10 +122,16 @@ fun LiveScoringScreen(
                             onClick = { showRevokeShareConfirm = true }
                         )
 
-                        IconButton(onClick = { showManageSquads = true }) {
+                        IconButton(
+                            onClick = { if (!uiState.isSpectatorMode) showManageSquads = true },
+                            enabled = !uiState.isSpectatorMode
+                        ) {
                             Icon(Icons.Default.PersonAdd, contentDescription = "Manage Squads")
                         }
-                        IconButton(onClick = { showOversDialog = true }) {
+                        IconButton(
+                            onClick = { if (!uiState.isSpectatorMode) showOversDialog = true },
+                            enabled = !uiState.isSpectatorMode
+                        ) {
                             Icon(Icons.Default.Settings, contentDescription = "Settings")
                         }
                     },

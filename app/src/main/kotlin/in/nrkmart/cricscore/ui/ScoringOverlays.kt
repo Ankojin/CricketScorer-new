@@ -56,6 +56,17 @@ fun ScoringOverlaysContainer(
 ) {
     val match = uiState.match ?: return
 
+    if (uiState.isSpectatorMode) {
+        if (match.status == MatchStatus.COMPLETED && showMatchFinishedDialog) {
+            MatchCelebrationDialog(
+                uiState = uiState,
+                onNavigateToDashboard = onNavigateToDashboard,
+                onDismiss = onDismissMatchFinished
+            )
+        }
+        return
+    }
+
     if (match.pendingAction == PendingAction.TOSS_REQUIRED || match.pendingAction == PendingAction.SELECT_MATCH_SETTINGS) {
         MatchSettingsDialog(
             uiState, 
