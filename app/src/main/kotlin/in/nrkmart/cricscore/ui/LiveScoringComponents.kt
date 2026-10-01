@@ -377,19 +377,7 @@ fun PlayerStatsSection(uiState: MatchUiState, viewModel: ScoringViewModel) {
             }) 
         }
         
-        if (!match.gullyRules.singleSideBatting) {
-            Button(
-                onClick = { viewModel.swapStrike() },
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                enabled = !isCompleted,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer, contentColor = MaterialTheme.colorScheme.onTertiaryContainer),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(Icons.Default.Refresh, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("SWAP BATSMEN (FIX SELECTION)", fontWeight = FontWeight.Bold)
-            }
-        }
+
         
         Spacer(modifier = Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth().background(Color.LightGray.copy(alpha = 0.2f)).padding(8.dp)) {

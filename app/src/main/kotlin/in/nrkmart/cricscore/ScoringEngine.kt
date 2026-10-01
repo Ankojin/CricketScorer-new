@@ -257,19 +257,40 @@ object ScoringEngine {
 
             if (match.pendingAction == PendingAction.SELECT_MATCH_SETTINGS || match.pendingAction == PendingAction.TOSS_REQUIRED) {
                 current = current.copy(pendingAction = match.pendingAction)
-            } else if (current.pendingAction == PendingAction.NONE) {
+            } else {
                 if (!inningsEnded || current.currentInnings == 2) {
-                    current = when {
-                        current.strikerId == null -> current.copy(pendingAction = PendingAction.SELECT_STRIKER)
-                        needsNonStriker && current.nonStrikerId == null -> current.copy(pendingAction = PendingAction.SELECT_NON_STRIKER)
-                        current.currentBowlerId == null -> current.copy(pendingAction = PendingAction.SELECT_BOWLER)
-                        else -> current
-                    }
+                    val autoStriker = if (current.strikerId == null) autoNextBatter(current) else current.strikerId
+                    val autoNonStriker = if (needsNonStriker && current.nonStrikerId == null) {
+                        val updatedM = current.copy(strikerId = autoStriker)
+                        autoNextBatter(updatedM)
+                    } else current.nonStrikerId
+                    val autoBowler = if (current.currentBowlerId == null) autoNextBowler(current) else current.currentBowlerId
+
+                    current = current.copy(
+                        strikerId = autoStriker,
+                        nonStrikerId = if (current.gullyRules.singleSideBatting) null else autoNonStriker,
+                        currentBowlerId = autoBowler,
+                        pendingAction = PendingAction.NONE
+                    )
                 }
             }
         }
 
         return if (current.gullyRules.singleSideBatting) current.copy(nonStrikerId = null) else current
+    }
+
+    private fun autoNextBatter(m: Match): String? {
+        val battingTeam = if (isTeamA(m.battingTeamId, m)) m.teamA else m.teamB
+        return battingTeam.players.firstOrNull { p ->
+            p.id != m.strikerId && p.id != m.nonStrikerId &&
+            !p.battingStats.isOut && !p.battingStats.isRetiredHurt
+        }?.id
+    }
+
+    private fun autoNextBowler(m: Match): String? {
+        val bowlingTeam = if (isTeamA(m.battingTeamId, m)) m.teamB else m.teamA
+        val available = bowlingTeam.players.filter { p -> p.id != m.lastBowlerId }
+        return available.firstOrNull()?.id ?: bowlingTeam.players.firstOrNull()?.id
     }
 
     fun isPlayerOut(pId: String?, m: Match): Boolean {
