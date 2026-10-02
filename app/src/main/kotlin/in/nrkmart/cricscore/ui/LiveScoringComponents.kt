@@ -347,6 +347,7 @@ fun PlayerStatsSection(uiState: MatchUiState, viewModel: ScoringViewModel) {
     val bowler = if (match.currentBowlerId != null) bowlingTeam.players.find { it.id == match.currentBowlerId } else null
 
     val isCompleted = match.status == MatchStatus.COMPLETED
+    val canEdit = !isCompleted && !uiState.isSpectatorMode
 
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(modifier = Modifier.fillMaxWidth().background(Color.LightGray.copy(alpha = 0.2f)).padding(8.dp)) {
@@ -362,8 +363,8 @@ fun PlayerStatsSection(uiState: MatchUiState, viewModel: ScoringViewModel) {
             val isWK = it.id == match.teamAWicketKeeperId || it.id == match.teamBWicketKeeperId
             val roleSuffix = if (isCaptain) " (c)" else if (it.isViceCaptain) " (vc)" else ""
             val nameWithExtras = it.name + " (${(it.battingStyle ?: BattingStyle.RHB).name})" + (if (it.isJoker) " 🃏" else "") + roleSuffix + (if (isWK) " 🧤" else "")
-            PlayerRow(nameWithExtras, it.battingStats.runs, it.battingStats.balls, it.battingStats.fours, it.battingStats.sixes, it.battingStats.strikeRate, true, onNameClick = { 
-                if (!isCompleted) viewModel.replaceStriker() 
+            PlayerRow(nameWithExtras, it.battingStats.runs, it.battingStats.balls, it.battingStats.fours, it.battingStats.sixes, it.battingStats.strikeRate, true, enabled = canEdit, onNameClick = { 
+                if (canEdit) viewModel.replaceStriker() 
             }) 
         }
         nonStriker?.let { 
@@ -372,16 +373,16 @@ fun PlayerStatsSection(uiState: MatchUiState, viewModel: ScoringViewModel) {
             val isWK = it.id == match.teamAWicketKeeperId || it.id == match.teamBWicketKeeperId
             val roleSuffix = if (isCaptain) " (c)" else if (isViceCaptain) " (vc)" else ""
             val nameWithExtras = it.name + " (${(it.battingStyle ?: BattingStyle.RHB).name})" + (if (it.isJoker) " 🃏" else "") + roleSuffix + (if (isWK) " 🧤" else "")
-            PlayerRow(nameWithExtras, it.battingStats.runs, it.battingStats.balls, it.battingStats.fours, it.battingStats.sixes, it.battingStats.strikeRate, false, onNameClick = { 
-                if (!isCompleted) viewModel.replaceNonStriker() 
+            PlayerRow(nameWithExtras, it.battingStats.runs, it.battingStats.balls, it.battingStats.fours, it.battingStats.sixes, it.battingStats.strikeRate, false, enabled = canEdit, onNameClick = { 
+                if (canEdit) viewModel.replaceNonStriker() 
             }) 
         }
         
-        if (!match.gullyRules.singleSideBatting) {
+        if (!match.gullyRules.singleSideBatting && !uiState.isSpectatorMode) {
             Button(
                 onClick = { viewModel.swapStrike() },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                enabled = !isCompleted,
+                enabled = canEdit,
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer, contentColor = MaterialTheme.colorScheme.onTertiaryContainer),
                 shape = RoundedCornerShape(8.dp)
             ) {
@@ -410,9 +411,12 @@ fun PlayerStatsSection(uiState: MatchUiState, viewModel: ScoringViewModel) {
                 val roleSuffix = if (isCaptain) " (c)" else if (isViceCaptain) " (vc)" else ""
                 val nameWithExtras = it.name + (if (it.isJoker) " 🃏" else "") + roleSuffix + (if (isWK) " 🧤" else "")
                 
-                Row(modifier = Modifier.weight(3f).clickable { if (!isCompleted) viewModel.replaceBowler() }, verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(3f).then(if (canEdit) Modifier.clickable { viewModel.replaceBowler() } else Modifier),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(nameWithExtras, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    if (!isCompleted) {
+                    if (canEdit) {
                         Spacer(Modifier.width(4.dp))
                         Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(12.dp), tint = Color.Gray)
                     }
@@ -431,12 +435,21 @@ fun PlayerStatsSection(uiState: MatchUiState, viewModel: ScoringViewModel) {
 }
 
 @Composable
-fun PlayerRow(name: String, r: Int, b: Int, s4: Int, s6: Int, sr: Double, isStriker: Boolean, onNameClick: () -> Unit) {
+fun PlayerRow(
+    name: String, r: Int, b: Int, s4: Int, s6: Int, sr: Double, isStriker: Boolean,
+    enabled: Boolean = true,
+    onNameClick: () -> Unit
+) {
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(modifier = Modifier.weight(3f).clickable { onNameClick() }, verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.weight(3f).then(if (enabled) Modifier.clickable { onNameClick() } else Modifier),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(name + (if (isStriker) "*" else ""), style = MaterialTheme.typography.bodySmall, fontWeight = if (isStriker) FontWeight.Bold else FontWeight.Normal)
-            Spacer(Modifier.width(4.dp))
-            Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(12.dp), tint = Color.Gray)
+            if (enabled) {
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(12.dp), tint = Color.Gray)
+            }
         }
         Text("$r", modifier = Modifier.width(30.dp), textAlign = TextAlign.End, style = MaterialTheme.typography.bodySmall)
         Text("$b", modifier = Modifier.width(30.dp), textAlign = TextAlign.End, style = MaterialTheme.typography.bodySmall)
