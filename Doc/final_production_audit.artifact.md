@@ -1,13 +1,13 @@
-# CricScore Pro — Final Production Audit Report
+# CricLeague — Final Production Audit Report
 
-This report documents the final production-readiness audit for both the **Android Application** (`in.nrkmart.cricscore`) and the new **React Web Application** (`web/`).
+This report documents the final production-readiness audit for both the **CricLeague Android Application** (`in.nrkmart.cricscore`) and the new **React Web Application** (`web/`).
 
 ---
 
 ## 1. Executive Summary & Verification Matrix
 
 ```text
-CricScore Pro
+CricLeague
 ├── Android Application
 │   ├── Package & App ID: in.nrkmart.cricscore
 │   ├── Architecture: Kotlin + Jetpack Compose + Room DB (v3) + Nearby P2P Sync

@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import {
   RotateCcw,
-  RefreshCw,
   UserCheck,
   AlertCircle,
   X,
   Play,
   Check,
-  Share2,
-  Cloud,
   CloudOff,
-  Link as LinkIcon
+  Cloud,
+  RefreshCw,
+  Share2,
+  Copy,
+  Eye,
+  ShieldAlert,
 } from 'lucide-react';
 import { useMatch } from '../../state/MatchContext';
 import { ExtrasType, WicketType, PendingAction, formatOvers } from '../../domain/models';
@@ -19,6 +21,14 @@ export const LiveScoringView: React.FC = () => {
   const {
     match,
     uiState,
+    isSpectator,
+    spectatorError,
+    isCloudSynced,
+    conflictError,
+    createShareToken,
+    revokeShareToken,
+    syncMatchToCloud,
+    resolveConflictByFetchingLatest,
     handleRuns,
     handleExtra,
     handleWicket,
@@ -32,16 +42,18 @@ export const LiveScoringView: React.FC = () => {
     dismissOverSummary,
     clearBowlerNotification,
     cancelPendingAction,
-    createLiveShareLink,
-    revokeLiveShareLink,
-    syncCurrentMatch
   } = useMatch();
 
   const [showWicketModal, setShowWicketModal] = useState(false);
   const [showExtrasModal, setShowExtrasModal] = useState(false);
   const [selectedExtraType, setSelectedExtraType] = useState<ExtrasType>(ExtrasType.WIDE);
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Share spectator link state
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareTtl, setShareTtl] = useState<15 | 60 | 360>(60);
+  const [generatedShareUrl, setGeneratedShareUrl] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [copiedToast, setCopiedToast] = useState(false);
 
   // Run-out modal state
   const [runOutRuns, setRunOutRuns] = useState(0);
@@ -72,70 +84,88 @@ export const LiveScoringView: React.FC = () => {
   );
   const availableBowlers = bowlingTeam.players.filter(p => p.id !== match.lastBowlerId);
 
+  const handleGenerateShare = async () => {
+    try {
+      setShareError(null);
+      const res = await createShareToken(shareTtl);
+      setGeneratedShareUrl(res.shareUrl);
+    } catch (err: any) {
+      setShareError(err.message || 'Failed to generate spectator link.');
+    }
+  };
+
+  const handleRevokeShare = async () => {
+    try {
+      setShareError(null);
+      await revokeShareToken();
+      setGeneratedShareUrl(null);
+      setShowShareModal(false);
+    } catch (err: any) {
+      setShareError(err.message || 'Failed to revoke spectator link.');
+    }
+  };
+
+  const handleCopyLink = () => {
+    if (generatedShareUrl) {
+      navigator.clipboard.writeText(generatedShareUrl);
+      setCopiedToast(true);
+      setTimeout(() => setCopiedToast(false), 2000);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-5 pb-12">
-      {/* Cloud Sync & Live Share Banner */}
-      <div className="bg-slate-900 text-white p-3.5 rounded-2xl shadow-sm flex items-center justify-between text-xs font-semibold">
-        <div className="flex items-center space-x-2">
-          {uiState.isSyncEnabled ? (
-            <span className="flex items-center space-x-1.5 text-emerald-400 font-bold">
-              <Cloud className="w-4 h-4" />
-              <span>Cloud Sync Active (Rev #{match.revision || 0})</span>
-            </span>
-          ) : (
+      {/* Mode Indicator / Spectator Banner */}
+      {isSpectator ? (
+        <div className="bg-sky-900 text-white p-3.5 rounded-2xl shadow-sm flex items-center justify-between text-xs font-bold border border-sky-700">
+          <div className="flex items-center space-x-2">
+            <Eye className="w-4 h-4 text-sky-400 animate-pulse" />
+            <span>Spectator View (Read-Only • Live Polling)</span>
+          </div>
+          <span className="text-[10px] bg-sky-800 px-2 py-0.5 rounded-full text-sky-200">Live Feed</span>
+        </div>
+      ) : (
+        <div className="bg-slate-900 text-white p-3.5 rounded-2xl shadow-sm flex items-center justify-between text-xs font-semibold">
+          <div className="flex items-center space-x-2">
             <span className="flex items-center space-x-1.5 text-slate-400">
               <CloudOff className="w-4 h-4" />
-              <span>Local Storage Only</span>
+              <span>Local scoring</span>
             </span>
-          )}
-        </div>
-
-        <div className="flex items-center space-x-2">
+          </div>
           <button
-            onClick={async () => {
-              setIsSyncing(true);
-              await syncCurrentMatch();
-              setIsSyncing(false);
-            }}
-            disabled={isSyncing}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold flex items-center space-x-1.5"
+            onClick={() => setShowShareModal(true)}
+            className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl font-bold transition-all"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>Sync</span>
+            <Share2 className="w-3.5 h-3.5" />
+            <span>Share Match</span>
           </button>
-
-          {!match.spectatorShareActive ? (
-            <button
-              onClick={async () => {
-                try {
-                  const url = await createLiveShareLink(360);
-                  setShareUrl(url);
-                  navigator.clipboard?.writeText(url);
-                  alert(`Live Spectator Link generated & copied:\n${url}`);
-                } catch (err: any) {
-                  alert(err.message || 'Unable to generate share link. Ensure you are signed in.');
-                }
-              }}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center space-x-1.5"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-              <span>Share Live Link</span>
-            </button>
-          ) : (
-            <button
-              onClick={async () => {
-                await revokeLiveShareLink();
-                setShareUrl(null);
-                alert('Live share link revoked.');
-              }}
-              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-bold flex items-center space-x-1.5"
-            >
-              <X className="w-3.5 h-3.5" />
-              <span>Revoke Share</span>
-            </button>
-          )}
         </div>
-      </div>
+      )}
+
+      {/* Spectator Error Banner */}
+      {spectatorError && (
+        <div className="bg-rose-900/90 text-white p-4 rounded-2xl shadow-md flex items-center space-x-3 text-xs font-bold border border-rose-700">
+          <ShieldAlert className="w-5 h-5 text-rose-300 shrink-0" />
+          <span>{spectatorError}</span>
+        </div>
+      )}
+
+      {/* 409 STALE_REVISION Conflict Banner */}
+      {conflictError && (
+        <div className="bg-amber-600 text-white p-4 rounded-2xl shadow-lg flex items-center justify-between font-bold text-xs border border-amber-500">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <span>{conflictError}</span>
+          </div>
+          <button
+            onClick={resolveConflictByFetchingLatest}
+            className="px-3 py-1.5 bg-amber-800 hover:bg-amber-900 rounded-xl text-xs font-black flex items-center space-x-1 shrink-0 transition-all ml-2"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Reload Latest Match</span>
+          </button>
+        </div>
+      )}
 
       {/* Over End Summary Banner */}
       {uiState.finishedOverSummary && (
@@ -367,54 +397,155 @@ export const LiveScoringView: React.FC = () => {
       </div>
 
       {/* Main Scoring Keypad */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-4">
-        <div className="grid grid-cols-6 gap-2">
-          {[0, 1, 2, 3, 4, 6].map(runs => (
-            <button
-              key={runs}
-              onClick={() => handleRuns(runs)}
-              className={`py-4 rounded-2xl font-black text-xl shadow-sm transition-transform active:scale-95 ${
-                runs === 4
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
-                  : runs === 6
-                  ? 'bg-purple-600 text-white hover:bg-purple-700'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-200'
-              }`}
-            >
-              {runs}
-            </button>
-          ))}
-        </div>
+      {!isSpectator ? (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-4">
+          <div className="grid grid-cols-6 gap-2">
+            {[0, 1, 2, 3, 4, 6].map(runs => (
+              <button
+                key={runs}
+                onClick={() => handleRuns(runs)}
+                className={`py-4 rounded-2xl font-black text-xl shadow-sm transition-transform active:scale-95 ${
+                  runs === 4
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : runs === 6
+                    ? 'bg-purple-600 text-white hover:bg-purple-700'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-200'
+                }`}
+              >
+                {runs}
+              </button>
+            ))}
+          </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <button
-            onClick={() => { setSelectedExtraType(ExtrasType.WIDE); setShowExtrasModal(true); }}
-            className="py-3 bg-amber-100 text-amber-900 font-extrabold rounded-xl text-sm hover:bg-amber-200"
-          >
-            WD / EXTRAS
-          </button>
-          <button
-            onClick={() => setShowWicketModal(true)}
-            className="py-3 bg-red-600 text-white font-extrabold rounded-xl text-sm hover:bg-red-700"
-          >
-            WICKET
-          </button>
-          <button
-            onClick={swapStrike}
-            className="py-3 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold rounded-xl text-xs flex items-center justify-center space-x-1"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>SWAP STRIKE</span>
-          </button>
-          <button
-            onClick={undo}
-            className="py-3 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold rounded-xl text-xs flex items-center justify-center space-x-1"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>UNDO</span>
-          </button>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <button
+              onClick={() => { setSelectedExtraType(ExtrasType.WIDE); setShowExtrasModal(true); }}
+              className="py-3 bg-amber-100 text-amber-900 font-extrabold rounded-xl text-sm hover:bg-amber-200"
+            >
+              WD / EXTRAS
+            </button>
+            <button
+              onClick={() => setShowWicketModal(true)}
+              className="py-3 bg-red-600 text-white font-extrabold rounded-xl text-sm hover:bg-red-700"
+            >
+              WICKET
+            </button>
+            <button
+              onClick={swapStrike}
+              className="py-3 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold rounded-xl text-xs flex items-center justify-center space-x-1"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>SWAP STRIKE</span>
+            </button>
+            <button
+              onClick={undo}
+              className="py-3 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold rounded-xl text-xs flex items-center justify-center space-x-1"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>UNDO</span>
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 text-center text-slate-500 font-bold text-xs space-y-1">
+          <Eye className="w-5 h-5 mx-auto text-slate-400" />
+          <div>Scoring controls disabled in Spectator Mode</div>
+        </div>
+      )}
+
+      {/* Share Spectator Link Modal */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-md w-full space-y-5 shadow-2xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-extrabold text-base text-slate-900 dark:text-white flex items-center space-x-2">
+                <Share2 className="w-5 h-5 text-emerald-600" />
+                <span>Share Spectator Link</span>
+              </h3>
+              <button onClick={() => setShowShareModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {shareError && (
+              <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-xl text-xs font-bold text-red-700 dark:text-red-300">
+                {shareError}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Link Expiry Duration</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { ttl: 15, label: '15 Mins' },
+                  { ttl: 60, label: '1 Hour' },
+                  { ttl: 360, label: '6 Hours' },
+                ].map(opt => (
+                  <button
+                    key={opt.ttl}
+                    onClick={() => setShareTtl(opt.ttl as any)}
+                    className={`py-2.5 rounded-xl font-bold text-xs border ${
+                      shareTtl === opt.ttl
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={handleGenerateShare}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl text-xs flex items-center justify-center space-x-2"
+              >
+                <Share2 className="w-4 h-4" />
+                <span>Generate Spectator Link</span>
+              </button>
+
+              {generatedShareUrl && (
+                <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Live Spectator URL</label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={generatedShareUrl}
+                      className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-xs font-mono text-slate-800 dark:text-slate-200 truncate"
+                    />
+                    <button
+                      onClick={handleCopyLink}
+                      className="p-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center justify-center"
+                    >
+                      {copiedToast ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {copiedToast && (
+                    <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 text-right">
+                      Link copied to clipboard!
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+              <button
+                onClick={handleRevokeShare}
+                className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline"
+              >
+                Revoke All Shares
+              </button>
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Extras Modal */}
       {showExtrasModal && (

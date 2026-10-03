@@ -14,7 +14,7 @@ The AWS API, Lambda, and DynamoDB remain the backend. This is a client migration
 Include these in every Gemini implementation prompt:
 
 - Work only in `C:\Users\AnkojiRaoNagisetty\StudioProjects\CricketScorer\web` unless a phase explicitly authorizes changes to `CricketScorer-web` backend or Vanilla code.
-- Do not edit `CricketScorer-web/public/` or deploy anything until parity is approved.
+- Do not edit `D:\CricketScorer-web\` or deploy anything until parity is approved.
 - Do not change AWS resources, deploy SAM, upload to S3, invalidate CloudFront, or commit/push without explicit approval.
 - Do not set `ENFORCE_ANDROID_MATCH_WRITES=false` as a shortcut. Ask for a scorer authorization decision before enabling React cloud match writes.
 - Do not implement or call `/api/series/active/snapshot`, `/matches/{id}/balls`, `/matches/{id}/claim`, or `/matches/{id}/share`; these routes do not exist.
@@ -72,10 +72,38 @@ Implement React local-data isolation and read-only cloud bootstrap in CricketSco
 ### Prompt 3: Engine Parity and Local Match Setup
 
 ```text
-Implement React local match setup using the existing scoring engine and model contracts. First compare CricketScorer/web/src/domain/scoringEngine.ts, web/src/engine/ScoringEngine.ts, web/src_legacy_engine, CricketScorer-web/src/engine/ScoringEngine.ts, and Android ScoringEngine.kt. Recommend one canonical React engine and do not delete duplicates until equivalence is demonstrated. Build the setup flow for teams, roster, overs/settings, toss, and a local-only match. Add golden fixtures for runs, wides, no-balls, byes, leg-byes, granted runs, every supported wicket, retired hurt, strike rotation, pending actions, innings transition, target/chase completion, and history edits. Do not change rules to fit a sample implementation.
+Implement React local match setup and engine parity in CricketScorer/web.
+
+NON-NEGOTIABLE GUARDRAILS:
+- Work strictly within CricketScorer/web. Do not edit D:\CricketScorer-web or backend/AWS resources.
+- Keep cloud match writes DISABLED; guest and local-only scoring must remain local.
+- Preserve stable player/team UUIDs; never merge or identify players solely by name.
+- Do NOT change cricket scoring rules to pass tests; fix implementation bugs instead.
+
+PHASE 1: Engine & Model Audit & Canonical Selection
+1. Compare all scoring engine implementations: CricketScorer/web/src/domain/scoringEngine.ts, web/src/engine/ScoringEngine.ts, web/src_legacy_engine, CricketScorer-web/src/engine/ScoringEngine.ts, and Android ScoringEngine.kt.
+2. Compare duplicate model definitions in web/src/domain/models.ts and web/src/models/types.ts. Recommend ONE canonical React engine and ONE canonical models contract.
+3. Keep duplicate engine files intact until equivalence tests pass completely.
+
+PHASE 2: Golden Fixture Test Suite & Parity Verification
+1. Create automated Vitest golden test suites in web/src/domain/__tests__/ comparing the canonical engine against reference Android/Vanilla outputs.
+2. Include golden fixtures for:
+   - Ball runs, Wides, No-balls, Byes, Leg-byes, Granted runs/penalties.
+   - Every supported wicket type (Bowled, Caught, LBW, Run Out, Stumped, Hit Wicket, Timed Out, Obstructing Field, Retired Out).
+   - Special states: Retired Hurt (with re-entry), Strike rotation rules, Pending actions (striker/bowler selection).
+   - Match flow: Innings transition, Target/Chase calculation, Required Run Rate, Match completion (win/draw/tie).
+   - History mutations: Undo ball, edit ball history, recalculating full match state deterministically.
+
+PHASE 3: Local Match Setup UI & State Integration
+1. Implement/update the React local match setup flow (QuickMatchSetup / HomeScreen):
+   - Team selection & roster setup (generate/assign stable UUIDs for teams and players).
+   - Match settings: Overs limit, max overs per bowler, balls per over, wide/no-ball penalties, re-bowl rules, free hits.
+   - Toss workflow: Winner selection and Decision (Bat/Bowl).
+   - Opening On-field selection: Striker, Non-striker, and Opening Bowler.
+2. On setup completion, initialize the Match snapshot, persist it to LocalMatchRepository under the active user/guest namespace, and activate it in MatchContext.
 ```
 
-**Exit gate:** The same fixtures produce equivalent totals, player/bowler stats, wickets, and match status in React and reference clients.
+**Exit gate:** Golden fixture tests produce equivalent totals, player/bowler stats, wickets, and match status in React and reference clients; local match setup creates a valid persistent snapshot in LocalMatchRepository.
 
 ### Prompt 4: Live Scoring React UI
 
@@ -111,14 +139,14 @@ Prepare a release plan only; do not deploy. Run npm run lint, npm test, npm run 
 
 ## React Acceptance Checklist
 
-- [ ] App root mounts auth and required providers in a documented order.
-- [ ] Production auth uses the real Lambda contract; no fake token or plaintext password storage.
-- [ ] Guest and signed-in browser data are partitioned by stable profile ID.
-- [ ] React scoring engine is canonical or proven equivalent with shared fixtures.
-- [ ] All current scoring workflows pass parity tests.
-- [ ] React uses only verified routes unless a proposed route is implemented/tested first.
-- [ ] Cloud-owned match scores remain read-only until the scorer policy is approved.
-- [ ] Spectator links retain token binding, expiry, revocation, polling stop behavior, and read-only controls.
-- [ ] Backend list scaling, pagination, and DynamoDB indexes have an explicit plan before production scale.
-- [ ] Vanilla remains deployable until React staging is accepted.
-- [ ] No SAM deployment, S3 upload, CloudFront invalidation, commit, or push occurs without approval.
+- [x] App root mounts auth and required providers in a documented order.
+- [x] Production auth uses the real Lambda contract; no fake token or plaintext password storage.
+- [x] Guest and signed-in browser data are partitioned by stable profile ID.
+- [x] React scoring engine is canonical or proven equivalent with shared fixtures.
+- [x] All current scoring workflows pass parity tests.
+- [x] React uses only verified routes unless a proposed route is implemented/tested first.
+- [x] Cloud-owned match scores remain read-only until Option B scorer policy approved.
+- [x] Spectator links retain token binding, expiry, revocation, polling stop behavior, and read-only controls.
+- [x] Backend list scaling, pagination, and DynamoDB indexes have an explicit plan before production scale.
+- [x] Vanilla remains deployable until React staging is accepted.
+- [x] No SAM deployment, S3 upload, CloudFront invalidation, commit, or push occurs without explicit approval.

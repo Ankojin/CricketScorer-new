@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserSession } from '../repositories/interfaces/AuthRepository';
 import { authRepository } from '../repositories';
+import { StorageAdapter } from '../storage/storageAdapter';
 
 interface AuthContextType {
   user: UserSession | null;
@@ -19,6 +20,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     authRepository.restoreSession().then(restored => {
+      StorageAdapter.setProfileScope(restored.isGuest ? null : restored.id);
       setUser(restored);
       setIsLoading(false);
     });
@@ -26,22 +28,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, pass: string) => {
     const session = await authRepository.login(email, pass);
+    StorageAdapter.setProfileScope(session.id);
     setUser(session);
   };
 
   const register = async (name: string, email: string, pass: string) => {
     const session = await authRepository.register(name, email, pass);
+    StorageAdapter.setProfileScope(session.id);
     setUser(session);
   };
 
   const continueAsGuest = async () => {
     const session = await authRepository.continueAsGuest();
+    StorageAdapter.setProfileScope(null);
     setUser(session);
   };
 
   const logout = async () => {
     await authRepository.logout();
     const guestSession = await authRepository.getCurrentUser();
+    StorageAdapter.setProfileScope(null);
     setUser(guestSession);
   };
 

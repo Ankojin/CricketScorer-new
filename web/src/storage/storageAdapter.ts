@@ -8,6 +8,9 @@ const STORAGE_KEYS = {
   IS_DARK_MODE: 'cricscore_v2_dark_mode'
 };
 
+const PROFILE_SCOPE_KEY = 'cricleague_active_profile';
+const LEGACY_KEYS = Object.values(STORAGE_KEYS);
+
 class InMemoryStorage {
   private store = new Map<string, string>();
 
@@ -41,6 +44,27 @@ function getStorage(): Storage | InMemoryStorage {
 }
 
 export class StorageAdapter {
+  public static setProfileScope(profileId: string | null): void {
+    getStorage().setItem(PROFILE_SCOPE_KEY, profileId ? `account:${profileId}` : 'guest');
+  }
+
+  public static getProfileScope(): string {
+    return getStorage().getItem(PROFILE_SCOPE_KEY) || 'guest';
+  }
+
+  public static hasLegacyUnscopedData(): boolean {
+    return LEGACY_KEYS.some(key => getStorage().getItem(key) !== null);
+  }
+
+  public static migrateLegacyDataToCurrentScope(): void {
+    const storage = getStorage();
+    LEGACY_KEYS.forEach(key => {
+      const legacy = storage.getItem(key);
+      const scoped = this.scopedKey(key);
+      if (legacy !== null && storage.getItem(scoped) === null) storage.setItem(scoped, legacy);
+    });
+  }
+
   public static clear(): void {
     getStorage().clear();
   }
@@ -59,7 +83,7 @@ export class StorageAdapter {
 
   public static getTournaments(): Tournament[] {
     try {
-      const raw = getStorage().getItem(STORAGE_KEYS.TOURNAMENTS);
+      const raw = getStorage().getItem(this.scopedKey(STORAGE_KEYS.TOURNAMENTS));
       return raw ? JSON.parse(raw) : [];
     } catch (e) {
       console.error('Failed to load tournaments from storage', e);
@@ -69,27 +93,27 @@ export class StorageAdapter {
 
   public static saveTournaments(tournaments: Tournament[]): void {
     try {
-      getStorage().setItem(STORAGE_KEYS.TOURNAMENTS, JSON.stringify(tournaments));
+      getStorage().setItem(this.scopedKey(STORAGE_KEYS.TOURNAMENTS), JSON.stringify(tournaments));
     } catch (e) {
       console.error('Failed to save tournaments to storage', e);
     }
   }
 
   public static getActiveMatchId(): string | null {
-    return getStorage().getItem(STORAGE_KEYS.ACTIVE_MATCH_ID);
+    return getStorage().getItem(this.scopedKey(STORAGE_KEYS.ACTIVE_MATCH_ID));
   }
 
   public static setActiveMatchId(id: string | null): void {
     if (id) {
-      getStorage().setItem(STORAGE_KEYS.ACTIVE_MATCH_ID, id);
+      getStorage().setItem(this.scopedKey(STORAGE_KEYS.ACTIVE_MATCH_ID), id);
     } else {
-      getStorage().removeItem(STORAGE_KEYS.ACTIVE_MATCH_ID);
+      getStorage().removeItem(this.scopedKey(STORAGE_KEYS.ACTIVE_MATCH_ID));
     }
   }
 
   public static getGlobalPlayers(): Player[] {
     try {
-      const raw = getStorage().getItem(STORAGE_KEYS.GLOBAL_PLAYERS);
+      const raw = getStorage().getItem(this.scopedKey(STORAGE_KEYS.GLOBAL_PLAYERS));
       return raw ? JSON.parse(raw) : [];
     } catch (e) {
       return [];
@@ -98,7 +122,7 @@ export class StorageAdapter {
 
   public static saveGlobalPlayers(players: Player[]): void {
     try {
-      getStorage().setItem(STORAGE_KEYS.GLOBAL_PLAYERS, JSON.stringify(players));
+      getStorage().setItem(this.scopedKey(STORAGE_KEYS.GLOBAL_PLAYERS), JSON.stringify(players));
     } catch (e) {
       console.error('Failed to save global players', e);
     }
@@ -106,7 +130,7 @@ export class StorageAdapter {
 
   public static getGullyRules(): GullyRules {
     try {
-      const raw = getStorage().getItem(STORAGE_KEYS.GULLY_RULES);
+      const raw = getStorage().getItem(this.scopedKey(STORAGE_KEYS.GULLY_RULES));
       return raw ? JSON.parse(raw) : createDefaultGullyRules();
     } catch (e) {
       return createDefaultGullyRules();
@@ -115,23 +139,27 @@ export class StorageAdapter {
 
   public static saveGullyRules(rules: GullyRules): void {
     try {
-      getStorage().setItem(STORAGE_KEYS.GULLY_RULES, JSON.stringify(rules));
+      getStorage().setItem(this.scopedKey(STORAGE_KEYS.GULLY_RULES), JSON.stringify(rules));
     } catch (e) {
       console.error('Failed to save gully rules', e);
     }
   }
 
   public static getDarkMode(): boolean | null {
-    const raw = getStorage().getItem(STORAGE_KEYS.IS_DARK_MODE);
+    const raw = getStorage().getItem(this.scopedKey(STORAGE_KEYS.IS_DARK_MODE));
     if (raw === null) return null;
     return raw === 'true';
   }
 
   public static saveDarkMode(isDark: boolean | null): void {
     if (isDark === null) {
-      getStorage().removeItem(STORAGE_KEYS.IS_DARK_MODE);
+      getStorage().removeItem(this.scopedKey(STORAGE_KEYS.IS_DARK_MODE));
     } else {
-      getStorage().setItem(STORAGE_KEYS.IS_DARK_MODE, isDark ? 'true' : 'false');
+      getStorage().setItem(this.scopedKey(STORAGE_KEYS.IS_DARK_MODE), isDark ? 'true' : 'false');
     }
+  }
+
+  private static scopedKey(key: string): string {
+    return `cricleague:${this.getProfileScope()}:${key}`;
   }
 }

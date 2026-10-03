@@ -130,13 +130,10 @@ export class ScoringEngine {
   }
 
   public static recalculateMatchFromHistory(match: Match): Match {
-    if (!match.tossWinnerId) {
-      match.tossWinnerId = match.teamA?.id;
-      match.tossDecision = 'BAT';
-    }
-
     const teamABatsFirst =
-      match.tossWinnerId === match.teamA.id
+      !match.tossWinnerId
+        ? true
+        : match.tossWinnerId === match.teamA.id
         ? match.tossDecision === 'BAT'
         : match.tossDecision === 'BOWL';
 
@@ -520,6 +517,10 @@ export class ScoringEngine {
       }
     }
 
+    if (current.status === MatchStatus.UPCOMING && !current.tossWinnerId) {
+      return { ...current, pendingAction: PendingAction.TOSS_REQUIRED };
+    }
+
     if (current.status === MatchStatus.LIVE) {
       const currentBattingTeam = this.isTeamA(current.battingTeamId, current)
         ? current.teamA
@@ -546,15 +547,11 @@ export class ScoringEngine {
           ? activeNonStrikerRaw
           : null;
 
-      // Preserve explicitly selected currentBowlerId when replaying ballHistory ends on an over boundary
-      const explicitBowlerId = this.ensureTeamPlayer(match.currentBowlerId, currentBowlingTeam);
-      const activeBowlerId = current.currentBowlerId || explicitBowlerId;
-
       current = {
         ...current,
         strikerId: activeStrikerId,
         nonStrikerId: activeNonStrikerId,
-        currentBowlerId: activeBowlerId,
+        currentBowlerId: current.currentBowlerId,
         lastBowlerId: this.ensureTeamPlayer(current.lastBowlerId, currentBowlingTeam)
       };
 

@@ -1,6 +1,6 @@
-# CricScore Pro — Android Audit Report
+# CricLeague — Android Audit Report
 
-This report provides a detailed technical audit of the **CricScore Pro** Android application. It serves as the primary functional and architectural reference for building the new **React Web application**.
+This report provides a detailed technical audit of the **CricLeague** Android application. It serves as the primary functional and architectural reference for building the new **React Web application**.
 
 ---
 

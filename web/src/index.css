@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    --cric-navy: #071B33;
+    --cric-navy-deep: #041326;
+    --cric-navy-soft: #0D2A4A;
+    --cric-navy-raised: #0E325A;
+    --cric-green: #13A968;
+    --cric-electric: #49E878;
+    --cric-live: #39F57A;
+    --cric-border: #29415B;
+  }
+
+  body.dark, html.dark body {
+    background-color: #041326;
+    color: #F8FAFC;
+  }
+}
+
 @layer utilities {
   /* Hide scrollbar for Chrome, Safari and Opera */
   .no-scrollbar::-webkit-scrollbar {

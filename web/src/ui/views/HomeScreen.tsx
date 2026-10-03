@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Trophy, Users, ShieldAlert, ChevronRight, Sparkles, Activity, Clock } from 'lucide-react';
+import { Play, Trophy, Users, ShieldAlert, ChevronRight, Sparkles, Activity, Clock, Zap } from 'lucide-react';
 import { useTournament } from '../../state/TournamentContext';
 import { useMatch } from '../../state/MatchContext';
 
@@ -23,130 +23,130 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Hero Banner / Quick Match Action */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 text-white p-6 sm:p-8 shadow-xl">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-        <div className="relative z-10 max-w-2xl space-y-4">
-          <div className="inline-flex items-center space-x-2 bg-emerald-500/20 backdrop-blur-md border border-emerald-400/30 px-3 py-1 rounded-full text-xs font-semibold text-emerald-200">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
-            <span>CricScore Pro UI v2 Experience</span>
+      {/* Hero Banner (Matching Image 1 & 2) */}
+      <div className="relative overflow-hidden rounded-3xl bg-cricNavy-700 border border-cricBorder text-white p-6 sm:p-10 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-72 h-72 bg-cricElectric-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 max-w-2xl space-y-4 mx-auto md:mx-0">
+          <div className="inline-flex items-center space-x-2 bg-cricGreen-500/20 backdrop-blur-md border border-cricGreen-500/30 px-3.5 py-1.5 rounded-full text-xs font-bold text-cricElectric-500">
+            <span className="w-2 h-2 rounded-full bg-cricElectric-500 animate-ping" />
+            <span>LIVE CRICKET SCORING PLATFORM</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">
-            Professional Cricket Scoring at Your Fingertips
+          <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-none uppercase text-white">
+            TRACK EVERY BALL. <br />
+            OWN EVERY OVER. <br />
+            <span className="text-cricElectric-500">SHARE EVERY MOMENT.</span>
           </h1>
-          <p className="text-emerald-100/90 text-sm sm:text-base font-normal">
-            Ball-by-ball processing, Gully rules, Last Man Standing, statistics & custom match setups.
+          <p className="text-slate-300 text-sm sm:text-base font-medium max-w-lg">
+            Score locally without an account. Sign in only when you need cloud data.
           </p>
-          <div className="pt-2 flex flex-wrap gap-3">
+          <div className="pt-2 flex flex-wrap justify-center md:justify-start gap-3">
             <button
               onClick={onStartQuickMatch}
-              className="inline-flex items-center space-x-2 bg-white text-emerald-800 hover:bg-emerald-50 font-bold px-6 py-3 rounded-2xl shadow-lg transition-transform active:scale-95 text-sm sm:text-base"
+              className="inline-flex items-center space-x-2 bg-cricGreen-500 hover:bg-emerald-400 text-cricNavy-900 font-black px-6 py-3.5 rounded-2xl shadow-lg transition-transform active:scale-95 text-sm sm:text-base"
             >
-              <Play className="w-5 h-5 fill-emerald-800" />
-              <span>Start Quick Match</span>
+              <Zap className="w-5 h-5 fill-cricNavy-900" />
+              <span>Web Score →</span>
             </button>
-            {liveMatch && (
-              <button
-                onClick={() => {
-                  loadMatch(liveMatch);
-                  onOpenLiveMatch();
-                }}
-                className="inline-flex items-center space-x-2 bg-emerald-500/30 hover:bg-emerald-500/40 border border-emerald-400/40 text-white font-bold px-5 py-3 rounded-2xl transition-all text-sm sm:text-base backdrop-blur-sm"
-              >
-                <Activity className="w-5 h-5 text-emerald-300 animate-pulse" />
-                <span>Resume Live Match</span>
-              </button>
-            )}
+            <a
+              href="https://play.google.com/store"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center space-x-2 bg-cricGreen-600 hover:bg-emerald-700 text-white font-bold px-5 py-3.5 rounded-2xl transition-all text-sm sm:text-base shadow-md"
+            >
+              <span>▶ GET IT ON Google Play</span>
+            </a>
+          </div>
+        </div>
+
+        {/* Hero Graphic Asset Container */}
+        <div className="relative z-10 w-full sm:w-72 md:w-80 lg:w-96 shrink-0 hidden md:block">
+          <div className="p-2.5 bg-cricNavy-800/90 border-2 border-cricGreen-500/40 rounded-3xl shadow-2xl backdrop-blur-md overflow-hidden group">
+            <img
+              src="/img/landing-hero-main.png"
+              alt="CricLeague Hero Graphic"
+              className="w-full h-auto max-h-80 object-cover rounded-2xl shadow-lg group-hover:scale-102 transition-transform duration-300"
+              onError={e => (e.target as HTMLElement).style.display = 'none'}
+            />
           </div>
         </div>
       </div>
 
-      {/* Live Match Widget Card */}
-      {liveMatch && (
-        <div className="bg-white dark:bg-slate-900 border-2 border-emerald-500/30 rounded-2xl p-5 shadow-sm space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-              <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">LIVE NOW</span>
-              <span className="text-xs text-slate-400">• {liveMatch.tournamentName || 'Quick Match'}</span>
+      {/* # MATCH HUB (Unified Action Center) */}
+      <div className="bg-cricNavy-700 border border-cricBorder rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
+        <div className="text-center space-y-1">
+          <div className="inline-flex items-center space-x-1.5 bg-cricGreen-500/20 text-cricElectric-500 px-3 py-1 rounded-full text-xs font-extrabold border border-cricGreen-500/30">
+            <span>🏏 CRICLEAGUE MATCH HUB</span>
+          </div>
+          <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-wider pt-1">
+            Start A Game or Manage Your League
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-300 max-w-lg mx-auto">
+            Launch an instant quick game, manage teams & squads, view series standings, or configure Gully rules.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+          {/* Quick Match Card */}
+          <div
+            onClick={onStartQuickMatch}
+            className="p-5 bg-cricNavy-800 hover:bg-cricNavy-600 border border-cricBorder rounded-2xl cursor-pointer transition-all shadow-md group space-y-3"
+          >
+            <div className="w-10 h-10 rounded-xl bg-cricGreen-500/20 text-cricElectric-500 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
+              <Play className="w-5 h-5 fill-cricElectric-500" />
             </div>
-            <button
-              onClick={() => {
-                loadMatch(liveMatch);
-                onOpenLiveMatch();
-              }}
-              className="text-xs font-bold text-emerald-600 hover:underline flex items-center space-x-1"
-            >
-              <span>Scoreboard</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            <div>
+              <h3 className="font-extrabold text-sm text-white group-hover:text-cricElectric-500 transition-colors">Quick Match</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Free local scoring • Teams → Toss → Live</p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 items-center pt-1">
-            <div className="space-y-1">
-              <div className="text-base font-bold text-slate-800 dark:text-slate-100">{liveMatch.teamA.name}</div>
-              <div className="text-sm font-semibold text-slate-500">
-                {liveMatch.battingTeamId === liveMatch.teamA.id ? (
-                  <span className="text-emerald-600 font-extrabold text-base">{liveMatch.totalRuns}/{liveMatch.totalWickets} <span className="text-xs font-normal">({Math.floor(liveMatch.totalBalls/6)}.{liveMatch.totalBalls%6} ov)</span></span>
-                ) : 'Yet to Bat'}
+          {/* Teams & Squads Card */}
+          <div
+            onClick={() => onNavigateTab('teams')}
+            className="p-5 bg-cricNavy-800 hover:bg-cricNavy-600 border border-cricBorder rounded-2xl cursor-pointer transition-all shadow-md group space-y-3"
+          >
+            <div className="w-10 h-10 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center justify-between">
+                <h3 className="font-extrabold text-sm text-white group-hover:text-sky-400 transition-colors">Teams & Squads</h3>
+                <span className="text-[9px] px-1.5 py-0.2 bg-amber-500/20 text-amber-300 rounded border border-amber-500/30 font-bold">Sign-in</span>
               </div>
+              <p className="text-xs text-slate-400 mt-0.5">Manage player profiles & batting styles</p>
             </div>
-            <div className="space-y-1 text-right">
-              <div className="text-base font-bold text-slate-800 dark:text-slate-100">{liveMatch.teamB.name}</div>
-              <div className="text-sm font-semibold text-slate-500">
-                {liveMatch.battingTeamId === liveMatch.teamB.id ? (
-                  <span className="text-emerald-600 font-extrabold text-base">{liveMatch.totalRuns}/{liveMatch.totalWickets} <span className="text-xs font-normal">({Math.floor(liveMatch.totalBalls/6)}.{liveMatch.totalBalls%6} ov)</span></span>
-                ) : (liveMatch.innings1Data && liveMatch.innings1Data.teamId === liveMatch.teamB.id ? `${liveMatch.innings1Data.runs}/${liveMatch.innings1Data.wickets}` : 'Yet to Bat')}
+          </div>
+
+          {/* Tournaments / Series Card */}
+          <div
+            onClick={() => onNavigateTab('stats')}
+            className="p-5 bg-cricNavy-800 hover:bg-cricNavy-600 border border-cricBorder rounded-2xl cursor-pointer transition-all shadow-md group space-y-3"
+          >
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
+              <Trophy className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center justify-between">
+                <h3 className="font-extrabold text-sm text-white group-hover:text-amber-400 transition-colors">Tournaments & Series</h3>
+                <span className="text-[9px] px-1.5 py-0.2 bg-amber-500/20 text-amber-300 rounded border border-amber-500/30 font-bold">Sign-in</span>
               </div>
+              <p className="text-xs text-slate-400 mt-0.5">Points table, NRR standings & stats</p>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Action Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div
-          onClick={onStartQuickMatch}
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 cursor-pointer hover:border-emerald-500 transition-all shadow-sm group"
-        >
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center font-bold mb-3 group-hover:scale-110 transition-transform">
-            <Play className="w-5 h-5 fill-emerald-600" />
+          {/* Gully Rules Card */}
+          <div
+            onClick={() => onNavigateTab('more')}
+            className="p-5 bg-cricNavy-800 hover:bg-cricNavy-600 border border-cricBorder rounded-2xl cursor-pointer transition-all shadow-md group space-y-3"
+          >
+            <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-sm text-white group-hover:text-purple-400 transition-colors">Gully & Turf Rules</h3>
+              <p className="text-xs text-slate-400 mt-0.5">LMS, Joker, custom overs & powerplays</p>
+            </div>
           </div>
-          <h3 className="font-bold text-sm text-slate-900 dark:text-white">Quick Match</h3>
-          <p className="text-xs text-slate-500 mt-1">Teams → Toss → Live</p>
-        </div>
-
-        <div
-          onClick={() => onNavigateTab('teams')}
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 cursor-pointer hover:border-emerald-500 transition-all shadow-sm group"
-        >
-          <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 flex items-center justify-center font-bold mb-3 group-hover:scale-110 transition-transform">
-            <Users className="w-5 h-5" />
-          </div>
-          <h3 className="font-bold text-sm text-slate-900 dark:text-white">Teams & Squads</h3>
-          <p className="text-xs text-slate-500 mt-1">Manage players & styles</p>
-        </div>
-
-        <div
-          onClick={() => onNavigateTab('stats')}
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 cursor-pointer hover:border-emerald-500 transition-all shadow-sm group"
-        >
-          <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950 text-purple-600 flex items-center justify-center font-bold mb-3 group-hover:scale-110 transition-transform">
-            <Trophy className="w-5 h-5" />
-          </div>
-          <h3 className="font-bold text-sm text-slate-900 dark:text-white">Tournaments</h3>
-          <p className="text-xs text-slate-500 mt-1">Points table & stats</p>
-        </div>
-
-        <div
-          onClick={() => onNavigateTab('more')}
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 cursor-pointer hover:border-emerald-500 transition-all shadow-sm group"
-        >
-          <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950 text-amber-600 flex items-center justify-center font-bold mb-3 group-hover:scale-110 transition-transform">
-            <ShieldAlert className="w-5 h-5" />
-          </div>
-          <h3 className="font-bold text-sm text-slate-900 dark:text-white">Gully Rules</h3>
-          <p className="text-xs text-slate-500 mt-1">LMS & Street Cricket</p>
         </div>
       </div>
 

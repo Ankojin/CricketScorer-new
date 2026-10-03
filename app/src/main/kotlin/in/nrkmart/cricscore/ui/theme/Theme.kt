@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 
-// CricScore Pro Web Tokens (exact)
+// CricLeague web tokens (exact)
 val WebBg = Color(0xFF041326)            // #041326 bg
 val WebSurface = Color(0xFF071B33)       // #071B33 surface
 val WebSoft = Color(0xFF0D2A4A)          // #0D2A4A soft

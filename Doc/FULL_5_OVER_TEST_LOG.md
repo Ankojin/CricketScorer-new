@@ -1,4 +1,4 @@
-# Cric Score — Full 5-Over Test Log
+# CricLeague — Full 5-Over Test Log
 
 **App version (footer):** _______________  
 **version.properties:** _______________  

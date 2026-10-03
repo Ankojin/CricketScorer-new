@@ -1,4 +1,4 @@
-import { Match, Tournament } from '../domain/models';
+import { Match } from '../domain/models';
 
 const DEFAULT_API_BASE = 'https://cricleagueapi.nrkmart.in';
 
@@ -9,12 +9,39 @@ export interface CloudSession {
   name: string;
 }
 
-export interface LiveShareResult {
-  matchId: string;
-  spectatorToken: string;
-  tokenVersion?: number;
-  expiresInSeconds: number;
-  shareUrl: string;
+export class CloudApiError extends Error {
+  constructor(public statusCode: number, message: string, public code?: string) {
+    super(message);
+    this.name = 'CloudApiError';
+  }
+}
+
+export class UnauthorizedError extends CloudApiError {
+  constructor(message = '401 Unauthorized: Invalid or missing authentication token.') {
+    super(401, message, 'UNAUTHORIZED');
+    this.name = 'UnauthorizedError';
+  }
+}
+
+export class ForbiddenError extends CloudApiError {
+  constructor(message = '403 Forbidden: You do not have permission to access this resource.') {
+    super(403, message, 'FORBIDDEN');
+    this.name = 'ForbiddenError';
+  }
+}
+
+export class ConflictError extends CloudApiError {
+  constructor(message = '409 Conflict: Stale match revision or concurrent edit detected.') {
+    super(409, message, 'STALE_REVISION');
+    this.name = 'ConflictError';
+  }
+}
+
+export class ExpiredTokenError extends CloudApiError {
+  constructor(message = '410 Gone: Spectator link has expired or been revoked.') {
+    super(410, message, 'SPECTATOR_TOKEN_EXPIRED_OR_REVOKED');
+    this.name = 'ExpiredTokenError';
+  }
 }
 
 export class CloudApiAdapter {
@@ -24,7 +51,7 @@ export class CloudApiAdapter {
 
   public static getSession(): CloudSession | null {
     try {
-      const raw = localStorage.getItem('cric_cloud_session');
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('cric_cloud_session') : null;
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -32,6 +59,7 @@ export class CloudApiAdapter {
   }
 
   public static saveSession(session: CloudSession | null): void {
+    if (typeof localStorage === 'undefined') return;
     if (session) {
       localStorage.setItem('cric_cloud_session', JSON.stringify(session));
     } else {
@@ -39,129 +67,167 @@ export class CloudApiAdapter {
     }
   }
 
+  public static getAuthHeaders(): Record<string, string> {
+    const session = this.getSession();
+    if (session && session.token) {
+      return { Authorization: `Bearer ${session.token}` };
+    }
+    return {};
+  }
+
   public static async login(email: string, pass: string): Promise<CloudSession> {
-    const res = await fetch(`${this.getApiBase()}/api/auth/login`, {
+    const res = await fetch(`${this.getApiBase()}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email.trim().toLowerCase(), password: pass })
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Login failed');
+    const data = await this.readJson(res);
+    if (!res.ok) {
+      this.handleHttpError(res.status, data);
+    }
     const session: CloudSession = {
       token: data.token,
-      userId: data.userId || data.user?.id || '',
-      email: data.email || data.user?.email || email,
-      name: data.name || data.user?.name || 'User'
+      userId: data.user?.userId || '',
+      email: data.user?.email || email.trim().toLowerCase(),
+      name: data.user?.name || 'User'
     };
     this.saveSession(session);
     return session;
   }
 
   public static async register(email: string, pass: string, name: string): Promise<CloudSession> {
-    const res = await fetch(`${this.getApiBase()}/api/auth/register`, {
+    const res = await fetch(`${this.getApiBase()}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email.trim().toLowerCase(), password: pass, name })
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Registration failed');
+    const data = await this.readJson(res);
+    if (!res.ok) {
+      this.handleHttpError(res.status, data);
+    }
     const session: CloudSession = {
       token: data.token,
-      userId: data.userId || data.user?.id || '',
-      email: data.email || data.user?.email || email,
-      name
+      userId: data.user?.userId || '',
+      email: data.user?.email || email.trim().toLowerCase(),
+      name: data.user?.name || name.trim()
     };
     this.saveSession(session);
     return session;
   }
 
-  public static async fetchActiveSeriesSnapshot(): Promise<{ series: Tournament; activeMatch?: Match } | null> {
-    const session = this.getSession();
-    const headers: Record<string, string> = { 'Accept': 'application/json' };
-    if (session?.token) headers['Authorization'] = `Bearer ${session.token}`;
-
-    try {
-      const res = await fetch(`${this.getApiBase()}/api/series/active/snapshot`, { headers });
-      if (!res.ok) return null;
-      return await res.json();
-    } catch {
-      return null;
+  public static async fetchOwnerMatches(): Promise<Match[]> {
+    const headers = { ...this.getAuthHeaders() };
+    const res = await fetch(`${this.getApiBase()}/matches`, { headers });
+    const data = await this.readJson(res);
+    if (!res.ok) {
+      this.handleHttpError(res.status, data);
     }
+    return Array.isArray(data) ? data : data.matches || [];
   }
 
-  public static async syncMatchToCloud(match: Match): Promise<{ match: Match; revision: number }> {
-    const session = this.getSession();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'X-Client-Platform': 'web'
-    };
-    if (session?.token) headers['Authorization'] = `Bearer ${session.token}`;
-
-    const payload = {
-      expectedRevision: match.revision || 0,
-      match: {
-        ...match,
-        revision: (match.revision || 0) + 1,
-        lastWriterPlatform: 'web',
-        updatedAt: new Date().toISOString()
-      }
-    };
-
-    const res = await fetch(`${this.getApiBase()}/api/matches/${match.id}`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify(payload)
-    });
-
-    const data = await res.json();
-    if (res.status === 409) {
-      throw new Error('REVISION_CONFLICT');
+  public static async fetchMatch(matchId: string, spectatorToken?: string | null): Promise<Match> {
+    let url = `${this.getApiBase()}/matches/${encodeURIComponent(matchId)}`;
+    if (spectatorToken) {
+      url += `?st=${encodeURIComponent(spectatorToken)}`;
     }
-    if (!res.ok) throw new Error(data.error || 'Sync failed');
-    return {
-      match: data.match || payload.match,
-      revision: data.revision || payload.match.revision
-    };
+    const headers = spectatorToken ? {} : this.getAuthHeaders();
+    const res = await fetch(url, { headers });
+    const data = await this.readJson(res);
+    if (!res.ok) {
+      this.handleHttpError(res.status, data);
+    }
+    return data.match || data;
   }
 
-  public static async createLiveShareLink(matchId: string, ttlMinutes: number = 360): Promise<LiveShareResult> {
-    const session = this.getSession();
-    if (!session?.token) throw new Error('Sign in required for live share');
-
-    const res = await fetch(`${this.getApiBase()}/api/matches/${matchId}/share`, {
+  public static async createShareToken(
+    matchId: string,
+    ttlMinutes: 15 | 60 | 360 = 60
+  ): Promise<{ spectatorToken: string; expiresAtMillis: number; shareUrl: string }> {
+    const res = await fetch(`${this.getApiBase()}/matches/${encodeURIComponent(matchId)}/share-token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.token}`
+        ...this.getAuthHeaders()
       },
       body: JSON.stringify({ ttlMinutes })
     });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Unable to generate live share link');
-
-    const baseUrl = 'https://cricleague.nrkmart.in';
-    const shareUrl = `${baseUrl}/?matchId=${matchId}&st=${encodeURIComponent(data.spectatorToken)}`;
-
+    const data = await this.readJson(res);
+    if (!res.ok) {
+      this.handleHttpError(res.status, data);
+    }
+    const spectatorToken = data.spectatorToken || data.token || '';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://cricscore.in';
+    const shareUrl = data.shareUrl || `${origin}?matchId=${encodeURIComponent(matchId)}&st=${encodeURIComponent(spectatorToken)}`;
     return {
-      matchId,
-      spectatorToken: data.spectatorToken,
-      tokenVersion: data.tokenVersion,
-      expiresInSeconds: data.expiresInSeconds || ttlMinutes * 60,
+      spectatorToken,
+      expiresAtMillis: data.expiresAtMillis || Date.now() + ttlMinutes * 60 * 1000,
       shareUrl
     };
   }
 
-  public static async revokeLiveShareLink(matchId: string): Promise<boolean> {
-    const session = this.getSession();
-    if (!session?.token) throw new Error('Sign in required');
-
-    const res = await fetch(`${this.getApiBase()}/api/matches/${matchId}/share`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${session.token}` }
+  public static async revokeShareToken(matchId: string): Promise<{ success: boolean }> {
+    const res = await fetch(`${this.getApiBase()}/matches/${encodeURIComponent(matchId)}/revoke-share`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      }
     });
+    const data = await this.readJson(res);
+    if (!res.ok) {
+      this.handleHttpError(res.status, data);
+    }
+    return { success: true };
+  }
 
-    if (!res.ok) throw new Error('Failed to revoke live share');
-    return true;
+  public static async createMatch(match: Match): Promise<Match> {
+    const res = await fetch(`${this.getApiBase()}/matches`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Client-Platform': 'web',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify(match)
+    });
+    const data = await this.readJson(res);
+    if (!res.ok) {
+      this.handleHttpError(res.status, data);
+    }
+    return data.match || data;
+  }
+
+  public static async updateMatch(match: Match): Promise<Match> {
+    const res = await fetch(`${this.getApiBase()}/matches/${encodeURIComponent(match.id)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Client-Platform': 'web',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify(match)
+    });
+    const data = await this.readJson(res);
+    if (!res.ok) {
+      this.handleHttpError(res.status, data);
+    }
+    return data.match || data;
+  }
+
+  private static handleHttpError(status: number, data: any): never {
+    const msg = data?.error || data?.message || `HTTP ${status} Request Failed`;
+    if (status === 401) throw new UnauthorizedError(msg);
+    if (status === 403) throw new ForbiddenError(msg);
+    if (status === 409) throw new ConflictError(msg);
+    if (status === 410) throw new ExpiredTokenError(msg);
+    throw new CloudApiError(status, msg);
+  }
+
+  private static async readJson(res: Response): Promise<any> {
+    try {
+      return await res.json();
+    } catch {
+      return { error: `Request failed (${res.status})` };
+    }
   }
 }

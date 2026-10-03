@@ -51,6 +51,9 @@ export const ScorecardView: React.FC = () => {
     : (match.currentInnings === 2 ? match.wicketHistory : []);
 
   const activePartnership = match.currentInnings === activeInnings ? StatsCalculator.calculateActivePartnership(match) : null;
+  const allPartnerships = activePartnership ? [activePartnership] : [];
+  const forecaster = null as any;
+  const motm = null as any;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">

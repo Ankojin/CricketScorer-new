@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Tournament, Match, Team, Player, TournamentSettings } from '../domain/models';
 import { StorageAdapter } from '../storage/storageAdapter';
-import { CloudApiAdapter } from '../storage/CloudApiAdapter';
+import { useAuth } from './AuthContext';
 
 interface TournamentContextType {
   tournaments: Tournament[];
@@ -15,15 +15,21 @@ interface TournamentContextType {
   deleteMatchFromTournament: (tournamentId: string, matchId: string) => void;
   addPlayerToGlobalList: (name: string, battingStyle?: any) => Player;
   addPlayersToTeam: (tournamentId: string, teamId: string, players: Player[]) => void;
-  fetchCloudSeriesSnapshot: () => Promise<Tournament | null>;
 }
 
 const TournamentContext = createContext<TournamentContextType | undefined>(undefined);
 
 export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const [tournaments, setTournaments] = useState<Tournament[]>(() => StorageAdapter.getTournaments());
   const [globalPlayers, setGlobalPlayers] = useState<Player[]>(() => StorageAdapter.getGlobalPlayers());
   const [activeTournamentId, setActiveTournamentId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTournaments(StorageAdapter.getTournaments());
+    setGlobalPlayers(StorageAdapter.getGlobalPlayers());
+    setActiveTournamentId(null);
+  }, [user?.id]);
 
   useEffect(() => {
     StorageAdapter.saveTournaments(tournaments);
@@ -179,25 +185,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }));
   };
 
-  const fetchCloudSeriesSnapshot = async (): Promise<Tournament | null> => {
-    const cloud = await CloudApiAdapter.fetchActiveSeriesSnapshot();
-    if (cloud?.series) {
-      const series = cloud.series;
-      setTournaments((prev: Tournament[]) => {
-        const existing = prev.find(t => t.id === series.id || t.name === series.name);
-        if (existing) {
-          const matchMap = new Map<string, Match>();
-          existing.matches.forEach(m => matchMap.set(m.id, m));
-          series.matches.forEach(m => matchMap.set(m.id, m));
-          return prev.map(t => (t.id === existing.id ? { ...series, matches: Array.from(matchMap.values()) } : t));
-        }
-        return [series, ...prev];
-      });
-      return series;
-    }
-    return null;
-  };
-
   return (
     <TournamentContext.Provider value={{
       tournaments,
@@ -210,8 +197,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       updateMatchInTournament,
       deleteMatchFromTournament,
       addPlayerToGlobalList,
-      addPlayersToTeam,
-      fetchCloudSeriesSnapshot
+      addPlayersToTeam
     }}>
       {children}
     </TournamentContext.Provider>

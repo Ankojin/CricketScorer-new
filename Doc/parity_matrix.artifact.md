@@ -1,4 +1,4 @@
-# CricScore Pro — Android ↔ React Web Parity Matrix
+# CricLeague — Android ↔ React Web Parity Matrix
 
 This document presents the full functional parity audit comparing the existing Android application (`in.nrkmart.cricscore`) with the new React Web application (`web/`).
 

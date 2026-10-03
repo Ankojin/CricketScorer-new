@@ -1,0 +1,445 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: CricLeague - Serverless Architecture (AWS Free Tier / On-Demand Mode)
+
+Parameters:
+  CustomDomainName:
+    Type: String
+    Default: cricleague.nrkmart.in
+    Description: Primary domain used for the web application.
+  ApiDomainName:
+    Type: String
+    Default: cricleagueapi.nrkmart.in
+    Description: Hostname used for the public HTTP API.
+  WebCertificateArn:
+    Type: String
+    Default: arn:aws:acm:us-east-1:112232725342:certificate/266fd1fb-e2ce-4529-bfad-4b753b959fc0
+    Description: ACM certificate ARN in us-east-1 covering the website hostname.
+  ApiCertificateArn:
+    Type: String
+    Default: arn:aws:acm:us-east-1:112232725342:certificate/e59d7422-a76a-46fc-b7ad-f006a2b63f6e
+    Description: ACM certificate ARN in us-east-1 covering the API hostname.
+
+Conditions:
+  HasCustomDomain: !And
+    - !Not [!Equals [!Ref WebCertificateArn, ""]]
+    - !Not [!Equals [!Ref ApiCertificateArn, ""]]
+
+Globals:
+  Function:
+    Timeout: 10
+    MemorySize: 256
+    Runtime: nodejs22.x
+    Architectures:
+      - x86_64
+
+Resources:
+
+  # 1. DynamoDB Table (PAY_PER_REQUEST / On-Demand = $0 Cost when Idle)
+  CricMatchesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: CricMatches
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: matchId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: matchId
+          KeyType: HASH
+
+  # 2. JWT Signing Key Secret in AWS Secrets Manager
+  JwtSigningSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name:
+        Fn::Sub: "cricscore-jwt-secret-${AWS::StackName}"
+      Description: "JWT Signing Secret for CricLeague API"
+      GenerateSecretString:
+        SecretStringTemplate: '{"secretKey": ""}'
+        GenerateStringKey: "secretKey"
+        PasswordLength: 64
+        ExcludePunctuation: true
+
+  # 3. Private S3 Bucket for Static Web UI Hosting (5 GB Always Free)
+  CricScoreWebBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: "cricscore-pro-web-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # 4. CloudFront Origin Access Control (OAC)
+  CloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: CricScoreOAC
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  RedirectCloudFrontDomain:
+    Type: AWS::CloudFront::Function
+    Condition: HasCustomDomain
+    Properties:
+      Name: !Sub "${AWS::StackName}-redirect-cloudfront-domain"
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Redirect the CloudFront hostname to the public domain.
+        Runtime: cloudfront-js-2.0
+      FunctionCode: !Sub |
+        function handler(event) {
+          var request = event.request;
+          var host = request.headers.host.value.toLowerCase();
+          var publicHosts = ['${CustomDomainName}'];
+
+          if (publicHosts.indexOf(host) !== -1) {
+            return request;
+          }
+
+          var query = request.querystring ? '?' + request.querystring : '';
+          return {
+            statusCode: 301,
+            statusDescription: 'Moved Permanently',
+            headers: {
+              location: { value: 'https://${CustomDomainName}' + request.uri + query }
+            }
+          };
+        }
+
+  # 5. S3 Bucket Policy allowing CloudFront Read Access
+  CricScoreWebBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: CricScoreWebBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipalReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource:
+              Fn::Sub: "${CricScoreWebBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn:
+                  Fn::Sub: "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CricScoreCDN}"
+
+  # 6. CloudFront Distribution (1 TB Always Free Data Transfer)
+  CricScoreCDN:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        Aliases: !If
+          - HasCustomDomain
+          - - !Ref CustomDomainName
+          - !Ref AWS::NoValue
+        Origins:
+          - Id: S3Origin
+            DomainName:
+              Fn::GetAtt:
+                - CricScoreWebBucket
+                - RegionalDomainName
+            OriginAccessControlId:
+              Fn::GetAtt:
+                - CloudFrontOAC
+                - Id
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          FunctionAssociations: !If
+            - HasCustomDomain
+            - - EventType: viewer-request
+                FunctionARN: !GetAtt RedirectCloudFrontDomain.FunctionARN
+            - !Ref AWS::NoValue
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+        ViewerCertificate: !If
+          - HasCustomDomain
+          - AcmCertificateArn: !Ref WebCertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
+
+  # 7. API Gateway HTTP API v2 (1 Million Requests Free)
+  CricScoreHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Name: CricScoreHttpApi
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 40
+        ThrottlingRateLimit: 20
+      CorsConfiguration:
+        AllowOrigins:
+          - "https://cricleague.nrkmart.in"
+          - "https://www.cricleague.nrkmart.in"
+          - !Sub "https://${CricScoreCDN.DomainName}"
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+
+  ApiCustomDomain:
+    Type: AWS::ApiGatewayV2::DomainName
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Ref ApiDomainName
+      DomainNameConfigurations:
+        - CertificateArn: !Ref ApiCertificateArn
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_2
+
+  ApiCustomDomainMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Condition: HasCustomDomain
+    Properties:
+      ApiId: !Ref CricScoreHttpApi
+      DomainName: !Ref ApiCustomDomain
+      Stage: $default
+
+  # 8. AWS Lambda Backend API Handler (1 Million Requests Always Free)
+  CricScoreApiLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./lambda
+      Handler: index.handler
+      Environment:
+        Variables:
+          TABLE_NAME:
+            Ref: CricMatchesTable
+          JWT_SECRET_ARN:
+            Ref: JwtSigningSecret
+          ENFORCE_ANDROID_MATCH_WRITES: "true"
+          ENFORCE_STRICT_MATCH_REVISION: "false"
+          ENABLE_AUTH_RATE_LIMIT: "true"
+          AUTH_RATE_LIMIT_MAX_REQUESTS: "20"
+          AUTH_RATE_LIMIT_WINDOW_SECONDS: "60"
+          MATCH_WRITE_MAX_BODY_BYTES: "262144"
+          MATCH_WRITE_MAX_BALL_EVENTS: "3000"
+          MATCH_WRITE_MAX_WICKET_EVENTS: "400"
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:Scan
+                - dynamodb:DeleteItem
+              Resource:
+                Fn::GetAtt:
+                  - CricMatchesTable
+                  - Arn
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource:
+                Ref: JwtSigningSecret
+      Events:
+        PostAuthRegister:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /auth/register
+            Method: POST
+        PostAuthLogin:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /auth/login
+            Method: POST
+        GetMatches:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /matches
+            Method: GET
+        PostMatches:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /matches
+            Method: POST
+        PostMatchShareToken:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /matches/{id}/share-token
+            Method: POST
+        PostMatchRevokeShare:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /matches/{id}/revoke-share
+            Method: POST
+        GetMatchById:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /matches/{id}
+            Method: GET
+        PutMatchById:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /matches/{id}
+            Method: PUT
+        DeleteMatchById:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /matches/{id}
+            Method: DELETE
+        GetTournaments:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /tournaments
+            Method: GET
+        PostTournaments:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /tournaments
+            Method: POST
+        DeleteTournaments:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /tournaments/{id}
+            Method: DELETE
+        GetPlayers:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /players
+            Method: GET
+        PostPlayers:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /players
+            Method: POST
+        DeletePlayers:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /players/{id}
+            Method: DELETE
+        AdminUsers:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /admin/users
+            Method: GET
+        AdminHealth:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /admin/system-health
+            Method: GET
+        AdminAuthSync:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /admin/auth-sync
+            Method: GET
+        AdminErrorDashboard:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /admin/error-dashboard
+            Method: GET
+        AdminAuditLogs:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /admin/audit-logs
+            Method: GET
+        AdminErrorLog:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /admin/error-log
+            Method: POST
+        AdminProxyAny:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: CricScoreHttpApi
+            Path: /admin/{proxy+}
+            Method: ANY
+
+Outputs:
+  WebUrl:
+    Description: Public website URL
+    Value: !If
+      - HasCustomDomain
+      - !Sub "https://${CustomDomainName}"
+      - !Sub "https://${CricScoreCDN.DomainName}"
+  ApiUrl:
+    Description: Public API URL
+    Value: !If
+      - HasCustomDomain
+      - !Sub "https://${ApiDomainName}"
+      - !Sub "https://${CricScoreHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  CloudFrontDomainName:
+    Description: CloudFront domain target for external DNS configuration
+    Value: !GetAtt CricScoreCDN.DomainName
+  ApiGatewayRegionalDomainName:
+    Description: API Gateway regional domain target for external DNS configuration
+    Condition: HasCustomDomain
+    Value: !GetAtt ApiCustomDomain.RegionalDomainName
+  S3BucketName:
+    Description: S3 Bucket Name for Static Web UI Deployment
+    Value:
+      Ref: CricScoreWebBucket

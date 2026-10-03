@@ -15,13 +15,24 @@ import {
 } from '../domain/models';
 import { ScoringEngine } from '../domain/scoringEngine';
 import { StorageAdapter } from '../storage/storageAdapter';
-import { CloudApiAdapter } from '../storage/CloudApiAdapter';
 import { useTournament } from './TournamentContext';
+import { useAuth } from './AuthContext';
+
+import { CloudApiAdapter, CloudApiError, ExpiredTokenError, ConflictError } from '../storage/CloudApiAdapter';
 
 interface MatchContextType {
   match: Match | null;
   uiState: MatchUiState;
+  isSpectator: boolean;
+  spectatorError: string | null;
+  spectatorToken: string | null;
+  isCloudSynced: boolean;
+  conflictError: string | null;
   loadMatch: (match: Match) => void;
+  createShareToken: (ttlMinutes?: 15 | 60 | 360) => Promise<{ spectatorToken: string; expiresAtMillis: number; shareUrl: string }>;
+  revokeShareToken: () => Promise<void>;
+  syncMatchToCloud: () => Promise<void>;
+  resolveConflictByFetchingLatest: () => Promise<void>;
   handleToss: (winnerId: string, decision: 'BAT' | 'BOWL') => void;
   handleRuns: (runs: number, rotateStrike?: boolean) => void;
   handleExtra: (type: ExtrasType, extraRuns: number) => void;
@@ -43,14 +54,12 @@ interface MatchContextType {
   dismissOverSummary: () => void;
   clearBowlerNotification: () => void;
   cancelPendingAction: () => void;
-  createLiveShareLink: (ttlMinutes?: number) => Promise<string>;
-  revokeLiveShareLink: () => Promise<boolean>;
-  syncCurrentMatch: () => Promise<void>;
 }
 
 const MatchContext = createContext<MatchContextType | undefined>(undefined);
 
 export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const { updateMatchInTournament, addPlayerToGlobalList, addPlayersToTeam } = useTournament();
 
   const [match, setMatch] = useState<Match | null>(null);
@@ -58,25 +67,129 @@ export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [activeWicketContext, setActiveWicketContext] = useState<ActiveWicketContext | null>(null);
   const [finishedOverSummary, setFinishedOverSummary] = useState<OverSummary | null>(null);
 
+  const [isSpectator, setIsSpectator] = useState<boolean>(false);
+  const [spectatorError, setSpectatorError] = useState<string | null>(null);
+  const [spectatorToken, setSpectatorToken] = useState<string | null>(null);
+
+  const [isCloudSynced, setIsCloudSynced] = useState<boolean>(false);
+  const [conflictError, setConflictError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const stParam = urlParams.get('st');
+    const matchIdParam = urlParams.get('matchId') || urlParams.get('id');
+
+    if (stParam) {
+      setIsSpectator(true);
+      setSpectatorToken(stParam);
+      const targetMatchId = matchIdParam || 'active';
+
+      const pollMatch = async () => {
+        try {
+          const cloudMatch = await CloudApiAdapter.fetchMatch(targetMatchId, stParam);
+          loadMatch(cloudMatch);
+          if (cloudMatch.status === MatchStatus.COMPLETED || cloudMatch.status === MatchStatus.ABANDONED) {
+            return false; // Stop polling when match is complete or abandoned
+          }
+          return true;
+        } catch (err: any) {
+          if (err?.statusCode === 410 || err?.code === 'SPECTATOR_TOKEN_EXPIRED_OR_REVOKED') {
+            setSpectatorError('Spectator link has expired or been revoked.');
+          } else if (err?.statusCode === 403) {
+            setSpectatorError('403 Forbidden: You do not have permission to view this private match.');
+          } else if (err?.statusCode === 401) {
+            setSpectatorError('401 Unauthorized: Invalid spectator token.');
+          } else {
+            setSpectatorError(err.message || 'Failed to connect to live spectator feed.');
+          }
+          return false; // Stop polling on error
+        }
+      };
+
+      pollMatch();
+      const interval = setInterval(async () => {
+        const keepGoing = await pollMatch();
+        if (!keepGoing) clearInterval(interval);
+      }, 5000);
+
+      return () => clearInterval(interval);
+    }
+  }, []);
+
   useEffect(() => {
     const savedMatchId = StorageAdapter.getActiveMatchId();
-    if (savedMatchId && !match) {
+    if (savedMatchId && !match && !isSpectator) {
       const tournaments = StorageAdapter.getTournaments();
       const foundMatch = tournaments.flatMap(t => t.matches).find(m => m.id === savedMatchId);
       if (foundMatch) {
         loadMatch(foundMatch);
       }
     }
-  }, []);
+  }, [isSpectator]);
 
   useEffect(() => {
-    if (match) {
+    if (!isSpectator) {
+      setMatch(null);
+      setBowlerNotification(null);
+      setActiveWicketContext(null);
+      setFinishedOverSummary(null);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (match && !isSpectator) {
       StorageAdapter.setActiveMatchId(match.id);
       if (match.tournamentId) {
         updateMatchInTournament(match.tournamentId, match);
       }
     }
-  }, [match]);
+  }, [match, isSpectator]);
+
+  const createShareToken = async (ttlMinutes: 15 | 60 | 360 = 60) => {
+    if (!match) throw new Error('No active match loaded.');
+    return await CloudApiAdapter.createShareToken(match.id, ttlMinutes);
+  };
+
+  const revokeShareToken = async () => {
+    if (!match) throw new Error('No active match loaded.');
+    await CloudApiAdapter.revokeShareToken(match.id);
+  };
+
+  const syncMatchToCloud = async () => {
+    if (!match || isSpectator || !user || user.isGuest) return;
+    try {
+      setConflictError(null);
+      const nextRev = (match.revision || 0) + 1;
+      const updatedMatch = {
+        ...match,
+        revision: nextRev,
+        updatedAt: new Date().toISOString(),
+        lastWriterPlatform: 'web'
+      };
+      const result = await CloudApiAdapter.updateMatch(updatedMatch);
+      loadMatch(result);
+      setIsCloudSynced(true);
+    } catch (err: any) {
+      if (err instanceof ConflictError || err?.statusCode === 409) {
+        setConflictError('409 Conflict: Match was updated on another device. Please reload the latest score snapshot.');
+      } else {
+        setConflictError(err.message || 'Failed to sync match to cloud.');
+      }
+      setIsCloudSynced(false);
+    }
+  };
+
+  const resolveConflictByFetchingLatest = async () => {
+    if (!match) return;
+    try {
+      setConflictError(null);
+      const latestMatch = await CloudApiAdapter.fetchMatch(match.id);
+      loadMatch(latestMatch);
+      setIsCloudSynced(true);
+    } catch (err: any) {
+      setConflictError(err.message || 'Failed to fetch latest server match snapshot.');
+    }
+  };
 
   const loadMatch = (m: Match) => {
     ScoringEngine.clearCache(m.id);
@@ -88,7 +201,7 @@ export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const recordBall = (ball: Ball) => {
-    if (!match) return;
+    if (!match || isSpectator) return; // Read-only for spectators
     if (match.status === MatchStatus.COMPLETED && !ball.isAdjustment) return;
 
     let updatedHistory = [...match.ballHistory, ball];
@@ -467,50 +580,11 @@ export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (match) setMatch({ ...match, pendingAction: PendingAction.NONE });
   };
 
-  const createLiveShareLink = async (ttlMinutes: number = 360): Promise<string> => {
-    if (!match) throw new Error('No active match');
-    const result = await CloudApiAdapter.createLiveShareLink(match.id, ttlMinutes);
-    setMatch((prev: Match | null) => prev ? {
-      ...prev,
-      spectatorShareActive: true,
-      spectatorTokenVersion: result.tokenVersion || 1
-    } : null);
-    return result.shareUrl;
-  };
-
-  const revokeLiveShareLink = async (): Promise<boolean> => {
-    if (!match) throw new Error('No active match');
-    const success = await CloudApiAdapter.revokeLiveShareLink(match.id);
-    if (success) {
-      setMatch((prev: Match | null) => prev ? {
-        ...prev,
-        spectatorShareActive: false,
-        spectatorTokenVersion: (prev.spectatorTokenVersion || 0) + 1
-      } : null);
-    }
-    return success;
-  };
-
-  const syncCurrentMatch = async (): Promise<void> => {
-    if (!match) return;
-    try {
-      const res = await CloudApiAdapter.syncMatchToCloud(match);
-      setMatch((prev: Match | null) => prev ? { ...prev, revision: res.revision } : null);
-    } catch (err: any) {
-      if (err.message === 'REVISION_CONFLICT') {
-        const snapshot = await CloudApiAdapter.fetchActiveSeriesSnapshot();
-        if (snapshot?.activeMatch) {
-          loadMatch(snapshot.activeMatch);
-        }
-      }
-    }
-  };
-
   const uiState: MatchUiState = {
     match,
     bowlerNotification,
     activeWicketContext,
-    isSyncEnabled: Boolean(CloudApiAdapter.getSession()),
+    isSyncEnabled: false,
     connectedDevicesCount: 0,
     finishedOverSummary
   };
@@ -519,7 +593,16 @@ export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     <MatchContext.Provider value={{
       match,
       uiState,
+      isSpectator,
+      spectatorError,
+      spectatorToken,
+      isCloudSynced,
+      conflictError,
       loadMatch,
+      createShareToken,
+      revokeShareToken,
+      syncMatchToCloud,
+      resolveConflictByFetchingLatest,
       handleToss,
       handleRuns,
       handleExtra,
@@ -541,9 +624,6 @@ export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       dismissOverSummary,
       clearBowlerNotification,
       cancelPendingAction,
-      createLiveShareLink,
-      revokeLiveShareLink,
-      syncCurrentMatch
     }}>
       {children}
     </MatchContext.Provider>

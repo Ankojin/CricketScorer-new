@@ -3,6 +3,7 @@ import { Trophy, Award, BarChart3, Search, Table } from 'lucide-react';
 import { useTournament } from '../../state/TournamentContext';
 import { calculateStrikeRate, calculateEconomy } from '../../domain/models';
 import { ScoringEngine } from '../../domain/scoringEngine';
+import { StatsCalculator } from '../../domain/statsCalculator';
 
 export const StatsScreen: React.FC = () => {
   const { tournaments, globalPlayers } = useTournament();
@@ -30,7 +31,7 @@ export const StatsScreen: React.FC = () => {
 
       {/* Series Points Table */}
       {tournaments.map(t => {
-        const standings = ScoringEngine.calculatePointsTable(t.teams, t.matches);
+        const standings = StatsCalculator.calculateStandings(t.matches, t.teams);
         if (standings.length === 0) return null;
         return (
           <div key={t.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-3">
@@ -52,10 +53,10 @@ export const StatsScreen: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
                   {standings.map((tm, idx) => (
-                    <tr key={tm.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                    <tr key={tm.teamId} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                       <td className="p-3 font-extrabold flex items-center space-x-2">
                         <span className="text-slate-400 w-4">{idx + 1}</span>
-                        <span>{tm.name}</span>
+                        <span>{tm.teamName}</span>
                       </td>
                       <td className="p-3">{tm.matchesPlayed}</td>
                       <td className="p-3 text-emerald-600 font-bold">{tm.wins}</td>

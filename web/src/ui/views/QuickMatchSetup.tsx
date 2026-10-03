@@ -21,18 +21,18 @@ export const QuickMatchSetup: React.FC<QuickMatchSetupProps> = ({ onCancel, onCo
   const [teamAName, setTeamAName] = useState('Team Alpha');
   const [teamBName, setTeamBName] = useState('Team Beta');
 
-  // Step 2: Players
+  // Step 2: Players with stable unique IDs
   const [teamAPlayers, setTeamAPlayers] = useState<Player[]>([
-    createDefaultPlayer('p1', 'Player 1', BattingStyle.RHB),
-    createDefaultPlayer('p2', 'Player 2', BattingStyle.RHB),
-    createDefaultPlayer('p3', 'Player 3', BattingStyle.LHB),
-    createDefaultPlayer('p4', 'Player 4', BattingStyle.RHB)
+    addPlayerToGlobalList('Player 1', BattingStyle.RHB),
+    addPlayerToGlobalList('Player 2', BattingStyle.RHB),
+    addPlayerToGlobalList('Player 3', BattingStyle.LHB),
+    addPlayerToGlobalList('Player 4', BattingStyle.RHB)
   ]);
   const [teamBPlayers, setTeamBPlayers] = useState<Player[]>([
-    createDefaultPlayer('pb1', 'Player A', BattingStyle.RHB),
-    createDefaultPlayer('pb2', 'Player B', BattingStyle.LHB),
-    createDefaultPlayer('pb3', 'Player C', BattingStyle.RHB),
-    createDefaultPlayer('pb4', 'Player D', BattingStyle.RHB)
+    addPlayerToGlobalList('Player A', BattingStyle.RHB),
+    addPlayerToGlobalList('Player B', BattingStyle.LHB),
+    addPlayerToGlobalList('Player C', BattingStyle.RHB),
+    addPlayerToGlobalList('Player D', BattingStyle.RHB)
   ]);
 
   const [newPlayerA, setNewPlayerA] = useState('');
@@ -324,7 +324,13 @@ export const QuickMatchSetup: React.FC<QuickMatchSetupProps> = ({ onCancel, onCo
       {/* Step 4: Toss */}
       {step === 4 && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-6">
-          <h3 className="font-extrabold text-xl text-slate-900 dark:text-white">Toss & Decision</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-extrabold text-xl text-slate-900 dark:text-white">Toss & Decision</h3>
+            <div className="flex space-x-2">
+              <img src="/img/coin_heads.png" alt="Coin Heads" className="w-8 h-8 rounded-full shadow-sm" onError={e => (e.target as HTMLElement).style.display = 'none'} />
+              <img src="/img/coin_tails.png" alt="Coin Tails" className="w-8 h-8 rounded-full shadow-sm" onError={e => (e.target as HTMLElement).style.display = 'none'} />
+            </div>
+          </div>
 
           <div className="space-y-4">
             <div>
