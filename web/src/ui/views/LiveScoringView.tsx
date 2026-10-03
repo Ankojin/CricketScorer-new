@@ -6,7 +6,11 @@ import {
   AlertCircle,
   X,
   Play,
-  Check
+  Check,
+  Share2,
+  Cloud,
+  CloudOff,
+  Link as LinkIcon
 } from 'lucide-react';
 import { useMatch } from '../../state/MatchContext';
 import { ExtrasType, WicketType, PendingAction, formatOvers } from '../../domain/models';
@@ -27,12 +31,17 @@ export const LiveScoringView: React.FC = () => {
     forceChangeBowler,
     dismissOverSummary,
     clearBowlerNotification,
-    cancelPendingAction
+    cancelPendingAction,
+    createLiveShareLink,
+    revokeLiveShareLink,
+    syncCurrentMatch
   } = useMatch();
 
   const [showWicketModal, setShowWicketModal] = useState(false);
   const [showExtrasModal, setShowExtrasModal] = useState(false);
   const [selectedExtraType, setSelectedExtraType] = useState<ExtrasType>(ExtrasType.WIDE);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Run-out modal state
   const [runOutRuns, setRunOutRuns] = useState(0);
@@ -65,6 +74,69 @@ export const LiveScoringView: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-5 pb-12">
+      {/* Cloud Sync & Live Share Banner */}
+      <div className="bg-slate-900 text-white p-3.5 rounded-2xl shadow-sm flex items-center justify-between text-xs font-semibold">
+        <div className="flex items-center space-x-2">
+          {uiState.isSyncEnabled ? (
+            <span className="flex items-center space-x-1.5 text-emerald-400 font-bold">
+              <Cloud className="w-4 h-4" />
+              <span>Cloud Sync Active (Rev #{match.revision || 0})</span>
+            </span>
+          ) : (
+            <span className="flex items-center space-x-1.5 text-slate-400">
+              <CloudOff className="w-4 h-4" />
+              <span>Local Storage Only</span>
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={async () => {
+              setIsSyncing(true);
+              await syncCurrentMatch();
+              setIsSyncing(false);
+            }}
+            disabled={isSyncing}
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold flex items-center space-x-1.5"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>Sync</span>
+          </button>
+
+          {!match.spectatorShareActive ? (
+            <button
+              onClick={async () => {
+                try {
+                  const url = await createLiveShareLink(360);
+                  setShareUrl(url);
+                  navigator.clipboard?.writeText(url);
+                  alert(`Live Spectator Link generated & copied:\n${url}`);
+                } catch (err: any) {
+                  alert(err.message || 'Unable to generate share link. Ensure you are signed in.');
+                }
+              }}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center space-x-1.5"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>Share Live Link</span>
+            </button>
+          ) : (
+            <button
+              onClick={async () => {
+                await revokeLiveShareLink();
+                setShareUrl(null);
+                alert('Live share link revoked.');
+              }}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-bold flex items-center space-x-1.5"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Revoke Share</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Over End Summary Banner */}
       {uiState.finishedOverSummary && (
         <div className="bg-emerald-600 text-white p-4 rounded-2xl shadow-lg flex items-center justify-between">

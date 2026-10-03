@@ -282,6 +282,9 @@ export interface Match {
   battingOrder: string[];
   startTimeMillis?: number | null;
   endTimeMillis?: number | null;
+  revision?: number | null;
+  updatedAt?: string | null;
+  lastWriterPlatform?: string | null;
   dateMillis: number;
 }
 

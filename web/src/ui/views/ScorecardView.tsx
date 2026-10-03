@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { Trophy, TrendingUp, Award, Users } from 'lucide-react';
 import { useMatch } from '../../state/MatchContext';
-import { formatOvers, calculateStrikeRate, calculateEconomy } from '../../domain/models';
+import { formatOvers, calculateStrikeRate, calculateEconomy, MatchStatus } from '../../domain/models';
 import { StatsCalculator } from '../../domain/statsCalculator';
+import { ScoringEngine } from '../../domain/scoringEngine';
 
 export const ScorecardView: React.FC = () => {
   const { match } = useMatch();
@@ -189,6 +191,62 @@ export const ScorecardView: React.FC = () => {
                 <span className="text-slate-500 font-mono">{w.totalRuns}/{w.wicketNumber} ({w.over} ov)</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Partnerships Breakdown */}
+      {allPartnerships.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-3">
+          <div className="flex items-center space-x-2 font-extrabold text-sm text-slate-900 dark:text-white">
+            <Users className="w-4 h-4 text-emerald-600" />
+            <span>Partnerships Breakdown</span>
+          </div>
+          <div className="space-y-2 text-xs">
+            {allPartnerships.map((p, idx) => (
+              <div key={idx} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-between font-bold">
+                <span>{p.batter1Name} ({p.batter1Runs}r) & {p.batter2Name} ({p.batter2Runs}r)</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-mono">{p.totalRuns} runs ({p.totalBalls}b)</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Match Forecaster & Projected Scores */}
+      {match.status === MatchStatus.LIVE && forecaster && (
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-3xl p-5 shadow-md space-y-2">
+          <div className="flex items-center space-x-2 font-extrabold text-xs uppercase tracking-wider opacity-90">
+            <TrendingUp className="w-4 h-4" />
+            <span>Match Forecaster & Win Probability</span>
+          </div>
+          <div className="flex items-center justify-between pt-1">
+            <div>
+              <div className="text-2xl font-black">{forecaster.teamAWinProb}% vs {forecaster.teamBWinProb}%</div>
+              <div className="text-xs opacity-90 font-medium">Win chance ({match.teamA.name} vs {match.teamB.name})</div>
+            </div>
+            {forecaster.projectedScore && (
+              <div className="text-right">
+                <div className="text-xl font-extrabold">{forecaster.projectedScore} Runs</div>
+                <div className="text-[11px] opacity-80">Projected Final Score</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Man of the Match (MOTM) Analysis */}
+      {motm && motm.player && (
+        <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-3xl p-5 shadow-lg flex items-center space-x-4">
+          <div className="p-3 bg-white/20 rounded-2xl">
+            <Award className="w-8 h-8 text-white" />
+          </div>
+          <div>
+            <div className="text-xs font-black uppercase tracking-wider text-amber-100">Man of the Match</div>
+            <div className="text-xl font-extrabold mt-0.5">{motm.player.name}</div>
+            <div className="text-xs font-medium text-amber-50 mt-1">
+              {ScoringEngine.formatPlayerStatsSummary(motm.player)}
+            </div>
           </div>
         </div>
       )}

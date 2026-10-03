@@ -1,32 +1,19 @@
 import {
   Match,
   Team,
-  Ball,
-  WicketType,
-  ExtrasType,
-  MatchStatus,
-  PendingAction,
-  WicketRecord,
-  InningsSummary,
   Player,
+  Ball,
   BattingStats,
   BowlingStats,
   FieldingStats,
-  GullyRules,
-  Partnership,
+  WicketRecord,
+  InningsSummary,
+  MatchStatus,
+  PendingAction,
   isPhysicalBall
-} from './models';
+} from '../models/types.js';
 
 export class ScoringEngine {
-  private static overSnapshots: Map<string, Match[]> = new Map();
-
-  public static clearCache(matchId?: string | null): void {
-    if (matchId) {
-      this.overSnapshots.delete(matchId);
-    } else {
-      this.overSnapshots.clear();
-    }
-  }
 
   public static isPhysicalBall(ball: Ball): boolean {
     return isPhysicalBall(ball);
@@ -40,7 +27,7 @@ export class ScoringEngine {
       sixes: 0,
       isOut: false,
       isRetiredHurt: false,
-      wicketType: WicketType.NONE,
+      wicketType: 'NONE',
       dismissalBowlerId: null,
       dismissalFielderId: null
     };
@@ -170,14 +157,14 @@ export class ScoringEngine {
       nonStrikerId: hasHistory ? null : match.nonStrikerId || null,
       currentBowlerId: hasHistory ? null : match.currentBowlerId || null,
       lastBowlerId: hasHistory ? null : match.lastBowlerId || null,
-      pendingAction: PendingAction.NONE
+      pendingAction: 'NONE'
     };
 
     let ballsInOver = 0;
 
     for (let i = 0; i < history.length; i++) {
       const ball = history[i];
-      if (current.status === MatchStatus.COMPLETED) break;
+      if (current.status === 'COMPLETED') break;
 
       const isBattingA = this.isTeamA(current.battingTeamId, current);
       const battingTeam = isBattingA ? current.teamA : current.teamB;
@@ -202,8 +189,8 @@ export class ScoringEngine {
       const outId =
         healedBall.outPlayerId ||
         (healedBall.wicketType &&
-        healedBall.wicketType !== WicketType.NONE &&
-        healedBall.wicketType !== WicketType.RETIRED_HURT
+        healedBall.wicketType !== 'NONE' &&
+        healedBall.wicketType !== 'RETIRED_HURT'
           ? healedBall.strikerId
           : null);
       if (outId && !newBattingOrder.includes(outId)) {
@@ -213,8 +200,8 @@ export class ScoringEngine {
       const isPhysical = isPhysicalBall(healedBall);
       const isRealWicket =
         healedBall.wicketType &&
-        healedBall.wicketType !== WicketType.NONE &&
-        healedBall.wicketType !== WicketType.RETIRED_HURT;
+        healedBall.wicketType !== 'NONE' &&
+        healedBall.wicketType !== 'RETIRED_HURT';
 
       current = {
         ...current,
@@ -223,16 +210,16 @@ export class ScoringEngine {
         totalBalls: current.totalBalls + (isPhysical ? 1 : 0),
         wideCount:
           current.wideCount +
-          (healedBall.extrasType === ExtrasType.WIDE ? healedBall.extraRuns || 0 : 0),
+          (healedBall.extrasType === 'WIDE' ? healedBall.extraRuns || 0 : 0),
         noBallCount:
           current.noBallCount +
-          (healedBall.extrasType === ExtrasType.NO_BALL ? healedBall.extraRuns || 0 : 0),
+          (healedBall.extrasType === 'NO_BALL' ? healedBall.extraRuns || 0 : 0),
         byeCount:
           current.byeCount +
-          (healedBall.extrasType === ExtrasType.BYE ? healedBall.extraRuns || 0 : 0),
+          (healedBall.extrasType === 'BYE' ? healedBall.extraRuns || 0 : 0),
         legByeCount:
           current.legByeCount +
-          (healedBall.extrasType === ExtrasType.LEG_BYE ? healedBall.extraRuns || 0 : 0),
+          (healedBall.extrasType === 'LEG_BYE' ? healedBall.extraRuns || 0 : 0),
         battingOrder: newBattingOrder,
         teamA: this.updateTeamStats(current.teamA, healedBall, isBattingA, !isBattingA),
         teamB: this.updateTeamStats(current.teamB, healedBall, !isBattingA, isBattingA),
@@ -275,7 +262,7 @@ export class ScoringEngine {
       if (!healedBall.isAdjustment) {
         const victimId =
           healedBall.outPlayerId ||
-          (healedBall.wicketType && healedBall.wicketType !== WicketType.NONE
+          (healedBall.wicketType && healedBall.wicketType !== 'NONE'
             ? healedBall.strikerId
             : null);
         if (
@@ -327,19 +314,19 @@ export class ScoringEngine {
       }
 
       let physicalRuns = 0;
-      if (healedBall.extrasType === ExtrasType.WIDE) {
+      if (healedBall.extrasType === 'WIDE') {
         physicalRuns = current.gullyRules?.noExtraRunsForWidesNoBalls
           ? healedBall.extraRuns || 0
           : Math.max(0, (healedBall.extraRuns || 0) - 1);
       } else if (
-        healedBall.extrasType === ExtrasType.BYE ||
-        healedBall.extrasType === ExtrasType.LEG_BYE
+        healedBall.extrasType === 'BYE' ||
+        healedBall.extrasType === 'LEG_BYE'
       ) {
         physicalRuns = healedBall.extraRuns || 0;
       } else {
         physicalRuns =
           healedBall.runs +
-          (healedBall.extrasType === ExtrasType.GRANTED ? healedBall.extraRuns || 0 : 0);
+          (healedBall.extrasType === 'GRANTED' ? healedBall.extraRuns || 0 : 0);
       }
 
       const isLastBallOfOver = ballsInOver === 6;
@@ -355,7 +342,7 @@ export class ScoringEngine {
         nsId = temp;
       }
 
-      if (healedBall.wicketType && healedBall.wicketType !== WicketType.NONE) {
+      if (healedBall.wicketType && healedBall.wicketType !== 'NONE') {
         const victimId = healedBall.outPlayerId || healedBall.strikerId;
         if (healedBall.wicketType === 'CAUGHT') {
           sId = null;
@@ -491,13 +478,13 @@ export class ScoringEngine {
           currentBowlerId: presetBowlerId,
           lastBowlerId: presetLastBowlerId,
           pendingAction: match.isSecondInningsStarted
-            ? PendingAction.NONE
-            : PendingAction.START_SECOND_INNINGS
+            ? 'NONE'
+            : 'START_SECOND_INNINGS'
         };
         ballsInOver = 0;
       } else if (
         current.currentInnings === 2 &&
-        current.status === MatchStatus.LIVE &&
+        current.status === 'LIVE' &&
         current.target !== null &&
         current.target !== undefined &&
         (current.totalBalls > 0 || current.totalWickets > 0)
@@ -506,13 +493,13 @@ export class ScoringEngine {
         if (current.totalRuns >= targetValue) {
           current = {
             ...current,
-            status: MatchStatus.COMPLETED,
+            status: 'COMPLETED',
             winnerId: current.battingTeamId
           };
         } else if (inningsEnded) {
           current = {
             ...current,
-            status: MatchStatus.COMPLETED,
+            status: 'COMPLETED',
             winnerId:
               current.totalRuns < targetValue - 1 ? current.bowlingTeamId : null
           };
@@ -520,7 +507,7 @@ export class ScoringEngine {
       }
     }
 
-    if (current.status === MatchStatus.LIVE) {
+    if (current.status === 'LIVE') {
       const currentBattingTeam = this.isTeamA(current.battingTeamId, current)
         ? current.teamA
         : current.teamB;
@@ -682,44 +669,44 @@ export class ScoringEngine {
           currentBowlerId: presetBowlerId,
           lastBowlerId: presetLastBowlerId,
           pendingAction: match.isSecondInningsStarted
-            ? PendingAction.NONE
-            : PendingAction.START_SECOND_INNINGS
+            ? 'NONE'
+            : 'START_SECOND_INNINGS'
         };
       }
 
       const preservedPendingActions: PendingAction[] = [
-        PendingAction.SELECT_MATCH_SETTINGS,
-        PendingAction.TOSS_REQUIRED,
-        PendingAction.SELECT_FIELDER,
-        PendingAction.SELECT_RUNS_WICKET,
-        PendingAction.SELECT_FIELDER_DROPPED_CATCH,
-        PendingAction.SELECT_RUNS_DROPPED_CATCH,
-        PendingAction.REPLACE_STRIKER,
-        PendingAction.REPLACE_NON_STRIKER,
-        PendingAction.REPLACE_BOWLER
+        'SELECT_MATCH_SETTINGS',
+        'TOSS_REQUIRED',
+        'SELECT_FIELDER',
+        'SELECT_RUNS_WICKET',
+        'SELECT_FIELDER_DROPPED_CATCH',
+        'SELECT_RUNS_DROPPED_CATCH',
+        'REPLACE_STRIKER',
+        'REPLACE_NON_STRIKER',
+        'REPLACE_BOWLER'
       ];
 
-      if (match.pendingAction && preservedPendingActions.includes(match.pendingAction)) {
+      if (preservedPendingActions.includes(match.pendingAction)) {
         current = { ...current, pendingAction: match.pendingAction };
       } else if (
-        current.pendingAction === PendingAction.NONE ||
-        current.pendingAction === PendingAction.START_SECOND_INNINGS
+        current.pendingAction === 'NONE' ||
+        current.pendingAction === 'START_SECOND_INNINGS'
       ) {
         if (
           current.currentInnings === 2 &&
           !match.isSecondInningsStarted &&
-          current.pendingAction === PendingAction.START_SECOND_INNINGS
+          current.pendingAction === 'START_SECOND_INNINGS'
         ) {
-          current = { ...current, pendingAction: PendingAction.START_SECOND_INNINGS };
+          current = { ...current, pendingAction: 'START_SECOND_INNINGS' };
         } else if (!inningsEnded || current.currentInnings === 2) {
           if (!current.strikerId) {
-            current = { ...current, pendingAction: PendingAction.SELECT_STRIKER };
+            current = { ...current, pendingAction: 'SELECT_STRIKER' };
           } else if (needsNonStriker && !current.nonStrikerId) {
-            current = { ...current, pendingAction: PendingAction.SELECT_NON_STRIKER };
+            current = { ...current, pendingAction: 'SELECT_NON_STRIKER' };
           } else if (!current.currentBowlerId) {
-            current = { ...current, pendingAction: PendingAction.SELECT_BOWLER };
+            current = { ...current, pendingAction: 'SELECT_BOWLER' };
           } else {
-            current = { ...current, pendingAction: PendingAction.NONE };
+            current = { ...current, pendingAction: 'NONE' };
           }
         }
       }
@@ -729,7 +716,7 @@ export class ScoringEngine {
   }
 
   public static getMatchResultString(match: Match): string {
-    if (!match || match.status !== MatchStatus.COMPLETED) return 'Match In Progress';
+    if (!match || match.status !== 'COMPLETED') return 'Match In Progress';
     if (!match.winnerId) return 'Match Tied';
 
     const winner = match.winnerId === match.teamA?.id ? match.teamA : match.teamB;
@@ -778,7 +765,7 @@ export class ScoringEngine {
       if (b.isAdjustment) return;
 
       const ballTotal = (b.runs || 0) + (b.extraRuns || 0);
-      const isW = b.wicketType && b.wicketType !== WicketType.NONE && b.wicketType !== WicketType.RETIRED_HURT;
+      const isW = b.wicketType && b.wicketType !== 'NONE' && b.wicketType !== 'RETIRED_HURT';
 
       if (pB < powerplayBalls) {
         ppR += ballTotal;
@@ -793,8 +780,8 @@ export class ScoringEngine {
 
       if (isW) w++;
       if (b.extrasType && b.extrasType !== 'NONE' && b.extrasType !== 'GRANTED') exR += b.extraRuns || 0;
-      if (b.extrasType === ExtrasType.WIDE) wC++;
-      if (b.extrasType === ExtrasType.NO_BALL) nbC++;
+      if (b.extrasType === 'WIDE') wC++;
+      if (b.extrasType === 'NO_BALL') nbC++;
 
       const runs = b.runs || 0;
       if (isPhysicalBall(b)) pB++;
@@ -884,7 +871,7 @@ export class ScoringEngine {
 
       pExtras += b.extraRuns || 0;
 
-      if (b.wicketType && b.wicketType !== WicketType.NONE && b.wicketType !== WicketType.RETIRED_HURT) {
+      if (b.wicketType && b.wicketType !== 'NONE' && b.wicketType !== 'RETIRED_HURT') {
         partnerships.push({
           batter1Name: recoverName(currentB1Id), batter1Runs: runs1, batter1Balls: balls1,
           batter2Name: recoverName(currentB2Id), batter2Runs: runs2, batter2Balls: balls2,
@@ -1066,7 +1053,7 @@ export class ScoringEngine {
 
     (match.ballHistory || []).forEach((b) => {
       const isPhysical = isPhysicalBall(b);
-      const isRealWicket = b.wicketType && b.wicketType !== WicketType.NONE && b.wicketType !== WicketType.RETIRED_HURT;
+      const isRealWicket = b.wicketType && b.wicketType !== 'NONE' && b.wicketType !== 'RETIRED_HURT';
       const runsThisBall = b.runs + (b.extraRuns || 0);
 
       currentOverBalls.push(b);
@@ -1131,7 +1118,7 @@ export class ScoringEngine {
     }));
 
     (matches || []).forEach(m => {
-      if (m.status !== MatchStatus.COMPLETED) return;
+      if (m.status !== 'COMPLETED') return;
       const tA = table.find(x => x.teamId === m.teamA?.id);
       const tB = table.find(x => x.teamId === m.teamB?.id);
       if (!tA || !tB) return;
@@ -1210,15 +1197,15 @@ export class ScoringEngine {
         if (isBat) {
           const outId =
             ball.outPlayerId ||
-            (ball.wicketType && ball.wicketType !== WicketType.NONE ? ball.strikerId : null);
+            (ball.wicketType && ball.wicketType !== 'NONE' ? ball.strikerId : null);
           const isOut = p.id === outId;
 
           if (p.id === ball.strikerId) {
             const actualRuns =
-              ball.runs + (ball.extrasType === ExtrasType.GRANTED ? ball.extraRuns || 0 : 0);
+              ball.runs + (ball.extrasType === 'GRANTED' ? ball.extraRuns || 0 : 0);
             const isLegal =
               ball.isLegalBall !== false && ball.extrasType !== 'WIDE';
-            const isNoBall = ball.extrasType === ExtrasType.NO_BALL;
+            const isNoBall = ball.extrasType === 'NO_BALL';
 
             np = {
               ...np,
@@ -1230,13 +1217,13 @@ export class ScoringEngine {
                 sixes: np.battingStats.sixes + (actualRuns === 6 ? 1 : 0),
                 isOut:
                   np.battingStats.isOut ||
-                  (isOut && ball.wicketType !== WicketType.RETIRED_HURT),
-                isRetiredHurt: ball.wicketType === WicketType.RETIRED_HURT,
+                  (isOut && ball.wicketType !== 'RETIRED_HURT'),
+                isRetiredHurt: ball.wicketType === 'RETIRED_HURT',
                 wicketType: isOut ? ball.wicketType || 'NONE' : np.battingStats.wicketType,
                 dismissalBowlerId:
                   isOut &&
                   ball.wicketType !== 'RUN_OUT' &&
-                  ball.wicketType !== WicketType.RETIRED_HURT
+                  ball.wicketType !== 'RETIRED_HURT'
                     ? ball.bowlerId
                     : np.battingStats.dismissalBowlerId,
                 dismissalFielderId: isOut
@@ -1250,8 +1237,8 @@ export class ScoringEngine {
                 ...np,
                 battingStats: {
                   ...np.battingStats,
-                  isOut: ball.wicketType !== WicketType.RETIRED_HURT,
-                  isRetiredHurt: ball.wicketType === WicketType.RETIRED_HURT,
+                  isOut: ball.wicketType !== 'RETIRED_HURT',
+                  isRetiredHurt: ball.wicketType === 'RETIRED_HURT',
                   wicketType: ball.wicketType || 'NONE',
                   dismissalFielderId: ball.fielderId
                 }
@@ -1282,15 +1269,15 @@ export class ScoringEngine {
           }
 
           const runsToBowler =
-            ball.extrasType === ExtrasType.BYE || ball.extrasType === ExtrasType.LEG_BYE
+            ball.extrasType === 'BYE' || ball.extrasType === 'LEG_BYE'
               ? ball.runs
               : ball.runs + (ball.extraRuns || 0);
 
           const isBowlerWicket =
             ball.wicketType &&
-            ball.wicketType !== WicketType.NONE &&
+            ball.wicketType !== 'NONE' &&
             ball.wicketType !== 'RUN_OUT' &&
-            ball.wicketType !== WicketType.RETIRED_HURT;
+            ball.wicketType !== 'RETIRED_HURT';
 
           np = {
             ...np,
@@ -1304,9 +1291,9 @@ export class ScoringEngine {
                 np.bowlingStats.dotBalls +
                 (ball.runs === 0 && (!ball.extraRuns || ball.extraRuns === 0) ? 1 : 0),
               wides:
-                np.bowlingStats.wides + (ball.extrasType === ExtrasType.WIDE ? 1 : 0),
+                np.bowlingStats.wides + (ball.extrasType === 'WIDE' ? 1 : 0),
               noBalls:
-                np.bowlingStats.noBalls + (ball.extrasType === ExtrasType.NO_BALL ? 1 : 0)
+                np.bowlingStats.noBalls + (ball.extrasType === 'NO_BALL' ? 1 : 0)
             }
           };
         }

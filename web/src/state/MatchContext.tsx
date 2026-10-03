@@ -15,6 +15,7 @@ import {
 } from '../domain/models';
 import { ScoringEngine } from '../domain/scoringEngine';
 import { StorageAdapter } from '../storage/storageAdapter';
+import { CloudApiAdapter } from '../storage/CloudApiAdapter';
 import { useTournament } from './TournamentContext';
 
 interface MatchContextType {
@@ -42,6 +43,9 @@ interface MatchContextType {
   dismissOverSummary: () => void;
   clearBowlerNotification: () => void;
   cancelPendingAction: () => void;
+  createLiveShareLink: (ttlMinutes?: number) => Promise<string>;
+  revokeLiveShareLink: () => Promise<boolean>;
+  syncCurrentMatch: () => Promise<void>;
 }
 
 const MatchContext = createContext<MatchContextType | undefined>(undefined);
@@ -463,11 +467,50 @@ export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (match) setMatch({ ...match, pendingAction: PendingAction.NONE });
   };
 
+  const createLiveShareLink = async (ttlMinutes: number = 360): Promise<string> => {
+    if (!match) throw new Error('No active match');
+    const result = await CloudApiAdapter.createLiveShareLink(match.id, ttlMinutes);
+    setMatch((prev: Match | null) => prev ? {
+      ...prev,
+      spectatorShareActive: true,
+      spectatorTokenVersion: result.tokenVersion || 1
+    } : null);
+    return result.shareUrl;
+  };
+
+  const revokeLiveShareLink = async (): Promise<boolean> => {
+    if (!match) throw new Error('No active match');
+    const success = await CloudApiAdapter.revokeLiveShareLink(match.id);
+    if (success) {
+      setMatch((prev: Match | null) => prev ? {
+        ...prev,
+        spectatorShareActive: false,
+        spectatorTokenVersion: (prev.spectatorTokenVersion || 0) + 1
+      } : null);
+    }
+    return success;
+  };
+
+  const syncCurrentMatch = async (): Promise<void> => {
+    if (!match) return;
+    try {
+      const res = await CloudApiAdapter.syncMatchToCloud(match);
+      setMatch((prev: Match | null) => prev ? { ...prev, revision: res.revision } : null);
+    } catch (err: any) {
+      if (err.message === 'REVISION_CONFLICT') {
+        const snapshot = await CloudApiAdapter.fetchActiveSeriesSnapshot();
+        if (snapshot?.activeMatch) {
+          loadMatch(snapshot.activeMatch);
+        }
+      }
+    }
+  };
+
   const uiState: MatchUiState = {
     match,
     bowlerNotification,
     activeWicketContext,
-    isSyncEnabled: false,
+    isSyncEnabled: Boolean(CloudApiAdapter.getSession()),
     connectedDevicesCount: 0,
     finishedOverSummary
   };
@@ -497,7 +540,10 @@ export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       editBall,
       dismissOverSummary,
       clearBowlerNotification,
-      cancelPendingAction
+      cancelPendingAction,
+      createLiveShareLink,
+      revokeLiveShareLink,
+      syncCurrentMatch
     }}>
       {children}
     </MatchContext.Provider>

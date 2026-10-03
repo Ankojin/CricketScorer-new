@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Trophy, Award, BarChart3, Search } from 'lucide-react';
+import { Trophy, Award, BarChart3, Search, Table } from 'lucide-react';
 import { useTournament } from '../../state/TournamentContext';
 import { calculateStrikeRate, calculateEconomy } from '../../domain/models';
+import { ScoringEngine } from '../../domain/scoringEngine';
 
 export const StatsScreen: React.FC = () => {
   const { tournaments, globalPlayers } = useTournament();
@@ -23,9 +24,52 @@ export const StatsScreen: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
       <div>
-        <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">Tournament Leaderboards & Stats</h1>
-        <p className="text-xs text-slate-500 mt-0.5">Player career stats, top run getters, and top wicket takers</p>
+        <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">Tournament Leaderboards & Standings</h1>
+        <p className="text-xs text-slate-500 mt-0.5">Player career stats, series points table (NRR), and top performers</p>
       </div>
+
+      {/* Series Points Table */}
+      {tournaments.map(t => {
+        const standings = ScoringEngine.calculatePointsTable(t.teams, t.matches);
+        if (standings.length === 0) return null;
+        return (
+          <div key={t.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-3">
+            <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <Table className="w-5 h-5 text-emerald-600" />
+              <h2 className="font-extrabold text-base text-slate-900 dark:text-white">{t.name} — Points Table</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-semibold">
+                <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-400 uppercase border-b border-slate-100 dark:border-slate-800">
+                  <tr>
+                    <th className="p-3">Team</th>
+                    <th className="p-3">P</th>
+                    <th className="p-3">W</th>
+                    <th className="p-3">L</th>
+                    <th className="p-3">Pts</th>
+                    <th className="p-3 text-right">NRR</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
+                  {standings.map((tm, idx) => (
+                    <tr key={tm.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                      <td className="p-3 font-extrabold flex items-center space-x-2">
+                        <span className="text-slate-400 w-4">{idx + 1}</span>
+                        <span>{tm.name}</span>
+                      </td>
+                      <td className="p-3">{tm.matchesPlayed}</td>
+                      <td className="p-3 text-emerald-600 font-bold">{tm.wins}</td>
+                      <td className="p-3 text-rose-500 font-bold">{tm.losses}</td>
+                      <td className="p-3 font-black text-sm">{tm.points}</td>
+                      <td className="p-3 text-right font-mono font-bold">{tm.nrr > 0 ? `+${tm.nrr.toFixed(3)}` : tm.nrr.toFixed(3)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
 
       {/* Top Performers Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
