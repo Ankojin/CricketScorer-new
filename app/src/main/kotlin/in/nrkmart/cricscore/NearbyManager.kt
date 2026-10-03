@@ -38,7 +38,7 @@ object NearbyManager {
     private var matchUpdateCallback: ((Match) -> Unit)? = null
     private var tournamentUpdateCallback: ((String) -> Unit)? = null
     private var onConnectedCallback: (() -> Unit)? = null
-    private var discoveryDeviceName: String = Build.MODEL
+    private var discoveryDeviceName: String = Build.MODEL?.takeIf { it.isNotBlank() } ?: "Android"
     private val endpointNames = ConcurrentHashMap<String, String>()
 
     fun setMatchUpdateCallback(callback: (Match) -> Unit) {

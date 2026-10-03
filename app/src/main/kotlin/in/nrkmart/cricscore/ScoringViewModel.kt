@@ -87,6 +87,20 @@ class ScoringViewModel : ViewModel() {
 
     init {
         viewModelScope.launch {
+            var activeUserId = CloudSyncManager.session.value?.userId
+            CloudSyncManager.session.collect { session ->
+                val nextUserId = session?.userId
+                if (nextUserId != activeUserId) {
+                    stopWebSharePolling()
+                    _matchState.value = null
+                    _isWebSpectatorMode.value = false
+                    _liveShareState.value = LiveShareState()
+                    activeUserId = nextUserId
+                }
+            }
+        }
+
+        viewModelScope.launch {
             TournamentRepository.tournaments.collect { tournaments ->
                 val current = _matchState.value
                 
@@ -131,7 +145,17 @@ class ScoringViewModel : ViewModel() {
                             )
                         } else current.teamB
 
-                        _matchState.update { it?.copy(teamA = updatedTeamA, teamB = updatedTeamB) }
+                        val resolvedTeamACaptainId = updatedTeamA.players.firstOrNull { it.isCaptain }?.id ?: current.teamACaptainId
+                        val resolvedTeamBCaptainId = updatedTeamB.players.firstOrNull { it.isCaptain }?.id ?: current.teamBCaptainId
+
+                        _matchState.update { 
+                            it?.copy(
+                                teamA = updatedTeamA, 
+                                teamB = updatedTeamB,
+                                teamACaptainId = resolvedTeamACaptainId,
+                                teamBCaptainId = resolvedTeamBCaptainId
+                            ) 
+                        }
                     }
                 }
                 
@@ -264,20 +288,41 @@ class ScoringViewModel : ViewModel() {
             throw IllegalStateException("Sign in to use live share")
         }
 
+        // Always sync latest LIVE match state to AWS Cloud so DynamoDB has status = "LIVE"
+        val liveMatch = current.copy(status = MatchStatus.LIVE)
+        var synced = CloudSyncManager.upsertMatchToCloud(liveMatch.safeCopy())
+        _matchState.value = synced
+        TournamentRepository.updateMatch(synced.tournamentId ?: "", synced)
+
         val result = try {
-            CloudSyncManager.createSpectatorShareToken(current.id, ttlMinutes)
+            CloudSyncManager.createSpectatorShareToken(synced.id, ttlMinutes)
         } catch (err: Exception) {
-            val msg = err.message.orEmpty()
-            if (msg.contains("HTTP 403") || msg.contains("HTTP 404")) {
-                throw IllegalStateException("Match is not synced to cloud yet. Tap Sync and Retry.")
+            val msg = err.message.orEmpty().lowercase()
+            val cloudLagOrMissing = msg.contains("http 403") ||
+                msg.contains("http 404") ||
+                msg.contains("only for live matches")
+
+            if (cloudLagOrMissing) {
+                // Retry once after a forced upsert so cloud has current LIVE state.
+                val resynced = CloudSyncManager.upsertMatchToCloud(synced.copy(status = MatchStatus.LIVE).safeCopy())
+                synced = resynced
+                _matchState.value = resynced
+                TournamentRepository.updateMatch(resynced.tournamentId ?: "", resynced)
+
+                try {
+                    CloudSyncManager.createSpectatorShareToken(resynced.id, ttlMinutes)
+                } catch (_: Exception) {
+                    throw IllegalStateException("Match is not synced to cloud yet. Tap Sync and Retry.")
+                }
+            } else {
+                throw err
             }
-            throw err
         }
         val base = WebShareApi.appBaseUrl().trimEnd('/')
-        val shareUrl = "$base?matchId=${Uri.encode(current.id)}&st=${Uri.encode(result.spectatorToken)}&spectator=1"
+        val shareUrl = "$base?matchId=${Uri.encode(synced.id)}&st=${Uri.encode(result.spectatorToken)}&spectator=1"
 
-        val updated = current.copy(
-            spectatorTokenVersion = result.tokenVersion ?: current.spectatorTokenVersion,
+        val updated = synced.copy(
+            spectatorTokenVersion = result.tokenVersion ?: synced.spectatorTokenVersion,
             spectatorShareActive = result.active,
             spectatorShareExpiresInSeconds = result.expiresInSeconds,
             spectatorShareIssuedAt = result.issuedAt,
@@ -297,15 +342,6 @@ class ScoringViewModel : ViewModel() {
     }
 
     suspend fun syncMatchAndCreateLiveShareLink(ttlMinutes: Int = 360): String {
-        val current = _matchState.value ?: throw IllegalStateException("No active match selected")
-        if (!CloudSyncManager.isSignedIn()) {
-            throw IllegalStateException("Sign in to use live share")
-        }
-
-        val synced = CloudSyncManager.upsertMatchToCloud(current.safeCopy())
-        _matchState.value = synced
-        TournamentRepository.updateMatch(synced.tournamentId ?: "", synced)
-
         return createLiveShareLink(ttlMinutes)
     }
 
@@ -371,8 +407,12 @@ class ScoringViewModel : ViewModel() {
                         Toast.makeText(context, "Shared live match ended", Toast.LENGTH_SHORT).show()
                         stopWebSharePolling()
                     }
-                } catch (_: Exception) {
-                    // Silent retry to keep stream resilient to transient network failures.
+                } catch (err: Exception) {
+                    val message = err.message.orEmpty()
+                    if (message.contains("HTTP 403") || message.contains("HTTP 410")) {
+                        Toast.makeText(context, "Live share was revoked or expired", Toast.LENGTH_SHORT).show()
+                        stopWebSharePolling()
+                    }
                 }
             }
         }
@@ -408,6 +448,8 @@ class ScoringViewModel : ViewModel() {
     }
 
     fun handleRuns(runs: Int, rotateStrike: Boolean = true) {
+        SoundEffectManager.playRunSound(runs)
+        VoiceCommentaryManager.speakBall(runs = runs)
         val currentMatch = _matchState.value ?: return
         val ball = Ball(
             runs = runs,
@@ -420,6 +462,8 @@ class ScoringViewModel : ViewModel() {
     }
 
     fun handleExtra(type: ExtrasType, extraRuns: Int) {
+        SoundEffectManager.playExtraSound()
+        VoiceCommentaryManager.speakBall(runs = 0, extraType = type, extraRuns = extraRuns)
         val currentMatch = _matchState.value ?: return
         val strikerId = currentMatch.strikerId ?: return
         val nonStrikerId = currentMatch.nonStrikerId
@@ -479,6 +523,8 @@ class ScoringViewModel : ViewModel() {
     }
 
     fun handleWicket(type: WicketType, victimId: String?) {
+        SoundEffectManager.playWicketSound()
+        VoiceCommentaryManager.speakBall(runs = 0, isWicket = true)
         val currentMatch = _matchState.value ?: return
         val strikerId = currentMatch.strikerId ?: return
         val nonStrikerId = currentMatch.nonStrikerId
@@ -545,6 +591,8 @@ class ScoringViewModel : ViewModel() {
     }
 
     fun handleRunsForDroppedCatch(runs: Int, rotate: Boolean) {
+        SoundEffectManager.playRunSound(runs)
+        VoiceCommentaryManager.speakBall(runs = runs)
         pendingDroppedCatchBall?.let {
             val finalBall = it.copy(runs = runs, rotateStrike = rotate)
             recordBall(finalBall)
@@ -553,6 +601,7 @@ class ScoringViewModel : ViewModel() {
     }
 
     fun handleRunOutWicket(runs: Int, outId: String, rotate: Boolean, fielderId: String?) {
+        SoundEffectManager.playWicketSound()
         val context = _activeWicketContext.value ?: return
         val ball = Ball(
             runs = runs, wicketType = WicketType.RUN_OUT,
@@ -745,8 +794,9 @@ class ScoringViewModel : ViewModel() {
                     }
 
                     val bTeam = if (ScoringEngine.isTeamA(finalResult.battingTeamId, finalResult)) finalResult.teamA else finalResult.teamB
+                    val overNum = finalResult.totalBalls / 6
                     _finishedOverSummary.value = OverSummary(
-                        overNumber = finalResult.totalBalls / 6,
+                        overNumber = overNum,
                         runs = runs,
                         wickets = wickets,
                         ballLabels = labels.reversed(), // Reverse back to chronological order 🏏🚀⚖️🏅
@@ -754,6 +804,40 @@ class ScoringViewModel : ViewModel() {
                         teamTotalWickets = finalResult.totalWickets,
                         battingTeamName = bTeam.name
                     )
+
+                    VoiceCommentaryManager.speakOverSummary(
+                        overNumber = overNum,
+                        runsInOver = runs,
+                        teamName = bTeam.name,
+                        totalRuns = finalResult.totalRuns,
+                        totalWickets = finalResult.totalWickets
+                    )
+                }
+
+                val bTeam = if (ScoringEngine.isTeamA(finalResult.battingTeamId, finalResult)) finalResult.teamA else finalResult.teamB
+                currentMatch?.let { previousMatch ->
+                    val oldStriker = previousMatch.teamA.players.find { it.id == previousMatch.strikerId }
+                        ?: previousMatch.teamB.players.find { it.id == previousMatch.strikerId }
+                    val newStriker = finalResult.teamA.players.find { it.id == finalResult.strikerId }
+                        ?: finalResult.teamB.players.find { it.id == finalResult.strikerId }
+
+                    if (oldStriker != null && newStriker != null && oldStriker.id == newStriker.id) {
+                        if (oldStriker.battingStats.runs < 50 && newStriker.battingStats.runs >= 50) {
+                            VoiceCommentaryManager.speakMilestone("Fifty for ${newStriker.name}! 50 runs off ${newStriker.battingStats.balls} balls!")
+                        } else if (oldStriker.battingStats.runs < 100 && newStriker.battingStats.runs >= 100) {
+                            VoiceCommentaryManager.speakMilestone("Century for ${newStriker.name}! Magnificent 100!")
+                        }
+                    }
+
+                    if (previousMatch.totalRuns < 50 && finalResult.totalRuns >= 50) {
+                        VoiceCommentaryManager.speakMilestone("50 runs up for ${bTeam.name}!")
+                    } else if (previousMatch.totalRuns < 100 && finalResult.totalRuns >= 100) {
+                        VoiceCommentaryManager.speakMilestone("100 runs up for ${bTeam.name}!")
+                    } else if (previousMatch.totalRuns < 150 && finalResult.totalRuns >= 150) {
+                        VoiceCommentaryManager.speakMilestone("150 runs up for ${bTeam.name}!")
+                    } else if (previousMatch.totalRuns < 200 && finalResult.totalRuns >= 200) {
+                        VoiceCommentaryManager.speakMilestone("200 runs up for ${bTeam.name}!")
+                    }
                 }
 
                 val bowlingTeam = if (ScoringEngine.isTeamA(finalResult.bowlingTeamId, finalResult)) finalResult.teamA else finalResult.teamB
@@ -838,6 +922,7 @@ class ScoringViewModel : ViewModel() {
     }
 
     fun undo(context: Context) {
+        SoundEffectManager.playUndoSound()
         _matchState.update { current ->
             if (current == null || current.ballHistory.isEmpty()) {
                 Toast.makeText(context, "Nothing to undo! 🤷‍♂️", Toast.LENGTH_SHORT).show()
@@ -1016,14 +1101,52 @@ class ScoringViewModel : ViewModel() {
 
     fun updatePlayerInMatch(playerId: String, newName: String, bStyle: BattingStyle, isCaptain: Boolean, isViceCaptain: Boolean) {
         val current = _matchState.value ?: return
-        val teamId = if (current.teamA.players.any { it.id == playerId }) current.teamA.id else current.teamB.id
+        val isInTeamA = current.teamA.players.any { it.id == playerId }
+        val isInTeamB = current.teamB.players.any { it.id == playerId }
+        if (!isInTeamA && !isInTeamB) return
+
+        val isTeamA = isInTeamA
+        val teamId = if (isTeamA) current.teamA.id else current.teamB.id
         
         TournamentRepository.updatePlayerDetails(current.tournamentId ?: "", teamId, playerId, newName, bStyle, isCaptain, isViceCaptain)
         
+        val updatedTeamA = if (isTeamA) {
+            current.teamA.copy(players = current.teamA.players.map { p ->
+                if (p.id == playerId) {
+                    p.copy(name = newName, battingStyle = bStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain)
+                } else {
+                    p.copy(
+                        isCaptain = if (isCaptain) false else p.isCaptain,
+                        isViceCaptain = if (isViceCaptain) false else p.isViceCaptain
+                    )
+                }
+            })
+        } else current.teamA
+
+        val updatedTeamB = if (!isTeamA) {
+            current.teamB.copy(players = current.teamB.players.map { p ->
+                if (p.id == playerId) {
+                    p.copy(name = newName, battingStyle = bStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain)
+                } else {
+                    p.copy(
+                        isCaptain = if (isCaptain) false else p.isCaptain,
+                        isViceCaptain = if (isViceCaptain) false else p.isViceCaptain
+                    )
+                }
+            })
+        } else current.teamB
+
+        val updatedMatchWithPlayers = current.copy(
+            teamA = updatedTeamA,
+            teamB = updatedTeamB,
+            teamACaptainId = updatedTeamA.players.firstOrNull { it.isCaptain }?.id,
+            teamBCaptainId = updatedTeamB.players.firstOrNull { it.isCaptain }?.id
+        )
+
         ScoringEngine.clearCache(current.id)
-        val updated = ScoringEngine.recalculateMatchFromHistory(_matchState.value!!)
-        _matchState.value = updated
-        TournamentRepository.updateMatch(updated.tournamentId ?: "", updated)
+        val finalMatch = ScoringEngine.recalculateMatchFromHistory(updatedMatchWithPlayers)
+        _matchState.value = finalMatch
+        TournamentRepository.updateMatch(finalMatch.tournamentId ?: "", finalMatch)
     }
 }
 

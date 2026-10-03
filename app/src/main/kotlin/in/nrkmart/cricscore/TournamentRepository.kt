@@ -10,6 +10,7 @@ import com.google.gson.JsonObject
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,11 @@ object TournamentRepository {
 
     private lateinit var db: CricketDatabase
     private lateinit var prefs: SharedPreferences
+    private lateinit var appContext: Context
+    @Volatile private var activeProfileId: String? = null
+    @Volatile private var databaseProfileId: String? = null
+    private var tournamentFlowJob: Job? = null
+    private val profileLock = Any()
     private val gson = Gson()
     private const val PREFS_NAME = "cricket_scorer_prefs"
     private const val TOURNAMENTS_KEY = "tournaments_data"
@@ -35,21 +41,44 @@ object TournamentRepository {
     private val updateMutex = Mutex()
 
     fun init(context: Context) {
-        prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        db = CricketDatabase.getInstance(context)
-        
-        // Collect data from Room and update StateFlow
-        repositoryScope.launch {
-            db.tournamentDao().getAllTournamentsFlow().collect { list ->
-                _tournaments.value = list.map { it.toDomain() }
-            }
-        }
+        appContext = context.applicationContext
+        prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val guestDb = CricketDatabase.getInstance(appContext)
+        db = guestDb
+        activeProfileId = null
+        databaseProfileId = null
+        observeProfileDatabase(guestDb, null)
         
         // Handle migration from legacy SharedPreferences
-        migrateFromPrefsIfNecessary()
+        migrateFromPrefsIfNecessary(guestDb)
     }
 
-    private fun migrateFromPrefsIfNecessary() {
+    fun switchProfile(userId: String?) {
+        val normalizedUserId = userId?.takeIf { it.isNotBlank() }
+        synchronized(profileLock) {
+            if (activeProfileId == normalizedUserId && databaseProfileId == normalizedUserId && ::db.isInitialized) return
+            activeProfileId = normalizedUserId
+            _tournaments.value = emptyList()
+            if (!::appContext.isInitialized) return
+
+            tournamentFlowJob?.cancel()
+            db = CricketDatabase.getInstance(appContext, normalizedUserId)
+            databaseProfileId = normalizedUserId
+            observeProfileDatabase(db, normalizedUserId)
+        }
+    }
+
+    private fun observeProfileDatabase(database: CricketDatabase, profileId: String?) {
+        tournamentFlowJob = repositoryScope.launch {
+            database.tournamentDao().getAllTournamentsFlow().collect { list ->
+                if (activeProfileId == profileId && databaseProfileId == profileId) {
+                    _tournaments.value = list.map { it.toDomain() }
+                }
+            }
+        }
+    }
+
+    private fun migrateFromPrefsIfNecessary(guestDb: CricketDatabase) {
         val json = prefs.getString(TOURNAMENTS_KEY, null)
         if (json != null) {
             repositoryScope.launch {
@@ -59,7 +88,7 @@ object TournamentRepository {
                         val data: List<Tournament> = gson.fromJson(json, type)
                         val tournaments = data.orEmpty().filterNotNull().map { it.safeCopy() }
                         
-                        tournaments.forEach { saveTournamentToDb(it) }
+                        tournaments.forEach { saveTournamentToDb(guestDb, it) }
                         
                         prefs.edit().remove(TOURNAMENTS_KEY).apply()
                         Log.d("TournamentRepository", "Migration from SharedPreferences completed successfully")
@@ -73,27 +102,29 @@ object TournamentRepository {
         }
     }
 
-    private suspend fun saveTournamentToDb(tRaw: Tournament) {
+    private suspend fun saveTournamentToDb(tRaw: Tournament) = saveTournamentToDb(db, tRaw)
+
+    private suspend fun saveTournamentToDb(targetDb: CricketDatabase, tRaw: Tournament) {
         val t = tRaw.safeCopy()
-        db.withTransaction {
-            db.tournamentDao().insertTournament(t.toEntity())
+        targetDb.withTransaction {
+            targetDb.tournamentDao().insertTournament(t.toEntity())
             
             val teams = t.teams.orEmpty().map { it.safeCopy() }
             val teamEntities = teams.map { it.toEntity(t.id) }
-            db.teamDao().insertTeams(teamEntities)
+            targetDb.teamDao().insertTeams(teamEntities)
             
             val participants = t.participants.orEmpty().map { it.safeCopy() }
             val playerEntities = participants.map { p ->
                 val teamId = teams.find { team -> team.players.orEmpty().any { tp -> tp.id == p.id } }?.id
                 p.toEntity(t.id, teamId)
             }
-            db.playerDao().insertPlayers(playerEntities)
+            targetDb.playerDao().insertPlayers(playerEntities)
             
             t.matches.orEmpty().forEach { mRaw ->
                 val m = mRaw.safeCopy()
-                db.matchDao().insertMatch(m.toEntity())
-                db.ballDao().deleteBallsByMatch(m.id)
-                db.ballDao().insertBalls(m.ballHistory.orEmpty().map { it.toEntity(m.id) })
+                targetDb.matchDao().insertMatch(m.toEntity())
+                targetDb.ballDao().deleteBallsByMatch(m.id)
+                targetDb.ballDao().insertBalls(m.ballHistory.orEmpty().map { it.toEntity(m.id) })
             }
         }
     }
@@ -102,11 +133,18 @@ object TournamentRepository {
         if (!::db.isInitialized) return
         repositoryScope.launch {
             updateMutex.withLock {
-                val details = db.tournamentDao().getTournamentById(tournamentId) ?: return@withLock
+                val profileId = activeProfileId
+                if (profileId != databaseProfileId) return@withLock
+                val targetDb = db
+                val details = targetDb.tournamentDao().getTournamentById(tournamentId) ?: return@withLock
                 val tournament = details.toDomain()
                 val updated = action(tournament)
                 val recalculated = recalculateTournamentStandings(updated)
-                saveTournamentToDb(recalculated)
+                if (profileId != activeProfileId || profileId != databaseProfileId) return@withLock
+                if (CloudSyncManager.canUploadTournament(recalculated.id)) {
+                    CloudSyncManager.enqueueTournamentUpsert(recalculated)
+                }
+                saveTournamentToDb(targetDb, recalculated)
             }
         }
     }
@@ -126,7 +164,9 @@ object TournamentRepository {
         }
     }
 
-    fun importTournament(json: String): Boolean {
+    fun importTournament(json: String, expectedProfileId: String? = activeProfileId): Boolean {
+        if (expectedProfileId != activeProfileId || expectedProfileId != databaseProfileId || !::db.isInitialized) return false
+        val targetDb = db
         return try {
             val jsonObject = gson.fromJson(json, JsonObject::class.java) ?: return false
             val allImportedGlobalPlayers = mutableListOf<Player>()
@@ -194,15 +234,32 @@ object TournamentRepository {
             }
             allImportedGlobalPlayers.addAll(tournament.participants.orEmpty().filterNotNull())
 
-            // Import all accumulated global players into GlobalPlayerRepository!
-            if (allImportedGlobalPlayers.isNotEmpty()) {
-                GlobalPlayerRepository.importPlayers(allImportedGlobalPlayers)
+            // Merge with existing series if ID or Name matches to avoid data loss
+            val existingSeries = _tournaments.value.find { 
+                it.id == tournament.id || it.name.equals(tournament.name, ignoreCase = true) 
+            }
+
+            val finalTournamentToSave = if (existingSeries != null) {
+                val mergedMatches = (existingSeries.matches + tournament.matches).distinctBy { it.id }
+                val mergedTeams = (existingSeries.teams + tournament.teams).distinctBy { it.id }
+                val mergedParticipants = (existingSeries.participants + tournament.participants).distinctBy { it.id }
+                existingSeries.copy(
+                    teams = mergedTeams,
+                    matches = mergedMatches,
+                    participants = mergedParticipants
+                )
+            } else {
+                tournament
             }
 
             repositoryScope.launch {
                 updateMutex.withLock {
-                    val recalculated = recalculateTournamentStandings(tournament)
-                    saveTournamentToDb(recalculated)
+                    if (expectedProfileId != activeProfileId || expectedProfileId != databaseProfileId) return@withLock
+                    if (allImportedGlobalPlayers.isNotEmpty()) {
+                        GlobalPlayerRepository.importPlayers(allImportedGlobalPlayers)
+                    }
+                    val recalculated = recalculateTournamentStandings(finalTournamentToSave)
+                    saveTournamentToDb(targetDb, recalculated)
                 }
             }
             true
@@ -212,9 +269,26 @@ object TournamentRepository {
         }
     }
 
+    fun importCloudTournament(tournament: Tournament, expectedProfileId: String? = activeProfileId): Boolean {
+        if (expectedProfileId != activeProfileId || expectedProfileId != databaseProfileId) return false
+        val localMatches = _tournaments.value
+            .firstOrNull { it.id == tournament.id }
+            ?.matches
+            .orEmpty()
+        val merged = tournament.safeCopy(matches = localMatches)
+        val wrapper = JsonObject().apply {
+            addProperty("type", "UNIFIED_BACKUP")
+            add("tournament", gson.toJsonTree(merged))
+        }
+        return importTournament(gson.toJson(wrapper), expectedProfileId)
+    }
+
     fun createTournament(name: String, overs: Int, maxOvers: Int? = null, quotaCount: Int? = null, quotaLimit: Int? = null) {
         repositoryScope.launch {
             updateMutex.withLock {
+                val profileId = activeProfileId
+                if (profileId != databaseProfileId) return@withLock
+                val targetDb = db
                 val tournament = Tournament(
                     id = UUID.randomUUID().toString(),
                     name = name,
@@ -225,15 +299,22 @@ object TournamentRepository {
                         quotaMaxOvers = quotaLimit
                     )
                 )
-                saveTournamentToDb(tournament)
+                CloudSyncManager.claimTournamentForCurrentUser(tournament.id)
+                if (profileId != activeProfileId || profileId != databaseProfileId) return@withLock
+                saveTournamentToDb(targetDb, tournament)
+                CloudSyncManager.enqueueTournamentUpsert(tournament)
             }
         }
     }
 
     fun deleteTournament(id: String) {
+        CloudSyncManager.enqueueTournamentDelete(id)
         repositoryScope.launch {
             updateMutex.withLock {
-                db.tournamentDao().deleteTournamentById(id)
+                val profileId = activeProfileId
+                if (profileId != databaseProfileId) return@withLock
+                val targetDb = db
+                targetDb.tournamentDao().deleteTournamentById(id)
             }
         }
     }
@@ -324,13 +405,34 @@ object TournamentRepository {
             }
             
             // 2. Add players to target team
+            var captainSeen = false
+            var viceCaptainSeen = false
+            val sanitizedPlayersToProcess = playersToProcess.map { p ->
+                val pCaptain = p.isCaptain && !captainSeen
+                if (pCaptain) captainSeen = true
+                val pViceCaptain = p.isViceCaptain && !pCaptain && !viceCaptainSeen
+                if (pViceCaptain) viceCaptainSeen = true
+                p.copy(isCaptain = pCaptain, isViceCaptain = pViceCaptain)
+            }
+
+            val hasNewCaptain = sanitizedPlayersToProcess.any { it.isCaptain }
+            val hasNewViceCaptain = sanitizedPlayersToProcess.any { it.isViceCaptain }
+
             val updatedTeams = teamsWithRemovals.map { team ->
                 if (team.id == teamId) {
-                    team.copy(players = team.players + playersToProcess)
+                    val adjustedExisting = if (hasNewCaptain || hasNewViceCaptain) {
+                        team.players.map { p ->
+                            p.copy(
+                                isCaptain = if (hasNewCaptain) false else p.isCaptain,
+                                isViceCaptain = if (hasNewViceCaptain) false else p.isViceCaptain
+                            )
+                        }
+                    } else team.players
+                    team.copy(players = adjustedExisting + sanitizedPlayersToProcess)
                 } else team
             }
             
-            val updatedParticipants = (t.participants.orEmpty() + playersToProcess).distinctBy { it.id }
+            val updatedParticipants = (t.participants.orEmpty() + sanitizedPlayersToProcess).distinctBy { it.id }
 
             // 3. Update matches with the moved rosters
             val updatedMatches = t.matches.orEmpty().map { match ->
@@ -344,7 +446,15 @@ object TournamentRepository {
                     if (masterA != null) newTeamA = match.teamA.copy(players = masterA.players)
                     if (masterB != null) newTeamB = match.teamB.copy(players = masterB.players)
 
-                    match.copy(teamA = newTeamA, teamB = newTeamB)
+                    val resolvedTeamACaptainId = newTeamA.players.firstOrNull { it.isCaptain }?.id
+                    val resolvedTeamBCaptainId = newTeamB.players.firstOrNull { it.isCaptain }?.id
+
+                    match.copy(
+                        teamA = newTeamA, 
+                        teamB = newTeamB,
+                        teamACaptainId = resolvedTeamACaptainId,
+                        teamBCaptainId = resolvedTeamBCaptainId
+                    )
                 } else match
             }
 
@@ -376,30 +486,48 @@ object TournamentRepository {
 
     fun updatePlayerDetails(tournamentId: String, teamId: String, playerId: String, newName: String, bStyle: BattingStyle, isCaptain: Boolean, isViceCaptain: Boolean) {
         updateTournament(tournamentId) { t ->
+            fun updateRosterIfContains(players: List<Player>): List<Player> {
+                if (players.none { it.id == playerId }) return players
+                return players.map { player ->
+                    if (player.id == playerId) {
+                        player.copy(name = newName, battingStyle = bStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain)
+                    } else {
+                        player.copy(
+                            isCaptain = if (isCaptain) false else player.isCaptain,
+                            isViceCaptain = if (isViceCaptain) false else player.isViceCaptain
+                        )
+                    }
+                }
+            }
+
             val updatedTeams = t.teams.map { team ->
                 if (team.id == teamId) {
-                    val updatedPlayers = team.players.map { player ->
-                        if (player.id == playerId) player.copy(name = newName, battingStyle = bStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain) else player
-                    }
+                    val updatedPlayers = updateRosterIfContains(team.players)
                     team.copy(players = updatedPlayers)
                 } else team
             }
             
             val updatedMatches = t.matches.map { match ->
                 if (match.status == MatchStatus.LIVE || match.status == MatchStatus.UPCOMING) {
-                    val updatedTeamA = if (match.teamA.id == teamId || match.teamA.players.any { it.id == playerId }) {
-                        match.teamA.copy(players = match.teamA.players.map { p ->
-                            if (p.id == playerId) p.copy(name = newName, battingStyle = bStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain) else p
-                        })
+                    val updatedTeamAPlayers = updateRosterIfContains(match.teamA.players)
+                    val updatedTeamA = if (updatedTeamAPlayers !== match.teamA.players) {
+                        match.teamA.copy(players = updatedTeamAPlayers)
                     } else match.teamA
                     
-                    val updatedTeamB = if (match.teamB.id == teamId || match.teamB.players.any { it.id == playerId }) {
-                        match.teamB.copy(players = match.teamB.players.map { p ->
-                            if (p.id == playerId) p.copy(name = newName, battingStyle = bStyle, isCaptain = isCaptain, isViceCaptain = isViceCaptain) else p
-                        })
+                    val updatedTeamBPlayers = updateRosterIfContains(match.teamB.players)
+                    val updatedTeamB = if (updatedTeamBPlayers !== match.teamB.players) {
+                        match.teamB.copy(players = updatedTeamBPlayers)
                     } else match.teamB
+
+                    val resolvedTeamACaptainId = updatedTeamA.players.firstOrNull { it.isCaptain }?.id
+                    val resolvedTeamBCaptainId = updatedTeamB.players.firstOrNull { it.isCaptain }?.id
                     
-                    match.copy(teamA = updatedTeamA, teamB = updatedTeamB)
+                    match.copy(
+                        teamA = updatedTeamA,
+                        teamB = updatedTeamB,
+                        teamACaptainId = resolvedTeamACaptainId,
+                        teamBCaptainId = resolvedTeamBCaptainId
+                    )
                 } else match
             }
             
@@ -469,6 +597,8 @@ object TournamentRepository {
         updateTournament(tournamentId) { t ->
             val teamA = t.teams.find { it.id == teamAId } ?: return@updateTournament t
             val teamB = t.teams.find { it.id == teamBId } ?: return@updateTournament t
+            val teamACaptainId = teamA.players.firstOrNull { it.isCaptain }?.id
+            val teamBCaptainId = teamB.players.firstOrNull { it.isCaptain }?.id
             
             val match = Match(
                 id = UUID.randomUUID().toString(),
@@ -476,6 +606,8 @@ object TournamentRepository {
                 tournamentName = t.name,
                 teamA = resetTeamStats(teamA),
                 teamB = resetTeamStats(teamB),
+                teamACaptainId = teamACaptainId,
+                teamBCaptainId = teamBCaptainId,
                 battingTeamId = teamA.id,
                 bowlingTeamId = teamB.id,
                 oversPerInnings = t.settings.overs,
@@ -483,7 +615,10 @@ object TournamentRepository {
                 dateMillis = scheduledDate ?: System.currentTimeMillis(),
                 gullyRules = GullyRulesRepository.gullyRules.value
             )
-            CloudSyncManager.enqueueMatchUpsert(match)
+            if (CloudSyncManager.canUploadTournament(tournamentId)) {
+                CloudSyncManager.claimMatchForCurrentUser(match.id)
+                CloudSyncManager.enqueueMatchUpsert(match)
+            }
             t.safeCopy(matches = t.matches.orEmpty() + match)
         }
     }
@@ -501,6 +636,19 @@ object TournamentRepository {
         updateTournament(tournamentId) { t ->
             val updatedMatches = t.matches.orEmpty().map { if (it.id == updatedMatch.id) updatedMatch else it }
             t.safeCopy(matches = updatedMatches)
+        }
+    }
+
+    fun updateMatchSyncMetadata(matchId: String, revision: Int?, updatedAt: String?) {
+        val match = _tournaments.value.asSequence()
+            .flatMap { it.matches.orEmpty().asSequence() }
+            .firstOrNull { it.id == matchId } ?: return
+        val tournamentId = match.tournamentId ?: return
+        updateTournament(tournamentId) { tournament ->
+            val updatedMatches = tournament.matches.orEmpty().map {
+                if (it.id == matchId) it.copy(revision = revision, updatedAt = updatedAt) else it
+            }
+            tournament.safeCopy(matches = updatedMatches)
         }
     }
 

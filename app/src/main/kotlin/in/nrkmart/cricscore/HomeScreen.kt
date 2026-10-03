@@ -47,6 +47,41 @@ private enum class NearbyStartMode {
     SPECTATOR
 }
 
+private val BLOCKED_EMAIL_DOMAINS = setOf(
+    "example.com",
+    "example.net",
+    "example.org",
+    "test.com",
+    "invalid",
+    "mailinator.com",
+    "tempmail.com",
+    "10minutemail.com",
+    "guerrillamail.com"
+)
+
+private fun normalizeEmail(rawEmail: String): String = rawEmail.trim().lowercase()
+
+private fun isValidEmailSyntax(email: String): Boolean {
+    return Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$").matches(email)
+}
+
+private fun isStrongPassword(password: String): Boolean {
+    return password.length >= 8 && password.any { it.isLetter() } && password.any { it.isDigit() }
+}
+
+private fun looksLikeDummyEmail(email: String): Boolean {
+    val parts = email.split("@")
+    if (parts.size != 2) return true
+
+    val local = parts[0].trim().lowercase()
+    val domain = parts[1].trim().lowercase()
+    if (local.isBlank() || domain.isBlank()) return true
+    if (domain in BLOCKED_EMAIL_DOMAINS) return true
+
+    val obviousLocals = setOf("test", "dummy", "fake", "sample", "unknown", "na", "none", "admin")
+    return local in obviousLocals
+}
+
 private fun isLocationEnabled(context: Context): Boolean {
     val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
     val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
@@ -113,12 +148,15 @@ fun HomeScreen(
     var showWebShareDialog by remember { mutableStateOf(false) }
     var showNearbyRoleDialog by remember { mutableStateOf(false) }
     var showCloudAuthDialog by remember { mutableStateOf(false) }
+    var showClaimBackupsDialog by remember { mutableStateOf(false) }
     var cloudAuthMode by remember { mutableStateOf("login") }
     var cloudEmail by remember { mutableStateOf("") }
     var cloudPassword by remember { mutableStateOf("") }
     var cloudName by remember { mutableStateOf("") }
     var cloudBusy by remember { mutableStateOf(false) }
     var lastCloudAutoSyncAt by remember { mutableStateOf(0L) }
+    var unclaimedLocalCount by remember { mutableStateOf(0) }
+    var showMoreOptions by remember { mutableStateOf(false) }
     var webShareUrl by remember { mutableStateOf("") }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -126,14 +164,79 @@ fun HomeScreen(
 
     fun requestCloudSync(showSuccessToast: Boolean) {
         if (cloudBusy || cloudSession == null) return
+        val syncUserId = cloudSession?.userId ?: return
         scope.launch {
             cloudBusy = true
             try {
+                // 1. Upload owned series metadata, then revisioned match snapshots.
+                val localTournaments = TournamentRepository.tournaments.value
+                var uploadedTournaments = 0
+                var skippedTournamentOwnership = 0
+                var tournamentConflicts = 0
+                val conflictedTournamentIds = mutableSetOf<String>()
+                localTournaments.forEach { tournament ->
+                    if (!CloudSyncManager.canUploadTournament(tournament.id)) {
+                        skippedTournamentOwnership++
+                        return@forEach
+                    }
+                    try {
+                        CloudSyncManager.upsertTournamentToCloud(tournament)
+                        uploadedTournaments++
+                    } catch (_: CloudSyncManager.StaleTournamentException) {
+                        tournamentConflicts++
+                        conflictedTournamentIds += tournament.id
+                    } catch (_: Exception) {}
+                }
+
+                val localMatches = localTournaments.flatMap { it.matches }
+                var uploaded = 0
+                var skippedOwnership = 0
+                var conflicts = 0
+                val conflictedMatchIds = mutableSetOf<String>()
+                localMatches.forEach { match ->
+                    if (!CloudSyncManager.canUploadMatch(match.id)) {
+                        skippedOwnership++
+                        return@forEach
+                    }
+                    try {
+                        val syncedMatch = CloudSyncManager.upsertMatchToCloud(match)
+                        TournamentRepository.updateMatchSyncMetadata(
+                            syncedMatch.id,
+                            syncedMatch.revision,
+                            syncedMatch.updatedAt
+                        )
+                        uploaded++
+                    } catch (_: CloudSyncManager.StaleRevisionException) {
+                        conflicts++
+                        conflictedMatchIds += match.id
+                    } catch (_: Exception) {}
+                }
+
+                // 2. Process account-owned offline operations.
+                CloudSyncManager.processPendingQueue()
+                CloudSyncManager.processPendingTournamentQueue()
+                if (CloudSyncManager.session.value?.userId != syncUserId) return@launch
+
+                // 3. Pull owner-scoped snapshots; keep local copies involved in conflicts.
+                val tournaments = CloudSyncManager.pullCloudTournaments()
+                val importableTournaments = tournaments.filterNot { it.id in conflictedTournamentIds }
+                val importedTournaments = CloudSyncManager.importCloudTournamentsToLocal(
+                    importableTournaments,
+                    conflictedTournamentIds,
+                    expectedUserId = syncUserId
+                )
                 val matches = CloudSyncManager.pullCloudMatches()
-                val imported = CloudSyncManager.importCloudMatchesToLocal(matches)
+                if (CloudSyncManager.session.value?.userId != syncUserId) return@launch
+                val importableMatches = matches.filterNot { it.id in conflictedMatchIds }
+                val imported = CloudSyncManager.importCloudMatchesToLocal(importableMatches, syncUserId)
                 lastCloudAutoSyncAt = System.currentTimeMillis()
-                if (showSuccessToast) {
-                    Toast.makeText(context, "Imported $imported cloud match(es)", Toast.LENGTH_LONG).show()
+
+                if (showSuccessToast && CloudSyncManager.session.value?.userId == syncUserId) {
+                    Toast.makeText(
+                        context,
+                        "Cloud sync complete ☁️\nAndroid -> Cloud -> Web\nSeries: $uploadedTournaments uploaded, $importedTournaments imported, $skippedTournamentOwnership skipped, $tournamentConflicts conflicts\nMatches: $uploaded uploaded, $imported imported, $skippedOwnership skipped, $conflicts conflicts",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             } catch (err: Exception) {
                 if (showSuccessToast) {
@@ -141,7 +244,61 @@ fun HomeScreen(
                 }
             } finally {
                 cloudBusy = false
+                val nextUserId = CloudSyncManager.session.value?.userId
+                if (nextUserId != null && nextUserId != syncUserId) {
+                    scope.launch { requestCloudSync(showSuccessToast = false) }
+                }
             }
+        }
+    }
+
+    fun claimLocalBackupsForCurrentUser() {
+        if (cloudBusy || cloudSession == null) return
+        scope.launch {
+            cloudBusy = true
+            try {
+                val localTournaments = TournamentRepository.tournaments.value
+                val localMatchIds = localTournaments.flatMap { it.matches }.map { it.id }
+                val claimedMatches = CloudSyncManager.claimUnclaimedMatchesForCurrentUser(localMatchIds)
+                val claimableTournamentIds = localTournaments
+                    .filter { tournament ->
+                        CloudSyncManager.canClaimTournamentForCurrentUser(
+                            tournament.id,
+                            tournament.matches.map { it.id }
+                        )
+                    }
+                    .map { it.id }
+                val claimedTournaments = CloudSyncManager.claimUnclaimedTournamentsForCurrentUser(claimableTournamentIds)
+                val totalClaimed = claimedMatches + claimedTournaments
+                Toast.makeText(
+                    context,
+                    if (totalClaimed > 0) {
+                        "Claimed $claimedMatches match(es) and $claimedTournaments series. You can now run Cloud Sync."
+                    } else {
+                        "No unclaimed local matches or series found."
+                    },
+                    Toast.LENGTH_LONG
+                ).show()
+                unclaimedLocalCount = CloudSyncManager.countUnclaimedMatchesForCurrentUser(localMatchIds) +
+                    CloudSyncManager.countUnclaimedTournamentsForCurrentUser(claimableTournamentIds)
+            } finally {
+                cloudBusy = false
+            }
+        }
+    }
+
+    LaunchedEffect(showSyncSheet, cloudSession?.userId) {
+        if (showSyncSheet && cloudSession != null) {
+            val localTournaments = TournamentRepository.tournaments.value
+            val localMatchIds = localTournaments.flatMap { it.matches }.map { it.id }
+            val claimableTournamentIds = localTournaments.filter { tournament ->
+                CloudSyncManager.canClaimTournamentForCurrentUser(
+                    tournament.id,
+                    tournament.matches.map { it.id }
+                )
+            }.map { it.id }
+            unclaimedLocalCount = CloudSyncManager.countUnclaimedMatchesForCurrentUser(localMatchIds) +
+                CloudSyncManager.countUnclaimedTournamentsForCurrentUser(claimableTournamentIds)
         }
     }
 
@@ -351,7 +508,6 @@ fun HomeScreen(
                     }
                 }
 
-                // Highlighted Motto / Brand Banner
                 item {
                     Card(
                         modifier = Modifier
@@ -389,6 +545,84 @@ fun HomeScreen(
                 }
 
                 item {
+                    val signedIn = cloudSession != null
+                    Card(
+                        modifier = Modifier
+                            .padding(start = 16.dp, end = 16.dp, top = 12.dp)
+                            .fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (signedIn) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(
+                            0.5.dp,
+                            if (signedIn) MaterialTheme.colorScheme.secondary.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outlineVariant
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = "CRICLEAGUE CLOUD BACKUP & SYNC",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = if (signedIn) {
+                                    "Connected as ${cloudSession?.name?.ifBlank { cloudSession?.email } ?: "User"}. Match, team, and series cloud sync is active."
+                                } else {
+                                    "Sign in to sync matches, teams, and series across devices. Scoring remains available locally."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                if (signedIn) {
+                                    Button(
+                                        onClick = { showSyncSheet = true },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("OPEN SYNC", fontWeight = FontWeight.Bold)
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            CloudSyncManager.signOut()
+                                            Toast.makeText(context, "Signed out from cloud", Toast.LENGTH_SHORT).show()
+                                        },
+                                        enabled = !cloudBusy,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("SIGN OUT", fontWeight = FontWeight.Bold)
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = {
+                                            cloudAuthMode = "login"
+                                            showCloudAuthDialog = true
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("SIGN IN", fontWeight = FontWeight.Bold)
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            cloudAuthMode = "register"
+                                            showCloudAuthDialog = true
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("REGISTER", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item {
                     Text(
                         "QUICK START",
                         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
@@ -396,7 +630,7 @@ fun HomeScreen(
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    
+
                     Card(
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
@@ -426,6 +660,17 @@ fun HomeScreen(
                                 }
                             }
                         }
+                    }
+                }
+
+                item {
+                    TextButton(
+                        onClick = { showMoreOptions = !showMoreOptions },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Text(if (showMoreOptions) "Hide More Options" else "Show More Options")
                     }
                 }
 
@@ -473,9 +718,39 @@ fun HomeScreen(
                     }
                 }
 
-                item {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    CardBranding()
+                if (showMoreOptions) {
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { showSyncSheet = true },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("OPEN SYNC", fontWeight = FontWeight.Bold)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    if (isSyncEnabled) {
+                                        stopNearbySync(context, viewModel)
+                                    } else {
+                                        showNearbyRoleDialog = true
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(if (isSyncEnabled) "STOP NEARBY" else "NEARBY SYNC", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        CardBranding()
+                    }
                 }
             }
 
@@ -757,6 +1032,21 @@ fun HomeScreen(
                                 )
 
                                 if (cloudSession == null) {
+                                    Surface(
+                                        shape = RoundedCornerShape(999.dp),
+                                        color = MaterialTheme.colorScheme.errorContainer
+                                    ) {
+                                        Text(
+                                            text = "SIGN IN REQUIRED FOR CLOUD SYNC",
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Black,
+                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                    }
+                                }
+
+                                if (cloudSession == null) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                         Button(
                                             onClick = {
@@ -778,27 +1068,51 @@ fun HomeScreen(
                                         }
                                     }
                                 } else {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                        Button(
-                                            onClick = {
-                                                if (cloudBusy) return@Button
-                                                requestCloudSync(showSuccessToast = true)
-                                            },
-                                            enabled = !cloudBusy,
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text(if (cloudBusy) "SYNCING..." else "SYNC NOW", fontWeight = FontWeight.Bold)
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                            Button(
+                                                onClick = {
+                                                    if (cloudBusy) return@Button
+                                                    requestCloudSync(showSuccessToast = true)
+                                                },
+                                                enabled = !cloudBusy,
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text(if (cloudBusy) "SYNCING..." else "SYNC NOW", fontWeight = FontWeight.Bold)
+                                            }
+                                            OutlinedButton(
+                                                onClick = {
+                                                    CloudSyncManager.signOut()
+                                                    Toast.makeText(context, "Signed out from cloud", Toast.LENGTH_SHORT).show()
+                                                },
+                                                enabled = !cloudBusy,
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text("SIGN OUT", fontWeight = FontWeight.Bold)
+                                            }
                                         }
+
                                         OutlinedButton(
-                                            onClick = {
-                                                CloudSyncManager.signOut()
-                                                Toast.makeText(context, "Signed out from cloud", Toast.LENGTH_SHORT).show()
-                                            },
+                                            onClick = { showClaimBackupsDialog = true },
                                             enabled = !cloudBusy,
-                                            modifier = Modifier.weight(1f)
+                                            modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Text("SIGN OUT", fontWeight = FontWeight.Bold)
+                                            Text("CLAIM LOCAL BACKUPS (ONE-TIME)", fontWeight = FontWeight.Bold)
                                         }
+
+                                        Text(
+                                            text = "Unclaimed local backups: $unclaimedLocalCount",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (unclaimedLocalCount > 0) {
+                                                MaterialTheme.colorScheme.error
+                                            } else {
+                                                Color(0xFF2E7D32)
+                                            },
+                                            fontWeight = FontWeight.SemiBold
+                                        )
                                     }
                                 }
                             }
@@ -911,6 +1225,41 @@ fun HomeScreen(
                         Spacer(Modifier.height(12.dp))
                     }
                 }
+            }
+
+            if (showClaimBackupsDialog) {
+                AlertDialog(
+                    onDismissRequest = {
+                        if (!cloudBusy) showClaimBackupsDialog = false
+                    },
+                    title = { Text("Claim Local Backups", fontWeight = FontWeight.Black) },
+                    text = {
+                        Text(
+                            "This one-time action claims only unowned local matches and series for your signed-in account. Series containing another account's matches are not claimable.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showClaimBackupsDialog = false
+                                claimLocalBackupsForCurrentUser()
+                            },
+                            enabled = !cloudBusy
+                        ) {
+                            Text("CLAIM NOW", fontWeight = FontWeight.Black)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { showClaimBackupsDialog = false },
+                            enabled = !cloudBusy
+                        ) {
+                            Text("CANCEL")
+                        }
+                    }
+                )
             }
 
             if (showWebShareDialog) {
@@ -1047,11 +1396,27 @@ fun HomeScreen(
                     confirmButton = {
                         Button(
                             onClick = {
-                                val email = cloudEmail.trim()
+                                val email = normalizeEmail(cloudEmail)
                                 val password = cloudPassword
                                 if (email.isBlank() || password.isBlank()) {
                                     Toast.makeText(context, "Email and password are required", Toast.LENGTH_SHORT).show()
                                     return@Button
+                                }
+
+                                if (!isValidEmailSyntax(email)) {
+                                    Toast.makeText(context, "Please enter a valid email address", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+
+                                if (cloudAuthMode == "register") {
+                                    if (!isStrongPassword(password)) {
+                                        Toast.makeText(context, "Password must be at least 8 characters and include letters and numbers", Toast.LENGTH_LONG).show()
+                                        return@Button
+                                    }
+                                    if (looksLikeDummyEmail(email)) {
+                                        Toast.makeText(context, "Please use a real email address you can access", Toast.LENGTH_LONG).show()
+                                        return@Button
+                                    }
                                 }
 
                                 scope.launch {
@@ -1098,14 +1463,14 @@ fun QuickActionChip(text: String, onClick: () -> Unit, modifier: Modifier = Modi
         modifier = modifier,
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(12.dp),
-        shadowElevation = 2.dp,
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.LightGray)
+        shadowElevation = 1.dp,
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
             style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Black,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
         )
     }

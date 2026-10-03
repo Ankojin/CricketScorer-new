@@ -88,12 +88,12 @@ fun MatchSummaryCard(uiState: MatchUiState) {
 
 @Composable
 fun MotmSection(uiState: MatchUiState) {
-    val match = uiState.match ?: return
+    val rawMatch = uiState.match ?: return
+    // Step 1: Pre-Calculation History Replay to ensure 100% up-to-date player stats
+    val match = ScoringEngine.recalculateMatchFromHistory(rawMatch)
     val allPlayers = match.teamA.players + match.teamB.players
     
-    // v2.29.0: ICC Standard Impact Engine 🏏🚀⚖️🏅
-    // Focusing on Match-Turning Milestones and Winning Contribution.
-    
+    // Step 2: Weighted Impact Scoring Matrix
     val playerImpacts = mutableMapOf<String, Double>()
     allPlayers.forEach { playerImpacts[it.id] = 0.0 }
 
@@ -102,11 +102,11 @@ fun MotmSection(uiState: MatchUiState) {
         
         // 1. Batting Contribution
         if (p.battingStats.balls > 0) {
-            score += p.battingStats.runs * 1.0 // 1 pt per run
-            score += p.battingStats.fours * 1.0 // +1 bonus per 4
-            score += p.battingStats.sixes * 2.0 // +2 bonus per 6
+            score += p.battingStats.runs * 1.0 // +1.0 pt per run
+            score += p.battingStats.fours * 1.0 // +1.0 pt per 4
+            score += p.battingStats.sixes * 2.0 // +2.0 pts per 6
             
-            // ICC Milestone Bonuses
+            // Milestone Bonuses
             if (p.battingStats.runs >= 50) score += 20.0
             else if (p.battingStats.runs >= 30) score += 10.0
             
@@ -119,9 +119,9 @@ fun MotmSection(uiState: MatchUiState) {
 
         // 2. Bowling Contribution
         if (p.bowlingStats.balls > 0 || p.bowlingStats.overs > 0) {
-            score += p.bowlingStats.wickets * 25.0 // 25 pts per wicket
+            score += p.bowlingStats.wickets * 25.0 // +25.0 pts per wicket
             
-            // ICC Milestone Bonuses
+            // Wicket Milestone Bonuses
             if (p.bowlingStats.wickets >= 3) score += 25.0
             else if (p.bowlingStats.wickets >= 2) score += 10.0
             
@@ -139,19 +139,36 @@ fun MotmSection(uiState: MatchUiState) {
         // 3. Fielding Contribution
         score += p.fieldingStats.catches * 10.0
         score += p.fieldingStats.stumpings * 10.0
-        score += p.fieldingStats.runOuts * 15.0 // Run outs are high impact
+        score += p.fieldingStats.runOuts * 15.0
 
-        // 4. Winning Contribution (ICC Standard Bias)
+        // 4. Match Winner Bonus
         val isWinner = match.winnerId != null && (match.teamA.players.any { it.id == p.id } && match.winnerId == match.teamA.id || match.teamB.players.any { it.id == p.id } && match.winnerId == match.teamB.id)
         if (isWinner) score += 25.0
 
         playerImpacts[p.id] = score
     }
 
+    // Step 3: Selection & Stats Summary Formatting
     val mvpEntry = playerImpacts.maxByOrNull { it.value }
     val mvp = allPlayers.find { it.id == mvpEntry?.key }
 
     if (mvp != null && (mvpEntry?.value ?: 0.0) > 10.0) {
+        val statParts = mutableListOf<String>()
+        if (mvp.battingStats.balls > 0 || mvp.battingStats.runs > 0) {
+            statParts.add("${mvp.battingStats.runs} (${mvp.battingStats.balls}b)")
+        }
+        if (mvp.bowlingStats.overs > 0 || mvp.bowlingStats.balls > 0) {
+            statParts.add("${mvp.bowlingStats.wickets}/${mvp.bowlingStats.runsConceded} (${mvp.bowlingStats.formattedOvers} ov)")
+        }
+        val fieldingList = mutableListOf<String>()
+        if (mvp.fieldingStats.catches > 0) fieldingList.add("${mvp.fieldingStats.catches} c")
+        if (mvp.fieldingStats.stumpings > 0) fieldingList.add("${mvp.fieldingStats.stumpings} st")
+        if (mvp.fieldingStats.runOuts > 0) fieldingList.add("${mvp.fieldingStats.runOuts} ro")
+        if (fieldingList.isNotEmpty()) {
+            statParts.add(fieldingList.joinToString(", "))
+        }
+        val summaryText = statParts.joinToString(" • ")
+
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF1A237E), contentColor = Color.White),
@@ -166,11 +183,10 @@ fun MotmSection(uiState: MatchUiState) {
                 }
                 Spacer(Modifier.width(16.dp))
                 Column {
-                    Text("MAN OF THE MATCH • ICC RANKED", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.White.copy(alpha = 0.7f))
+                    Text("MAN OF THE MATCH", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.White.copy(alpha = 0.7f))
                     Text(mvp.name.uppercase(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("IMPACT SCORE: ", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.9f))
-                        Text(String.format(Locale.US, "%.0f", mvpEntry?.value ?: 0.0), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Black, color = Color(0xFFFFD700))
+                    if (summaryText.isNotBlank()) {
+                        Text(summaryText, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = Color(0xFFFFD700))
                     }
                 }
             }

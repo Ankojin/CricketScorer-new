@@ -165,8 +165,9 @@ fun PlayerProfileDialog(
                                     Spacer(Modifier.width(16.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
+                                            val roleBadge = if (stats.isCaptain) " (c)" else if (stats.isViceCaptain) " (vc)" else ""
                                             Text(
-                                                stats.playerName,
+                                                stats.playerName + roleBadge,
                                                 style = MaterialTheme.typography.titleLarge,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onSurface

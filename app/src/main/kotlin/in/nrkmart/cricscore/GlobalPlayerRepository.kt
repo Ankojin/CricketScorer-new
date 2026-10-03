@@ -2,6 +2,7 @@ package `in`.nrkmart.cricscore
 
 import android.content.Context
 import android.content.SharedPreferences
+import `in`.nrkmart.cricscore.db.CricketDatabase
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -16,21 +17,36 @@ object GlobalPlayerRepository {
     val players: StateFlow<List<Player>> = _players.asStateFlow()
 
     private var prefs: SharedPreferences? = null
+    private var appContext: Context? = null
     private val gson = Gson()
     private const val PREFS_NAME = "global_players_prefs"
     private const val PLAYERS_KEY = "global_players_data"
     private const val TAG = "GlobalPlayerRepo"
 
+    @Synchronized
     fun init(context: Context) {
-        if (prefs == null) {
-            prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            loadFromDisk()
+        appContext = context.applicationContext
+        switchProfile(null)
+    }
+
+    @Synchronized
+    fun switchProfile(userId: String?) {
+        val context = appContext ?: return
+        val profileSuffix = userId?.takeIf { it.isNotBlank() }?.let {
+            CricketDatabase.databaseNameForProfile(it).substringAfterLast('_')
         }
+        val scopedPrefsName = profileSuffix?.let { "${PREFS_NAME}_$it" } ?: PREFS_NAME
+        prefs = context.getSharedPreferences(scopedPrefsName, Context.MODE_PRIVATE)
+        _players.value = emptyList()
+        loadFromDisk()
     }
 
     private fun loadFromDisk() {
         val p = prefs ?: return
-        val json = p.getString(PLAYERS_KEY, null) ?: return
+        val json = p.getString(PLAYERS_KEY, null) ?: run {
+            _players.value = emptyList()
+            return
+        }
         try {
             val type = object : TypeToken<List<Player>>() {}.type
             val data: List<Player>? = gson.fromJson(json, type)
@@ -52,6 +68,7 @@ object GlobalPlayerRepository {
         }
     }
 
+    @Synchronized
     fun addPlayer(
         name: String,
         style: BattingStyle,
@@ -86,6 +103,7 @@ object GlobalPlayerRepository {
         return newPlayer
     }
 
+    @Synchronized
     fun importPlayers(importedList: List<Player>) {
         if (importedList.isEmpty()) return
         _players.update { currentList ->
@@ -100,12 +118,12 @@ object GlobalPlayerRepository {
                             battingStyle = p.battingStyle ?: existing.battingStyle,
                             bowlingStyle = p.bowlingStyle ?: existing.bowlingStyle,
                             role = p.role,
-                            isCaptain = p.isCaptain || existing.isCaptain,
-                            isViceCaptain = p.isViceCaptain || existing.isViceCaptain,
+                            isCaptain = false,
+                            isViceCaptain = false,
                             isJoker = p.isJoker || existing.isJoker
                         )
                     } else {
-                        currentMap[key] = p.safeCopy()
+                        currentMap[key] = p.copy(isCaptain = false, isViceCaptain = false)
                     }
                 }
             }
@@ -114,11 +132,13 @@ object GlobalPlayerRepository {
         saveToDisk(_players.value)
     }
 
+    @Synchronized
     fun removePlayer(id: String) {
         _players.update { list -> list.filter { it.id != id } }
         saveToDisk(_players.value)
     }
 
+    @Synchronized
     fun updatePlayer(id: String, newName: String, style: BattingStyle, bowlingStyle: BowlingStyle, role: PlayerRole) {
         val trimmed = newName.trim()
         if (trimmed.isBlank()) return

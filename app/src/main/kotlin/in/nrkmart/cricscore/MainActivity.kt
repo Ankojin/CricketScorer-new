@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -100,6 +101,8 @@ fun MainNavigation(scoringViewModel: ScoringViewModel) {
                 )
                 
                 items.forEach { item ->
+                    val navLabel = item.label
+
                     val isSelected = currentDestination?.hierarchy?.any { 
                         it.route == item.route || (item.route == "dashboard" && it.route?.startsWith("tournament_details") == true)
                     } == true
@@ -115,13 +118,13 @@ fun MainNavigation(scoringViewModel: ScoringViewModel) {
                                         )
                                     }
                                 ) {
-                                    Icon(item.icon, contentDescription = item.label)
+                                    Icon(item.icon, contentDescription = navLabel)
                                 }
                             } else {
-                                Icon(item.icon, contentDescription = item.label)
+                                Icon(item.icon, contentDescription = navLabel)
                             }
                         },
-                        label = { Text(item.label) },
+                        label = { Text(navLabel) },
                         selected = isSelected,
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.primary,
@@ -241,5 +244,6 @@ fun MainNavigation(scoringViewModel: ScoringViewModel) {
         }
     }
 }
+
 
 data class NavigationItem(val label: String, val route: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)

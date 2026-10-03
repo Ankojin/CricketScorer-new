@@ -36,9 +36,7 @@ object WebShareApi {
 
         if (matchId.isEmpty() || spectatorToken.isEmpty()) return null
 
-        val scheme = uri.scheme ?: "https"
-        val authority = uri.encodedAuthority ?: "cricleague.nrkmart.in"
-        val baseUrl = "$scheme://$authority"
+        val baseUrl = CloudSyncManager.apiBaseUrl()
 
         return ShareLinkPayload(
             matchId = matchId,

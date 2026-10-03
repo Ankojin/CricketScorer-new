@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package `in`.nrkmart.cricscore
 
 import android.app.DatePickerDialog
@@ -528,7 +530,8 @@ fun TournamentStatsTab(tournament: Tournament, graphicsLayer: GraphicsLayer) {
                         val player = item.first
                         val team = item.second
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(player.name + " (${(player.battingStyle ?: BattingStyle.RHB).name})", modifier = Modifier.weight(3f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                            val roleSuffix = if (player.isCaptain) " (c)" else if (player.isViceCaptain) " (vc)" else ""
+                            Text(player.name + roleSuffix + " (${(player.battingStyle ?: BattingStyle.RHB).name})", modifier = Modifier.weight(3f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
                             Row(modifier = Modifier.weight(1.5f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                                 Surface(modifier = Modifier.size(6.dp), shape = CircleShape, color = team.colorOrDefault(Color.Gray)) {}
                                 Spacer(Modifier.width(4.dp))
@@ -913,6 +916,7 @@ fun ScheduleMatchDialog(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TeamCard(
     tournament: Tournament,
@@ -1084,6 +1088,7 @@ fun TeamCard(
             var isCaptain by remember { mutableStateOf(false) }
             var isViceCaptain by remember { mutableStateOf(false) }
             var showGlobalPlaylist by remember { mutableStateOf(false) }
+            val selectedGlobalPlayers = remember { mutableStateListOf<Player>() }
             val globalPlayers by GlobalPlayerRepository.players.collectAsState()
 
             AlertDialog(
@@ -1132,29 +1137,37 @@ fun TeamCard(
                             }
                         } else {
                             Text("Select players to add:", style = MaterialTheme.typography.labelMedium)
+
                             // v2.31.8: Relaxed filter to allow players from other teams (shuffling) 🏏🚀⚖️🏅
                             val teamPlayerNames = team.players.map { it.name.lowercase() }
                             val filteredGlobal = globalPlayers.filter { gp -> gp.name.lowercase() !in teamPlayerNames }
-                            val selectedPlayers = remember { mutableStateListOf<Player>() }
 
                             if (filteredGlobal.isEmpty()) {
                                 Text("All saved players are already in this tournament.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
                             } else {
                                 Column(modifier = Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
                                     filteredGlobal.forEach { gp ->
-                                        val isSelected = selectedPlayers.contains(gp)
+                                        val isSelected = selectedGlobalPlayers.contains(gp)
                                         
                                         // find if player belongs to another team in THIS tournament
                                         val existingTeamName = findTeamNameForPlayer(tournament, gp.name)
                                         
                                         Row(
                                             modifier = Modifier.fillMaxWidth().clickable {
-                                                if (isSelected) selectedPlayers.remove(gp) else selectedPlayers.add(gp)
+                                                if (isSelected) {
+                                                    selectedGlobalPlayers.remove(gp)
+                                                } else {
+                                                    selectedGlobalPlayers.add(gp)
+                                                }
                                             }.padding(vertical = 4.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Checkbox(checked = isSelected, onCheckedChange = {
-                                                if (it) selectedPlayers.add(gp) else selectedPlayers.remove(gp)
+                                                if (it) {
+                                                    selectedGlobalPlayers.add(gp)
+                                                } else {
+                                                    selectedGlobalPlayers.remove(gp)
+                                                }
                                             })
                                             Column {
                                                 Text(gp.name + " (${gp.battingStyle})")
@@ -1176,15 +1189,25 @@ fun TeamCard(
                             Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Button(
                                     onClick = {
-                                        if (selectedPlayers.isNotEmpty()) {
-                                            viewModel.addGlobalPlayers(tournamentId, team.id, selectedPlayers.toList())
+                                        if (selectedGlobalPlayers.isNotEmpty()) {
+                                            val playersToAdd = selectedGlobalPlayers.map { player ->
+                                                player.copy(
+                                                    isCaptain = false,
+                                                    isViceCaptain = false
+                                                )
+                                            }
+                                            viewModel.addGlobalPlayers(
+                                                tournamentId, 
+                                                team.id, 
+                                                playersToAdd
+                                            )
                                             showAddPlayerDialog = false
                                         }
                                     },
                                     modifier = Modifier.weight(1f),
-                                    enabled = selectedPlayers.isNotEmpty()
+                                    enabled = selectedGlobalPlayers.isNotEmpty()
                                 ) {
-                                    Text("Add (${selectedPlayers.size})")
+                                    Text("Add (${selectedGlobalPlayers.size})")
                                 }
                                 TextButton(onClick = { showGlobalPlaylist = false }) { Text("BACK") }
                             }

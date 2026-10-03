@@ -1,5 +1,7 @@
 package `in`.nrkmart.cricscore
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
@@ -28,7 +30,9 @@ fun LiveScoringScreen(
     onNavigateToMatches: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val cloudSession by CloudSyncManager.session.collectAsState()
     val match = uiState.match
+    val isSignedIn = cloudSession != null
     
     var selectedTabIndex by remember(match?.id) { mutableIntStateOf(if (match?.status == MatchStatus.COMPLETED) 1 else 0) }
     var viewedInnings by remember(match?.currentInnings) { mutableIntStateOf(match?.currentInnings ?: 1) }
@@ -95,16 +99,21 @@ fun LiveScoringScreen(
                         }
                     },
                     actions = {
-                        val canUseLiveShare = match?.status == MatchStatus.LIVE && !uiState.isSpectatorMode && CloudSyncManager.isSignedIn()
+                        val canAttemptLiveShare = match?.status == MatchStatus.LIVE && !uiState.isSpectatorMode
+                        val canUseLiveShare = canAttemptLiveShare && isSignedIn
                         val shareIsActive = uiState.liveShareState.isActive
 
                         TopBarActionIcon(
                             icon = Icons.Default.Share,
                             contentDescription = if (shareIsActive) "Share live link (active)" else "Share live link",
-                            enabled = canUseLiveShare,
+                            enabled = canAttemptLiveShare,
                             tint = if (shareIsActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                             onClick = {
-                                if (!canUseLiveShare) return@TopBarActionIcon
+                                if (!canAttemptLiveShare) return@TopBarActionIcon
+                                if (!isSignedIn) {
+                                    Toast.makeText(context, "Sign in to use live share", Toast.LENGTH_SHORT).show()
+                                    return@TopBarActionIcon
+                                }
                                 val existingLink = uiState.liveShareState.shareUrl
                                 if (shareIsActive && !existingLink.isNullOrBlank()) {
                                     shareLiveScoreLink(context, match, existingLink)
@@ -119,7 +128,13 @@ fun LiveScoringScreen(
                             contentDescription = "Revoke live link",
                             enabled = canUseLiveShare && shareIsActive,
                             tint = if (shareIsActive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-                            onClick = { showRevokeShareConfirm = true }
+                            onClick = {
+                                if (!isSignedIn) {
+                                    Toast.makeText(context, "Sign in to manage live share", Toast.LENGTH_SHORT).show()
+                                    return@TopBarActionIcon
+                                }
+                                showRevokeShareConfirm = true
+                            }
                         )
 
                         IconButton(
@@ -167,7 +182,27 @@ fun LiveScoringScreen(
                     }
                 }
 
-                if (!uiState.isSpectatorMode && CloudSyncManager.isSignedIn()) {
+                val canAttemptLiveShare = match?.status == MatchStatus.LIVE && !uiState.isSpectatorMode
+
+                if (canAttemptLiveShare && !isSignedIn) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        tonalElevation = 1.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "Sign in to create and share spectator live link",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
+                }
+
+                if (!uiState.isSpectatorMode && isSignedIn) {
                     val shareLabel = if (uiState.liveShareState.isActive) {
                         val ttl = uiState.liveShareState.expiresInSeconds?.let { secs ->
                             val mins = (secs + 59) / 60
@@ -177,6 +212,7 @@ fun LiveScoringScreen(
                     } else {
                         "LIVE SHARE: Revoked / Not active"
                     }
+                    val currentShareLink = uiState.liveShareState.shareUrl
                     Surface(
                         color = if (uiState.liveShareState.isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                         tonalElevation = 1.dp,
@@ -184,13 +220,29 @@ fun LiveScoringScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        Text(
-                            text = shareLabel,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (uiState.liveShareState.isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = shareLabel,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (uiState.liveShareState.isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            if (!currentShareLink.isNullOrBlank()) {
+                                TextButton(onClick = { copyLiveScoreLink(context, currentShareLink) }) {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy live link", modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Copy Link", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -372,11 +424,36 @@ private fun shareLiveScoreLink(context: Context, match: Match?, link: String) {
         append("Open live score: $link")
     }
 
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    clipboard?.setPrimaryClip(ClipData.newPlainText("Live Score Link", link))
+    Toast.makeText(context, "Live link copied. Paste anywhere.", Toast.LENGTH_SHORT).show()
+
     val sendIntent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(Intent.EXTRA_TEXT, shareText)
     }
-    context.startActivity(Intent.createChooser(sendIntent, "Share live score"))
+
+    val whatsAppIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, shareText)
+        setPackage("com.whatsapp")
+    }
+
+    val pm = context.packageManager
+    val hasWhatsApp = whatsAppIntent.resolveActivity(pm) != null
+    if (hasWhatsApp) {
+        val chooser = Intent.createChooser(sendIntent, "Share live score")
+        chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(whatsAppIntent))
+        context.startActivity(chooser)
+    } else {
+        context.startActivity(Intent.createChooser(sendIntent, "Share live score"))
+    }
+}
+
+private fun copyLiveScoreLink(context: Context, link: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    clipboard?.setPrimaryClip(ClipData.newPlainText("Live Score Link", link))
+    Toast.makeText(context, "Live link copied. Paste anywhere.", Toast.LENGTH_SHORT).show()
 }
 
 private fun isLiveShareSyncRequiredError(err: Throwable): Boolean {

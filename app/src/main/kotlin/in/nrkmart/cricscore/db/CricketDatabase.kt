@@ -6,6 +6,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import `in`.nrkmart.cricscore.BuildConfig
+import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
 @Database(
     entities = [
@@ -27,17 +29,27 @@ abstract class CricketDatabase : RoomDatabase() {
     abstract fun ballDao(): BallDao
 
     companion object {
-        @Volatile
-        private var INSTANCE: CricketDatabase? = null
+        private val INSTANCES = ConcurrentHashMap<String, CricketDatabase>()
+
+        fun databaseNameForProfile(userId: String?): String {
+            if (userId.isNullOrBlank()) return "cricket_database"
+            val digest = MessageDigest.getInstance("SHA-256")
+                .digest(userId.toByteArray(Charsets.UTF_8))
+                .take(16)
+                .joinToString("") { byte -> "%02x".format(byte) }
+            return "cricket_database_user_$digest"
+        }
 
         // Every future version bump of CricketDatabase must add a corresponding Migration(n, n+1)
         // to Migrations.kt and include it in ALL_MIGRATIONS.
-        fun getInstance(context: Context): CricketDatabase {
-            return INSTANCE ?: synchronized(this) {
+        fun getInstance(context: Context, userId: String? = null): CricketDatabase {
+            val databaseName = databaseNameForProfile(userId)
+            return INSTANCES[databaseName] ?: synchronized(this) {
+                INSTANCES[databaseName]?.let { return@synchronized it }
                 val builder = Room.databaseBuilder(
                     context.applicationContext,
                     CricketDatabase::class.java,
-                    "cricket_database"
+                    databaseName
                 )
                 .addMigrations(*ALL_MIGRATIONS)
 
@@ -46,7 +58,7 @@ abstract class CricketDatabase : RoomDatabase() {
                 }
 
                 val instance = builder.build()
-                INSTANCE = instance
+                INSTANCES[databaseName] = instance
                 instance
             }
         }

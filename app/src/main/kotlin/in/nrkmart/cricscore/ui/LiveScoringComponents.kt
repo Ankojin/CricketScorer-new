@@ -1,5 +1,11 @@
 package `in`.nrkmart.cricscore.ui
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,6 +18,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -471,8 +478,75 @@ fun ControlsSection(
     val match = uiState.match ?: return
     val androidContext = LocalContext.current
     val isCompleted = match.status == MatchStatus.COMPLETED
+    val isMuted by SoundEffectManager.isMuted.collectAsState()
+    val isVoiceEnabled by VoiceCommentaryManager.isVoiceEnabled.collectAsState()
+
+    val speechLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val matches = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            val command = matches?.firstOrNull()
+            if (command != null) {
+                val handled = VoiceCommentaryManager.processVoiceCommand(command, viewModel, androidContext)
+                if (handled) {
+                    Toast.makeText(androidContext, "🎤 Recorded: \"$command\"", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(androidContext, "❓ Unrecognized: \"$command\"", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "SCORE PANEL",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                    color = Color.Gray
+                )
+                AssistChip(
+                    onClick = {
+                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toString())
+                            putExtra(RecognizerIntent.EXTRA_PROMPT, "Say command (e.g. '1 run', 'Four', 'Six', 'Wicket', 'Wide', 'Dot')")
+                        }
+                        try {
+                            speechLauncher.launch(intent)
+                        } catch (_: Exception) {
+                            Toast.makeText(androidContext, "Voice recognition not supported on device", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    label = { Text("🎙️ AI VOICE", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold) },
+                    enabled = !isCompleted,
+                    colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                )
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                IconButton(
+                    onClick = { VoiceCommentaryManager.toggleVoice() },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Text(if (isVoiceEnabled) "🗣️" else "🤐", fontSize = 14.sp)
+                }
+                IconButton(
+                    onClick = { SoundEffectManager.toggleMute() },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Text(if (isMuted) "🔇" else "🔊", fontSize = 14.sp)
+                }
+            }
+        }
+
         // Row 1: DOT, 1, 1G, 2, 3, 4, 6
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             RunButton(runs = 0, modifier = Modifier.weight(1f), label = "DOT", enabled = !isCompleted) { viewModel.handleRuns(0, true) }

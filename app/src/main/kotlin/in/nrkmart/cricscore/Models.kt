@@ -237,6 +237,9 @@ data class Match(
     val battingOrder: List<String> = emptyList(),
     val startTimeMillis: Long? = null,
     val endTimeMillis: Long? = null,
+    val revision: Int? = null,
+    val updatedAt: String? = null,
+    val lastWriterPlatform: String? = null,
     val dateMillis: Long = System.currentTimeMillis()
 )
 
@@ -350,6 +353,10 @@ fun Match.safeCopy(): Match {
         tossDecision = this.tossDecision,
         initialBattingTeamId = this.initialBattingTeamId,
         initialBowlingTeamId = this.initialBowlingTeamId,
+        teamACaptainId = this.teamACaptainId,
+        teamBCaptainId = this.teamBCaptainId,
+        teamAWicketKeeperId = this.teamAWicketKeeperId,
+        teamBWicketKeeperId = this.teamBWicketKeeperId,
         target = this.target,
         status = this.status ?: MatchStatus.UPCOMING,
         currentInnings = this.currentInnings,
@@ -389,6 +396,9 @@ fun Match.safeCopy(): Match {
         battingOrder = this.battingOrder.orEmpty().filterNotNull(),
         startTimeMillis = this.startTimeMillis,
         endTimeMillis = this.endTimeMillis,
+        revision = this.revision,
+        updatedAt = this.updatedAt,
+        lastWriterPlatform = this.lastWriterPlatform,
         dateMillis = this.dateMillis
     )
 }

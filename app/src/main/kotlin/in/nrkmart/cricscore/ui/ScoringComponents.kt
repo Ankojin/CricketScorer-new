@@ -15,6 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -142,6 +144,7 @@ fun RunButton(
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     val actualContainer = containerColor ?: MaterialTheme.colorScheme.surfaceVariant
     val contentColor = when (actualContainer) {
         WebElectricGreen, WebWarning -> WebBg // #041326 dark navy text
@@ -150,7 +153,12 @@ fun RunButton(
     }
 
     FilledTonalButton(
-        onClick = onClick,
+        onClick = {
+            haptic.performHapticFeedback(
+                if (runs >= 4) HapticFeedbackType.LongPress else HapticFeedbackType.TextHandleMove
+            )
+            onClick()
+        },
         enabled = enabled,
         modifier = modifier.aspectRatio(1f),
         contentPadding = PaddingValues(0.dp),
